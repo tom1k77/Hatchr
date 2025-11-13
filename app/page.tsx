@@ -1,65 +1,199 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+interface Token {
+  token_address: string;
+  name?: string;
+  symbol?: string;
+  source?: string;
+  source_url?: string;
+  liquidity_usd?: number;
+  price_usd?: number;
+  volume_24h?: number;
+  creator_address?: string;
+  creator_fid?: number;
+  creator_username?: string;
+  website_url?: string;
+  x_url?: string;
+  farcaster_url?: string;
+  telegram_url?: string;
+  first_seen_at?: string;
+}
 
 export default function Home() {
+  const [items, setItems] = useState<Token[]>([]);
+  const [source, setSource] = useState("all");
+  const [minLiq, setMinLiq] = useState(0);
+  const [q, setQ] = useState("");
+
+  useEffect(() => {
+    fetch("/api/tokens")
+      .then((r) => r.json())
+      .then((j) => setItems(j.items || []))
+      .catch(() => setItems([]));
+  }, []);
+
+  const filtered = useMemo(() => {
+    return items
+      .filter((i) => (source === "all" ? true : i.source === source))
+      .filter((i) => (i.liquidity_usd || 0) >= minLiq)
+      .filter((i) => {
+        if (!q.trim()) return true;
+        return (
+          `${i.name || ""} ${i.symbol || ""} ${i.token_address}`.toLowerCase().includes(q.toLowerCase())
+        );
+      })
+      .sort((a, b) => {
+        const tA = a.first_seen_at ? new Date(a.first_seen_at).getTime() : 0;
+        const tB = b.first_seen_at ? new Date(b.first_seen_at).getTime() : 0;
+        return tB - tA;
+      });
+  }, [items, source, minLiq, q]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main style={{ padding: 24, maxWidth: 1140, margin: "0 auto" }}>
+      <h1 style={{ margin: "4px 0 12px" }}>New Base Tokens (Zora + Clanker)</h1>
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <label>
+          Source:{" "}
+          <select value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="all">All</option>
+            <option value="zora">Zora</option>
+            <option value="clanker">Clanker</option>
+          </select>
+        </label>
+
+        <label>
+          Min Liquidity (USD):{" "}
+          <input
+            type="number"
+            min={0}
+            step={50}
+            value={minLiq}
+            onChange={(e) => setMinLiq(Number(e.target.value) || 0)}
+            style={{ width: 140 }}
+          />
+        </label>
+
+        <input
+          placeholder="Search name / symbol / address"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          style={{ flex: 1, minWidth: 220, padding: "6px 10px" }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </div>
+
+      <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 8 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
+              <th style={{ padding: 10 }}>Name</th>
+              <th style={{ padding: 10 }}>Address</th>
+              <th style={{ padding: 10 }}>Source</th>
+              <th style={{ padding: 10 }}>Liquidity</th>
+              <th style={{ padding: 10 }}>Price</th>
+              <th style={{ padding: 10 }}>Vol 24h</th>
+              <th style={{ padding: 10 }}>Creator</th>
+              <th style={{ padding: 10 }}>Socials</th>
+              <th style={{ padding: 10 }}>Seen</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((t) => (
+              <tr key={t.token_address} style={{ borderTop: "1px solid #fafafa" }}>
+                <td style={{ padding: 10 }}>
+                  {t.name || "—"} <small>{t.symbol}</small>
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  <a
+                    href={`https://basescan.org/token/${t.token_address}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t.token_address.slice(0, 6)}…{t.token_address.slice(-4)}
+                  </a>
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  {t.source_url ? (
+                    <a href={t.source_url} target="_blank">
+                      {t.source}
+                    </a>
+                  ) : (
+                    t.source
+                  )}
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  {t.liquidity_usd != null
+                    ? `$${Math.round(t.liquidity_usd).toLocaleString()}`
+                    : "—"}
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  {t.price_usd != null ? `$${t.price_usd.toFixed(6)}` : "—"}
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  {t.volume_24h != null
+                    ? `$${Math.round(t.volume_24h).toLocaleString()}`
+                    : "—"}
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  {t.creator_address ? (
+                    <a
+                      href={`https://basescan.org/address/${t.creator_address}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {t.creator_address.slice(0, 6)}…{t.creator_address.slice(-4)}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+
+                  {t.creator_fid && (
+                    <div>
+                      FID:{" "}
+                      <a
+                        href={`https://warpcast.com/~/profiles/${t.creator_fid}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t.creator_fid}
+                      </a>
+                      {t.creator_username ? ` (@${t.creator_username})` : ""}
+                    </div>
+                  )}
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {t.website_url && <a href={t.website_url}>Website</a>}
+                    {t.x_url && <a href={t.x_url}>X</a>}
+                    {t.farcaster_url && <a href={t.farcaster_url}>Farcaster</a>}
+                    {t.telegram_url && <a href={t.telegram_url}>Telegram</a>}
+                  </div>
+                </td>
+
+                <td style={{ padding: 10 }}>
+                  {t.first_seen_at
+                    ? new Date(t.first_seen_at).toLocaleString()
+                    : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {!filtered.length && (
+        <p style={{ marginTop: 16 }}>Пока пусто. Обнови страницу позже.</p>
+      )}
+    </main>
   );
 }
