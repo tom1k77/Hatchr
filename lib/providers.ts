@@ -31,7 +31,7 @@ export interface Token {
 }
 
 // адрес публичного API Clanker
-const CLANKER_URL = "https://www.clanker.world/api/tokens?sort=desc&limit=50";
+const CLANKER_URL = "https://www.clanker.world/api/tokens";
 
 // простой fetch с таймаутом
 async function fetchJson(url: string, init?: RequestInit) {
