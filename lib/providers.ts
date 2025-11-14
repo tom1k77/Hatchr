@@ -1,22 +1,5 @@
 // lib/providers.ts
 
-export interface TokenFromApi {
-  address?: string;
-  token_address?: string;
-  name?: string;
-  symbol?: string;
-  createdAt?: string;
-  created_at?: string;
-  pageUrl?: string;
-  links?: {
-    website?: string;
-    twitter?: string;
-    x?: string;
-    farcaster?: string;
-    telegram?: string;
-  };
-}
-
 export interface Token {
   token_address: string;
   name?: string;
@@ -30,63 +13,45 @@ export interface Token {
   telegram_url?: string;
 }
 
-// адрес публичного API Clanker
+// URL Clanker
 const CLANKER_URL = "https://www.clanker.world/api/tokens";
 
-// простой fetch с таймаутом
-async function fetchJson(url: string, init?: RequestInit) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 15000);
-
-  try {
-    const res = await fetch(url, {
-      ...init,
-      signal: ctrl.signal,
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      throw new Error(`${url} ${res.status}`);
-    }
-    return (await res.json()) as any;
-  } finally {
-    clearTimeout(t);
-  }
+// --- fetch helper ---
+async function fetchJson(url: string) {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
+  return res.json();
 }
 
-// получаем сырые токены из Clanker
+// --- normalize clanker ---
 export async function fetchTokensFromClanker(): Promise<Token[]> {
-  const json = await fetchJson(CLANKER_URL);
+  const raw = await fetchJson(CLANKER_URL);
 
-  // возможные варианты формата
-  const items: TokenFromApi[] = Array.isArray(json)
-    ? json
-    : Array.isArray(json?.items)
-    ? json.items
-    : Array.isArray(json?.tokens)
-    ? json.tokens
-    : [];
+  // Ответ Clanker — это просто огромный массив объектов
+  if (!Array.isArray(raw)) return [];
 
-  const normalized: Token[] = items
-    .map((c) => {
-      const addr = (c.address || c.token_address || "").toLowerCase();
+  return raw
+    .map((item: any) => {
+      const d = item?.data;
+      if (!d) return null;
+
+      const addr = d.contract_address?.toLowerCase();
       if (!addr) return null;
 
       return {
         token_address: addr,
-        name: c.name || "",
-        symbol: c.symbol || "",
+        name: d.ticker || "",
+        symbol: d.ticker || "",
         source: "clanker",
-        source_url:
-          c.pageUrl ||
-          (c.address ? `https://www.clanker.world/token/${c.address}` : undefined),
-        first_seen_at: c.createdAt || c.created_at,
-        website_url: c.links?.website,
-        x_url: c.links?.twitter || c.links?.x,
-        farcaster_url: c.links?.farcaster,
-        telegram_url: c.links?.telegram,
+        source_url: `https://www.clanker.world/token/${addr}`,
+        first_seen_at: d.created_at || d.indexed,
+
+        // соцсети
+        website_url: d?.website || null,
+        x_url: d?.twitter || null,
+        farcaster_url: d?.Farcaster || null,
+        telegram_url: d?.telegram || null,
       } as Token;
     })
     .filter(Boolean) as Token[];
-
-  return normalized;
 }
