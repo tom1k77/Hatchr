@@ -28,10 +28,28 @@ export default function Home() {
   const [q, setQ] = useState("");
 
   useEffect(() => {
-    fetch("/api/tokens")
-      .then((r) => r.json())
-      .then((j) => setItems(j.items || []))
-      .catch(() => setItems([]));
+    let cancelled = false;
+
+    const load = () => {
+      fetch("/api/tokens")
+        .then((r) => r.json())
+        .then((j) => {
+          if (!cancelled) setItems(j.items || []);
+        })
+        .catch(() => {
+          if (!cancelled) setItems([]);
+        });
+    };
+
+    // первый запрос сразу
+    load();
+    // автообновление каждые 10 секунд
+    const id = setInterval(load, 10000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
   const filtered = useMemo(() => {
@@ -40,9 +58,10 @@ export default function Home() {
       .filter((i) => (i.liquidity_usd || 0) >= minLiq)
       .filter((i) => {
         if (!q.trim()) return true;
-        return (
-          `${i.name || ""} ${i.symbol || ""} ${i.token_address}`.toLowerCase().includes(q.toLowerCase())
-        );
+        const hay = `${i.name || ""} ${i.symbol || ""} ${
+          i.token_address || ""
+        }`.toLowerCase();
+        return hay.includes(q.trim().toLowerCase());
       })
       .sort((a, b) => {
         const tA = a.first_seen_at ? new Date(a.first_seen_at).getTime() : 0;
@@ -60,8 +79,8 @@ export default function Home() {
           Source:{" "}
           <select value={source} onChange={(e) => setSource(e.target.value)}>
             <option value="all">All</option>
-            <option value="zora">Zora</option>
             <option value="clanker">Clanker</option>
+            {/* Zora добавим позже */}
           </select>
         </label>
 
@@ -95,105 +114,117 @@ export default function Home() {
               <th style={{ padding: 10 }}>Liquidity</th>
               <th style={{ padding: 10 }}>Price</th>
               <th style={{ padding: 10 }}>Vol 24h</th>
-              <th style={{ padding: 10 }}>Creator</th>
               <th style={{ padding: 10 }}>Socials</th>
               <th style={{ padding: 10 }}>Seen</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => (
-              <tr key={t.token_address} style={{ borderTop: "1px solid #fafafa" }}>
-                <td style={{ padding: 10 }}>
-                  {t.name || "—"} <small>{t.symbol}</small>
-                </td>
-
-                <td style={{ padding: 10 }}>
-                  <a
-                    href={`https://basescan.org/token/${t.token_address}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {t.token_address.slice(0, 6)}…{t.token_address.slice(-4)}
-                  </a>
-                </td>
-
-                <td style={{ padding: 10 }}>
-                  {t.source_url ? (
-                    <a href={t.source_url} target="_blank">
-                      {t.source}
-                    </a>
-                  ) : (
-                    t.source
+            {filtered.map((t) => {
+              const nameBlock = (
+                <>
+                  {t.name || "—"}
+                  {t.symbol && t.symbol !== t.name && (
+                    <>
+                      {" "}
+                      <small>{t.symbol}</small>
+                    </>
                   )}
-                </td>
+                </>
+              );
 
-                <td style={{ padding: 10 }}>
-                  {t.liquidity_usd != null
-                    ? `$${Math.round(t.liquidity_usd).toLocaleString()}`
-                    : "—"}
-                </td>
+              return (
+                <tr key={t.token_address} style={{ borderTop: "1px solid #fafafa" }}>
+                  {/* Кликабельное имя → страница токена на Clanker */}
+                  <td style={{ padding: 10 }}>
+                    {t.source_url ? (
+                      <a
+                        href={t.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ textDecoration: "none", color: "inherit" }}
+                      >
+                        {nameBlock}
+                      </a>
+                    ) : (
+                      nameBlock
+                    )}
+                  </td>
 
-                <td style={{ padding: 10 }}>
-                  {t.price_usd != null ? `$${t.price_usd.toFixed(6)}` : "—"}
-                </td>
-
-                <td style={{ padding: 10 }}>
-                  {t.volume_24h != null
-                    ? `$${Math.round(t.volume_24h).toLocaleString()}`
-                    : "—"}
-                </td>
-
-                <td style={{ padding: 10 }}>
-                  {t.creator_address ? (
+                  <td style={{ padding: 10 }}>
                     <a
-                      href={`https://basescan.org/address/${t.creator_address}`}
+                      href={`https://basescan.org/token/${t.token_address}`}
                       target="_blank"
                       rel="noreferrer"
                     >
-                      {t.creator_address.slice(0, 6)}…{t.creator_address.slice(-4)}
+                      {t.token_address.slice(0, 6)}…{t.token_address.slice(-4)}
                     </a>
-                  ) : (
-                    "—"
-                  )}
+                  </td>
 
-                  {t.creator_fid && (
-                    <div>
-                      FID:{" "}
-                      <a
-                        href={`https://warpcast.com/~/profiles/${t.creator_fid}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {t.creator_fid}
-                      </a>
-                      {t.creator_username ? ` (@${t.creator_username})` : ""}
+                  <td style={{ padding: 10 }}>{t.source || "clanker"}</td>
+
+                  <td style={{ padding: 10 }}>
+                    {t.liquidity_usd != null
+                      ? `$${Math.round(t.liquidity_usd).toLocaleString()}`
+                      : "—"}
+                  </td>
+
+                  <td style={{ padding: 10 }}>
+                    {t.price_usd != null ? `$${t.price_usd.toFixed(6)}` : "—"}
+                  </td>
+
+                  <td style={{ padding: 10 }}>
+                    {t.volume_24h != null
+                      ? `$${Math.round(t.volume_24h).toLocaleString()}`
+                      : "—"}
+                  </td>
+
+                  <td style={{ padding: 10 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {t.website_url && (
+                        <a href={t.website_url} target="_blank" rel="noreferrer">
+                          Website
+                        </a>
+                      )}
+                      {t.x_url && (
+                        <a href={t.x_url} target="_blank" rel="noreferrer">
+                          X
+                        </a>
+                      )}
+                      {t.farcaster_url && (
+                        <a
+                          href={t.farcaster_url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Farcaster
+                        </a>
+                      )}
+                      {t.telegram_url && (
+                        <a href={t.telegram_url} target="_blank" rel="noreferrer">
+                          Telegram
+                        </a>
+                      )}
                     </div>
-                  )}
-                </td>
+                  </td>
 
-                <td style={{ padding: 10 }}>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {t.website_url && <a href={t.website_url}>Website</a>}
-                    {t.x_url && <a href={t.x_url}>X</a>}
-                    {t.farcaster_url && <a href={t.farcaster_url}>Farcaster</a>}
-                    {t.telegram_url && <a href={t.telegram_url}>Telegram</a>}
-                  </div>
-                </td>
-
-                <td style={{ padding: 10 }}>
-                  {t.first_seen_at
-                    ? new Date(t.first_seen_at).toLocaleString()
-                    : "—"}
-                </td>
-              </tr>
-            ))}
+                  <td style={{ padding: 10 }}>
+                    {t.first_seen_at
+                      ? new Date(t.first_seen_at).toLocaleString()
+                      : "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       {!filtered.length && (
-        <p style={{ marginTop: 16 }}>Пока пусто. Обнови страницу позже.</p>
+        <p style={{ marginTop: 16 }}>Пока пусто. Обнови страницу чуть позже.</p>
       )}
+      <p style={{ marginTop: 8, color: "#888" }}>
+        Данные обновляются примерно каждые 10 секунд.
+      </p>
     </main>
   );
 }
