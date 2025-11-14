@@ -1,6 +1,6 @@
 // app/api/tokens/route.ts
 import { NextResponse } from "next/server";
-import { fetchTokensFromClanker } from "../../../../lib/providers";
+import { fetchTokensFromClanker } from "../../../lib/providers";
 
 const S_MAX_AGE = 60;
 const STALE_WHILE_REVALIDATE = 30;
