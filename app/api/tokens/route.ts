@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
-import { fetchTokensFromClanker } from "../../../lib/providers";
+import {
+  fetchTokensFromClanker,
+  enrichWithDexScreener,
+  TokenWithMarket,
+} from "../../../lib/providers";
 
 export async function GET() {
   try {
-    const items = await fetchTokensFromClanker();
+    // 1) базовые данные из Clanker
+    const baseTokens = await fetchTokensFromClanker();
+
+    // 2) обогащаем ценой / ликвидностью / объёмом
+    const withMarket: TokenWithMarket[] = await enrichWithDexScreener(baseTokens);
 
     return NextResponse.json(
-      { count: items.length, items },
+      { count: withMarket.length, items: withMarket },
       {
         headers: {
-          "cache-control": "public, s-maxage=60, stale-while-revalidate=30",
+          "cache-control": "public, s-maxage=5, stale-while-revalidate=5",
         },
       }
     );
