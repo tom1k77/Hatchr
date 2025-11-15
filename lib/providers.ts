@@ -8,6 +8,8 @@ export interface Token {
   source?: string;
   source_url?: string;
   first_seen_at?: string;
+
+  // для Clanker мы будем использовать только farcaster_url
   website_url?: string;
   x_url?: string;
   farcaster_url?: string;
@@ -33,7 +35,7 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-// Собираем все URL из объекта рекурсивно
+// рекурсивно собираем все строки-URL из объекта
 function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
   if (!obj || depth > 5) return acc;
 
@@ -58,73 +60,7 @@ function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
   return acc;
 }
 
-// аккуратно раскладываем соцсети по категориям
-function extractSocials(
-  urls: string[]
-): {
-  website_url?: string;
-  x_url?: string;
-  farcaster_url?: string;
-  telegram_url?: string;
-} {
-  let website: string | undefined;
-  let x: string | undefined;
-  let farcaster: string | undefined;
-  let telegram: string | undefined;
-
-  for (const u of urls) {
-    if (!u || typeof u !== "string") continue;
-
-    const url = u.trim();
-    const lower = url.toLowerCase();
-
-    // Farcaster / Warpcast
-    if (!farcaster && lower.includes("warpcast.com")) {
-      farcaster = url;
-      continue;
-    }
-
-    // X / Twitter
-    if (
-      !x &&
-      (lower.includes("twitter.com") ||
-        lower.includes("://x.com/") ||
-        lower.includes(" x.com/"))
-    ) {
-      x = url;
-      continue;
-    }
-
-    // Telegram
-    if (
-      !telegram &&
-      (lower.includes("t.me/") ||
-        lower.includes("telegram.me/") ||
-        lower.includes("telegram.org/"))
-    ) {
-      telegram = url;
-      continue;
-    }
-
-    // Website — всё остальное, что не соцсети
-    if (
-      !website &&
-      lower.startsWith("http") &&
-      !lower.includes("warpcast.com") &&
-      !lower.includes("twitter.com") &&
-      !lower.includes("://x.com/") &&
-      !lower.includes("t.me/") &&
-      !lower.includes("telegram.me") &&
-      !lower.includes("telegram.org")
-    ) {
-      website = url;
-    }
-  }
-
-  return { website_url: website, x_url: x, farcaster_url: farcaster, telegram_url: telegram };
-}
-
-// --- CLANKER: все токены за последний час на Base ---
+// --- CLANKER: токены Base за последний час, только Farcaster в соцсетях ---
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
@@ -172,13 +108,17 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
-      // вытаскиваем все URL из metadata и creator
+      // собираем все URL из metadata и creator
       const urlsMeta = collectUrls(meta);
       const urlsCreator = collectUrls(creator);
       const allUrls = [...urlsMeta, ...urlsCreator];
 
-      const { website_url, x_url, farcaster_url, telegram_url } =
-        extractSocials(allUrls);
+      // ИЩЕМ ТОЛЬКО FARCASTER: warpcast или farcaster.xyz
+      const farcasterUrl =
+        allUrls.find((u) => {
+          const lower = u.toLowerCase();
+          return lower.includes("farcaster.xyz") || lower.includes("warpcast.com");
+        }) || undefined;
 
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
@@ -190,15 +130,17 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         source: "clanker",
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
-        website_url,
-        x_url,
-        farcaster_url,
-        telegram_url,
+
+        // для Clanker заполняем только farcaster_url
+        farcaster_url: farcasterUrl,
+        website_url: undefined,
+        x_url: undefined,
+        telegram_url: undefined,
       } as Token;
     })
     .filter(Boolean) as Token[];
 
-  // допфильтр последнего часа (на всякий случай)
+  // на всякий случай ещё раз фильтруем по последнему часу
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
