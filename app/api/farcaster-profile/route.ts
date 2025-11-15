@@ -8,18 +8,12 @@ export async function GET(request: Request) {
   const username = searchParams.get("username");
 
   if (!username) {
-    return NextResponse.json(
-      { error: "Missing username" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Missing username" }, { status: 400 });
   }
 
   if (!NEYNAR_API_KEY) {
     console.error("NEYNAR_API_KEY is not set");
-    return NextResponse.json(
-      { error: "Server misconfigured" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
   }
 
   try {
@@ -32,7 +26,6 @@ export async function GET(request: Request) {
         "x-api-key": NEYNAR_API_KEY,
         "x-neynar-experimental": "false",
       },
-      // чтобы всегда брать свежие данные
       cache: "no-store",
     });
 
@@ -46,19 +39,22 @@ export async function GET(request: Request) {
     }
 
     const data = await res.json();
-
     const user = data.user;
+
     if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+
+    // Берём pfp из любых доступных полей
+    const pfpUrl =
+      user.pfp_url ||
+      (user.pfp && (user.pfp.url || user.pfp.source_url)) ||
+      null;
 
     return NextResponse.json({
       username: user.username,
       display_name: user.display_name,
-      pfp_url: user.pfp_url ?? null,
+      pfp_url: pfpUrl,
       follower_count: user.follower_count ?? 0,
       following_count: user.following_count ?? 0,
     });
