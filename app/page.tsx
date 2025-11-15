@@ -2,324 +2,458 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-// --- тип токена с рынка ---
+// Типы такие же, как в lib/providers.ts
 interface Token {
   token_address: string;
   name?: string;
   symbol?: string;
   source?: string;
   source_url?: string;
-  liquidity_usd?: number;
-  price_usd?: number;
-  volume_24h?: number;
+  first_seen_at?: string;
+
+  farcaster_url?: string;
   website_url?: string;
   x_url?: string;
-  farcaster_url?: string;
   telegram_url?: string;
-  first_seen_at?: string;
 }
 
-// --- ИКОНКИ ---
+interface TokenWithMarket extends Token {
+  price_usd?: number;
+  liquidity_usd?: number;
+  volume_24h?: number;
+}
 
-const iconSize = 18;
+interface ApiResponse {
+  count: number;
+  items: TokenWithMarket[];
+}
 
-function IconWebsite() {
-  return (
-    <svg
-      width={iconSize}
-      height={iconSize}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" fill="#ffffff" stroke="#111827" strokeWidth="1.6" />
-      <path
-        d="M4.5 12h15M12 4.5c-2 2-3.3 4.6-3.3 7.5 0 2.9 1.3 5.5 3.3 7.5 2-2 3.3-4.6 3.3-7.5 0-2.9-1.3-5.5-3.3-7.5z"
-        fill="none"
-        stroke="#111827"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+const SOURCE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "clanker", label: "Clanker" },
+  { value: "zora", label: "Zora" },
+];
+
+export default function Page() {
+  const [tokens, setTokens] = useState<TokenWithMarket[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
+    "all"
   );
-}
+  const [minLiquidity, setMinLiquidity] = useState<string>("0");
+  const [search, setSearch] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
 
-function IconX() {
-  return (
-    <svg
-      width={iconSize}
-      height={iconSize}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <rect x="2" y="2" width="20" height="20" rx="4" fill="#000000" />
-      <path
-        d="M8 7.5L15.5 16M15.5 7.5L8 16"
-        stroke="#ffffff"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+  // ---------- Загрузка с мерджем старых маркет-данных ----------
 
-function IconFarcaster() {
-  return (
-    <svg
-      width={iconSize}
-      height={iconSize}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <rect x="2" y="2" width="20" height="20" rx="4.5" fill="#8b5cf6" />
-      {/* арка-«мост» */}
-      <path
-        d="M7.5 16V11c0-2.2 1.8-4 4-4h1c2.2 0 4 1.8 4 4v5h-2.4v-3.4c0-1.3-0.8-2.3-2.1-2.3-1.3 0-2.1 1-2.1 2.3V16H7.5z"
-        fill="#ffffff"
-      />
-    </svg>
-  );
-}
+  const load = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/tokens");
+      if (!res.ok) throw new Error("Failed to load /api/tokens");
+      const data: ApiResponse = await res.json();
+      const fresh: TokenWithMarket[] = data.items ?? [];
 
-function IconTelegram() {
-  return (
-    <svg
-      width={iconSize}
-      height={iconSize}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" fill="#0f9cf5" />
-      <path
-        d="M8 12.3l7.8-4.3c.2-.1.5.1.4.4l-1.4 7c-.1.3-.4.4-.7.2l-2.1-1.6-1.1 1.1c-.1.1-.3.1-.4 0l.2-2.4 4.3-3.9-5.4 3.2-2.3-.8c-.3-.1-.3-.5 0-.6z"
-        fill="#ffffff"
-      />
-    </svg>
-  );
-}
+      setTokens((prev) => {
+        // карта старых токенов по адресу
+        const prevMap = new Map<string, TokenWithMarket>(
+          prev.map((t) => [t.token_address.toLowerCase(), t])
+        );
 
-// --- КОМПОНЕНТ СТРАНИЦЫ ---
+        const merged: TokenWithMarket[] = fresh.map((t) => {
+          const key = t.token_address.toLowerCase();
+          const old = prevMap.get(key);
 
-export default function Home() {
-  const [items, setItems] = useState<Token[]>([]);
-  const [source, setSource] = useState("all");
-  const [minLiq, setMinLiq] = useState(0);
-  const [q, setQ] = useState("");
+          if (!old) {
+            // новый токен — просто берём как есть
+            return t;
+          }
+
+          // если в новом ответе поле undefined, но в старом было значение —
+          // сохраняем старое (чтобы цена/ликвидность/объём не пропадали)
+          return {
+            ...t,
+            price_usd: t.price_usd ?? old.price_usd,
+            liquidity_usd: t.liquidity_usd ?? old.liquidity_usd,
+            volume_24h: t.volume_24h ?? old.volume_24h,
+          };
+        });
+
+        return merged;
+      });
+    } catch (e) {
+      console.error(e);
+      // при ошибке просто оставляем старые данные
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-
-    const load = () => {
-      fetch("/api/tokens")
-        .then((r) => r.json())
-        .then((j) => {
-          if (!cancelled) setItems(j.items || []);
-        })
-        .catch(() => {
-          if (!cancelled) setItems([]);
-        });
-    };
-
-    // первый запрос
     load();
-    // автообновление каждые 10 секунд
-    const id = setInterval(load, 10000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    // автообновление раз в 30 секунд (можно поменять на 60, если захочешь)
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
   }, []);
 
-  const filtered = useMemo(() => {
-    return items
-      .filter((i) => (source === "all" ? true : i.source === source))
-      .filter((i) => (i.liquidity_usd || 0) >= minLiq)
-      .filter((i) => {
-        if (!q.trim()) return true;
-        const hay = `${i.name || ""} ${i.symbol || ""} ${
-          i.token_address || ""
-        }`.toLowerCase();
-        return hay.includes(q.trim().toLowerCase());
-      })
-      .sort((a, b) => {
-        const tA = a.first_seen_at ? new Date(a.first_seen_at).getTime() : 0;
-        const tB = b.first_seen_at ? new Date(b.first_seen_at).getTime() : 0;
-        return tB - tA;
-      });
-  }, [items, source, minLiq, q]);
+  // ---------- Фильтрация / поиск ----------
+
+  const filteredTokens = useMemo(() => {
+    const minLiq = Number(minLiquidity) || 0;
+    const q = search.trim().toLowerCase();
+
+    return tokens.filter((t) => {
+      if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
+
+      const liq = t.liquidity_usd ?? 0;
+      if (liq < minLiq) return false;
+
+      if (q) {
+        const inName = (t.name || "").toLowerCase().includes(q);
+        const inSymbol = (t.symbol || "").toLowerCase().includes(q);
+        const inAddress = t.token_address.toLowerCase().includes(q);
+        if (!inName && !inSymbol && !inAddress) return false;
+      }
+
+      return true;
+    });
+  }, [tokens, sourceFilter, minLiquidity, search]);
+
+  // ---------- Утилиты отображения ----------
+
+  const formatNumber = (value?: number, decimals = 2) => {
+    if (value === undefined || Number.isNaN(value)) return "—";
+    return value.toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  };
+
+  const formatDateTime = (iso?: string) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("ru-RU");
+  };
+
+  const shortAddress = (addr: string) => {
+    if (!addr) return "";
+    return addr.slice(0, 6) + "..." + addr.slice(-4);
+  };
+
+  // ---------- Рендер ----------
 
   return (
-    <main style={{ padding: 24, maxWidth: 1140, margin: "0 auto" }}>
-      <h1 style={{ margin: "4px 0 12px" }}>New Base Tokens (Zora + Clanker)</h1>
+    <main
+      style={{
+        maxWidth: "1200px",
+        margin: "0 auto",
+        padding: "24px 16px 40px",
+        fontFamily:
+          '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+      }}
+    >
+      <header style={{ marginBottom: "16px" }}>
+        <h1
+          style={{
+            fontSize: "20px",
+            fontWeight: 600,
+            margin: 0,
+            marginBottom: "4px",
+          }}
+        >
+          New Base Tokens (Zora + Clanker)
+        </h1>
+        <p style={{ margin: 0, fontSize: "13px", opacity: 0.7 }}>
+          Auto-refresh every 30 seconds. Market data from DexScreener.
+        </p>
+      </header>
 
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <label>
-          Source:{" "}
-          <select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="all">All</option>
-            <option value="clanker">Clanker</option>
+      {/* Панель фильтров */}
+      <section
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "12px",
+          alignItems: "center",
+          marginBottom: "16px",
+        }}
+      >
+        <label style={{ fontSize: "13px" }}>
+          Source:&nbsp;
+          <select
+            value={sourceFilter}
+            onChange={(e) =>
+              setSourceFilter(e.target.value as "all" | "clanker" | "zora")
+            }
+            style={{ fontSize: "13px", padding: "4px 6px" }}
+          >
+            {SOURCE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </label>
 
-        <label>
-          Min Liquidity (USD):{" "}
+        <label style={{ fontSize: "13px" }}>
+          Min Liquidity (USD):&nbsp;
           <input
             type="number"
             min={0}
-            step={50}
-            value={minLiq}
-            onChange={(e) => setMinLiq(Number(e.target.value) || 0)}
-            style={{ width: 140 }}
+            value={minLiquidity}
+            onChange={(e) => setMinLiquidity(e.target.value)}
+            style={{ fontSize: "13px", padding: "4px 6px", width: "100px" }}
           />
         </label>
 
-        <input
-          placeholder="Search name / symbol / address"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          style={{ flex: 1, minWidth: 220, padding: "6px 10px" }}
-        />
-      </div>
+        <div style={{ flex: 1, minWidth: "220px", textAlign: "right" }}>
+          <input
+            type="text"
+            placeholder="Search name / symbol / address"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              width: "100%",
+              maxWidth: "260px",
+              fontSize: "13px",
+              padding: "4px 8px",
+            }}
+          />
+        </div>
+      </section>
 
-      <div style={{ overflowX: "auto", border: "1px solid #eee", borderRadius: 8 }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #eee" }}>
-              <th style={{ padding: 10 }}>Name</th>
-              <th style={{ padding: 10 }}>Address</th>
-              <th style={{ padding: 10 }}>Source</th>
-              <th style={{ padding: 10 }}>Liquidity</th>
-              <th style={{ padding: 10 }}>Price</th>
-              <th style={{ padding: 10 }}>Vol 24h</th>
-              <th style={{ padding: 10 }}>Socials</th>
-              <th style={{ padding: 10 }}>Seen</th>
+      {/* Таблица */}
+      <section
+        style={{
+          borderRadius: "8px",
+          border: "1px solid #e5e7eb",
+          overflow: "hidden",
+          background: "#ffffff",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            fontSize: "13px",
+          }}
+        >
+          <thead
+            style={{
+              background: "#f9fafb",
+              borderBottom: "1px solid #e5e7eb",
+            }}
+          >
+            <tr>
+              <th style={thStyle}>Name</th>
+              <th style={thStyle}>Address</th>
+              <th style={thStyle}>Source</th>
+              <th style={thStyle}>Liquidity</th>
+              <th style={thStyle}>Price</th>
+              <th style={thStyle}>Vol 24h</th>
+              <th style={thStyle}>Socials</th>
+              <th style={thStyle}>Seen</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => {
-              const nameBlock = (
-                <>
-                  {t.name || "—"}
-                  {t.symbol && t.symbol !== t.name && (
-                    <>
-                      {" "}
-                      <small>{t.symbol}</small>
-                    </>
-                  )}
-                </>
-              );
+            {filteredTokens.length === 0 && (
+              <tr>
+                <td
+                  colSpan={8}
+                  style={{
+                    padding: "16px",
+                    textAlign: "center",
+                    color: "#6b7280",
+                    fontSize: "13px",
+                  }}
+                >
+                  Пока пусто. Обнови страницу позже.
+                </td>
+              </tr>
+            )}
 
-              return (
-                <tr key={t.token_address} style={{ borderTop: "1px solid #fafafa" }}>
-                  {/* name → ссылка на Clanker */}
-                  <td style={{ padding: 10 }}>
-                    {t.source_url ? (
-                      <a
-                        href={t.source_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ textDecoration: "none", color: "inherit" }}
-                      >
-                        {nameBlock}
-                      </a>
-                    ) : (
-                      nameBlock
-                    )}
-                  </td>
-
-                  <td style={{ padding: 10 }}>
+            {filteredTokens.map((t) => (
+              <tr key={t.token_address}>
+                {/* Name + symbol (кликабельно на Clanker/Zora) */}
+                <td style={tdStyle}>
+                  {t.source_url ? (
                     <a
-                      href={`https://basescan.org/token/${t.token_address}`}
+                      href={t.source_url}
                       target="_blank"
                       rel="noreferrer"
+                      style={{
+                        textDecoration: "none",
+                        color: "#111827",
+                      }}
                     >
-                      {t.token_address.slice(0, 6)}…{t.token_address.slice(-4)}
+                      <div>{t.name || "—"}</div>
+                      {t.symbol && (
+                        <div style={{ opacity: 0.6, fontSize: "11px" }}>
+                          {t.symbol}
+                        </div>
+                      )}
                     </a>
-                  </td>
-
-                  <td style={{ padding: 10 }}>{t.source || "clanker"}</td>
-
-                  <td style={{ padding: 10 }}>
-                    {t.liquidity_usd != null
-                      ? `$${Math.round(t.liquidity_usd).toLocaleString()}`
-                      : "—"}
-                  </td>
-
-                  <td style={{ padding: 10 }}>
-                    {t.price_usd != null ? `$${t.price_usd.toFixed(6)}` : "—"}
-                  </td>
-
-                  <td style={{ padding: 10 }}>
-                    {t.volume_24h != null
-                      ? `$${Math.round(t.volume_24h).toLocaleString()}`
-                      : "—"}
-                  </td>
-
-                  <td style={{ padding: 10 }}>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {t.website_url && (
-                        <a
-                          href={t.website_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Website"
-                        >
-                          <IconWebsite />
-                        </a>
-                      )}
-                      {t.x_url && (
-                        <a
-                          href={t.x_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="X"
-                        >
-                          <IconX />
-                        </a>
-                      )}
-                      {t.farcaster_url && (
-                        <a
-                          href={t.farcaster_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Farcaster"
-                        >
-                          <IconFarcaster />
-                        </a>
-                      )}
-                      {t.telegram_url && (
-                        <a
-                          href={t.telegram_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Telegram"
-                        >
-                          <IconTelegram />
-                        </a>
+                  ) : (
+                    <div>
+                      <div>{t.name || "—"}</div>
+                      {t.symbol && (
+                        <div style={{ opacity: 0.6, fontSize: "11px" }}>
+                          {t.symbol}
+                        </div>
                       )}
                     </div>
-                  </td>
+                  )}
+                </td>
 
-                  <td style={{ padding: 10 }}>
-                    {t.first_seen_at
-                      ? new Date(t.first_seen_at).toLocaleString()
-                      : "—"}
-                  </td>
-                </tr>
-              );
-            })}
+                {/* Address */}
+                <td style={tdStyle}>
+                  <code>{shortAddress(t.token_address)}</code>
+                </td>
+
+                {/* Source */}
+                <td style={tdStyle}>{t.source || "—"}</td>
+
+                {/* Liquidity */}
+                <td style={tdStyle}>
+                  {t.liquidity_usd !== undefined
+                    ? `$${formatNumber(t.liquidity_usd, 0)}`
+                    : "—"}
+                </td>
+
+                {/* Price */}
+                <td style={tdStyle}>
+                  {t.price_usd !== undefined
+                    ? `$${formatNumber(t.price_usd, 6)}`
+                    : "—"}
+                </td>
+
+                {/* Volume 24h */}
+                <td style={tdStyle}>
+                  {t.volume_24h !== undefined
+                    ? `$${formatNumber(t.volume_24h, 0)}`
+                    : "—"}
+                </td>
+
+                {/* Socials */}
+                <td style={tdStyle}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "6px",
+                      alignItems: "center",
+                    }}
+                  >
+                    {t.farcaster_url && (
+                      <a
+                        href={t.farcaster_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Farcaster"
+                        style={iconLinkStyle}
+                      >
+                        {/* простая «фиолетовая плитка» под Farcaster */}
+                        <span
+                          style={{
+                            display: "inline-block",
+                            width: "18px",
+                            height: "18px",
+                            borderRadius: "4px",
+                            background: "#855DFF",
+                            color: "white",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            lineHeight: "18px",
+                            textAlign: "center",
+                          }}
+                        >
+                          F
+                        </span>
+                      </a>
+                    )}
+
+                    {t.website_url && (
+                      <a
+                        href={t.website_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Website"
+                        style={iconLinkStyle}
+                      >
+                        🌐
+                      </a>
+                    )}
+
+                    {t.x_url && (
+                      <a
+                        href={t.x_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="X (Twitter)"
+                        style={iconLinkStyle}
+                      >
+                        𝕏
+                      </a>
+                    )}
+
+                    {t.telegram_url && (
+                      <a
+                        href={t.telegram_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Telegram"
+                        style={iconLinkStyle}
+                      >
+                        ✈️
+                      </a>
+                    )}
+                  </div>
+                </td>
+
+                {/* Seen */}
+                <td style={tdStyle}>{formatDateTime(t.first_seen_at)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
-      </div>
+      </section>
 
-      {!filtered.length && (
-        <p style={{ marginTop: 16 }}>Пока пусто. Обнови страницу чуть позже.</p>
+      {loading && (
+        <div
+          style={{
+            marginTop: "8px",
+            fontSize: "11px",
+            opacity: 0.6,
+          }}
+        >
+          Updating…
+        </div>
       )}
-      <p style={{ marginTop: 8, color: "#888" }}>
-        Показываются токены за последний час. Данные обновляются примерно каждые
-        10 секунд.
-      </p>
     </main>
   );
 }
+
+// Общие стили ячеек
+
+const thStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  textAlign: "left",
+  fontWeight: 500,
+  fontSize: "12px",
+  color: "#4b5563",
+  borderBottom: "1px solid #e5e7eb",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderBottom: "1px solid #f3f4f6",
+  verticalAlign: "middle",
+};
+
+const iconLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  textDecoration: "none",
+  fontSize: "14px",
+};
