@@ -13,7 +13,7 @@ export type AggregatedToken = {
   volume24hUsd?: number | null;
 };
 
-// ----- CLANKER -----
+// ---------- CLANKER ----------
 
 export async function fetchClankerTokens(limit = 200): Promise<AggregatedToken[]> {
   const url = `https://www.clanker.world/api/tokens?sort=desc&limit=${limit}`;
@@ -21,7 +21,6 @@ export async function fetchClankerTokens(limit = 200): Promise<AggregatedToken[]
   let res: Response;
   try {
     res = await fetch(url, {
-      // на всякий случай, чтобы не кэшировалось надолго
       next: { revalidate: 10 },
     });
   } catch (e) {
@@ -42,16 +41,36 @@ export async function fetchClankerTokens(limit = 200): Promise<AggregatedToken[]
     return [];
   }
 
-  // у Clanker данные лежат либо в json.data, либо прямо в корне
-  const rawItems: any[] = Array.isArray(json)
-    ? json
-    : Array.isArray(json.data)
-    ? json.data
-    : [];
+  // Пытаемся найти массив токенов в разных возможных местах
+  let rawItems: any[] = [];
+
+  if (Array.isArray(json)) {
+    rawItems = json;
+  } else if (Array.isArray(json.items)) {
+    rawItems = json.items;
+  } else if (Array.isArray(json.data)) {
+    rawItems = json.data;
+  } else if (json.data && Array.isArray(json.data.items)) {
+    rawItems = json.data.items;
+  } else if (json.data && Array.isArray(json.data.tokens)) {
+    rawItems = json.data.tokens;
+  } else {
+    // последний шанс — берём первый массив в объекте
+    const firstArrKey = Object.keys(json).find((k) =>
+      Array.isArray((json as any)[k])
+    );
+    if (firstArrKey) {
+      rawItems = (json as any)[firstArrKey];
+    }
+  }
+
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    console.error("Clanker: no token array found in response");
+    return [];
+  }
 
   const mapped: AggregatedToken[] = rawItems
     .map((item: any) => {
-      // иногда токен лежит в item.token
       const t = item.token ?? item;
 
       const addr: string =
@@ -73,8 +92,7 @@ export async function fetchClankerTokens(limit = 200): Promise<AggregatedToken[]
         item.created ??
         new Date().toISOString();
 
-      // пробуем вытащить ссылку на фаркастер из metadata,
-      // Clanker может класть её по-разному
+      // пробуем вытащить ссылку на фаркастер
       let farcasterUrl: string | null = null;
       const m = t.metadata ?? item.metadata;
       if (m) {
@@ -102,13 +120,11 @@ export async function fetchClankerTokens(limit = 200): Promise<AggregatedToken[]
     })
     .filter(Boolean) as AggregatedToken[];
 
-  // доп. шаг: подтягиваем данные с DexScreener
   const withDex = await attachDexScreenerData(mapped);
-
   return withDex;
 }
 
-// ----- DEXSCREENER -----
+// ---------- DEXSCREENER ----------
 
 type DexInfo = {
   liquidityUsd: number | null;
@@ -121,12 +137,13 @@ async function fetchDexForToken(address: string): Promise<DexInfo | null> {
 
   try {
     const res = await fetch(url, {
-      // DexScreener и так кэширует, но чуть поменьше частота
       next: { revalidate: 30 },
     });
+
     if (!res.ok) {
       return null;
     }
+
     const json: any = await res.json();
     const pair = Array.isArray(json.pairs) ? json.pairs[0] : null;
     if (!pair) return null;
@@ -154,8 +171,8 @@ async function fetchDexForToken(address: string): Promise<DexInfo | null> {
 }
 
 /**
- * Подмешиваем данные DexScreener к токенам.
- * Чтобы не убить лимиты, смотрим только первые 50 адресов.
+ * Подмешиваем DexScreener к первым 50 токенам,
+ * чтобы не улететь в лимиты.
  */
 async function attachDexScreenerData(
   tokens: AggregatedToken[]
