@@ -1,702 +1,678 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-// ==== Типы данных ====
-
-interface Token {
+type TokenItem = {
   token_address: string;
-  name?: string;
-  symbol?: string;
-  source?: string;
-  source_url?: string;
-  first_seen_at?: string;
+  name: string;
+  symbol: string;
+  source: string;
+  source_url: string;
+  first_seen_at: string;
+  price_usd: number | null;
+  liquidity_usd: number | null;
+  volume_24h_usd: number | null;
+  farcaster_url?: string | null;
+};
 
-  farcaster_url?: string;
-  website_url?: string;
-  x_url?: string;
-  telegram_url?: string;
-
-  // Дополняем на клиенте
-  farcaster_username?: string;
-  farcaster_display_name?: string;
-  farcaster_pfp_url?: string;
-  farcaster_followers?: number;
-  farcaster_following?: number;
-}
-
-interface TokenWithMarket extends Token {
-  price_usd?: number;
-  liquidity_usd?: number;
-  volume_24h?: number;
-}
-
-interface ApiResponse {
+type TokensResponse = {
   count: number;
-  items: TokenWithMarket[];
+  items: TokenItem[];
+};
+
+type FarcasterProfile = {
+  username: string;
+  display_name: string;
+  pfp_url: string | null;
+  follower_count: number;
+  following_count: number;
+};
+
+const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 секунд
+
+function formatNumber(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (Math.abs(value) < 1) return value.toFixed(6);
+  if (Math.abs(value) < 10) return value.toFixed(4);
+  if (Math.abs(value) < 1000) return value.toFixed(2);
+  if (Math.abs(value) < 1_000_000)
+    return (value / 1_000).toFixed(1) + "K";
+  return (value / 1_000_000).toFixed(1) + "M";
 }
 
-const SOURCE_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "clanker", label: "Clanker" },
-  { value: "zora", label: "Zora" },
-];
-
-// ===== Утилиты =====
-
-const formatNumber = (value?: number, decimals = 2) => {
-  if (value === undefined || Number.isNaN(value)) return "—";
-  return value.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+function formatDate(dateString: string) {
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return dateString;
+  return d.toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
-};
+}
 
-const formatDateTime = (iso?: string) => {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("ru-RU");
-};
-
-const shortAddress = (addr: string) => {
-  if (!addr) return "";
-  return addr.slice(0, 6) + "..." + addr.slice(-4);
-};
-
-const extractFarcasterUsername = (url?: string) => {
-  if (!url) return undefined;
+function extractFarcasterUsername(url?: string | null): string | null {
+  if (!url) return null;
   try {
     const u = new URL(url);
-    if (!u.hostname.endsWith("farcaster.xyz")) return undefined;
-    const segments = u.pathname.split("/").filter(Boolean);
-    return segments[0] || undefined;
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    return parts[parts.length - 1];
   } catch {
-    return undefined;
+    return null;
   }
-};
-
-// ipfs://… -> https://ipfs.io/ipfs/…
-const normalizePfpUrl = (url?: string) => {
-  if (!url) return undefined;
-  if (url.startsWith("ipfs://")) {
-    const hash = url.slice("ipfs://".length);
-    return `https://ipfs.io/ipfs/${hash}`;
-  }
-  return url;
-};
-
-// простая иконка Farcaster (фоллбек)
-const FarcasterIcon: React.FC = () => (
-  <svg
-    width={24}
-    height={24}
-    viewBox="0 0 24 24"
-    style={{ display: "block", borderRadius: 8 }}
-  >
-    <rect x="0" y="0" width="24" height="24" rx="8" fill="#855DFF" />
-    <path
-      d="M7 17V12.5C7 9.5 8.8 8 12 8s5 1.5 5 4.5V17"
-      stroke="white"
-      strokeWidth="2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
-
-// ====== Стили таблицы ======
-
-const thStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  textAlign: "left",
-  fontWeight: 500,
-  fontSize: "12px",
-  color: "#4b5563",
-  borderBottom: "1px solid #e5e7eb",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "middle",
-};
-
-const iconLinkStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  textDecoration: "none",
-};
-
-// ===== Hover-карточка профиля Farcaster =====
-
-interface FarcasterProfileBadgeProps {
-  url: string;
-  displayName?: string;
-  usernameLabel?: string; // @username
-  pfpUrl?: string;
-  followers?: number;
-  following?: number;
 }
 
-const tooltipStyle: React.CSSProperties = {
-  position: "absolute",
-  top: "100%",
-  left: 0,
-  marginTop: 6,
-  padding: "10px 12px",
-  borderRadius: 12,
-  background: "rgba(17, 24, 39, 0.98)",
-  color: "white",
-  fontSize: "11px",
-  whiteSpace: "nowrap",
-  zIndex: 20,
-  boxShadow:
-    "0 20px 25px -5px rgba(0,0,0,0.4), 0 10px 10px -5px rgba(0,0,0,0.3)",
-  minWidth: 220,
-};
-
-const FarcasterProfileBadge: React.FC<FarcasterProfileBadgeProps> = ({
-  url,
-  displayName,
-  usernameLabel,
-  pfpUrl,
-  followers,
-  following,
-}) => {
-  const [hover, setHover] = useState(false);
-
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      style={{
-        ...iconLinkStyle,
-        gap: 6,
-        alignItems: "center",
-        position: "relative",
-      }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      {/* маленький вид в таблице */}
-      {pfpUrl ? (
-        <img
-          src={pfpUrl}
-          alt={displayName || "Farcaster user"}
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: "50%",
-            objectFit: "cover",
-          }}
-        />
-      ) : (
-        <FarcasterIcon />
-      )}
-
-      {displayName && (
-        <span style={{ fontSize: "11px" }}>{displayName}</span>
-      )}
-
-      {/* всплывающее окно как мини-профиль */}
-      {hover && (
-        <div style={tooltipStyle}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 8,
-            }}
-          >
-            <div>
-              {pfpUrl ? (
-                <img
-                  src={pfpUrl}
-                  alt={displayName || "Farcaster user"}
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: "50%",
-                    objectFit: "cover",
-                  }}
-                />
-              ) : (
-                <FarcasterIcon />
-              )}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  marginBottom: 2,
-                }}
-              >
-                {displayName || "Farcaster user"}
-              </span>
-              {usernameLabel && (
-                <span
-                  style={{
-                    fontSize: 11,
-                    opacity: 0.7,
-                  }}
-                >
-                  {usernameLabel}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {(followers !== undefined || following !== undefined) && (
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                fontSize: 11,
-                opacity: 0.9,
-              }}
-            >
-              {following !== undefined && (
-                <span>
-                  <strong>{following.toLocaleString()}</strong> Following
-                </span>
-              )}
-              {followers !== undefined && (
-                <span>
-                  <strong>{followers.toLocaleString()}</strong> Followers
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </a>
-  );
-};
-
-// ====== Страница ======
-
-export default function Page() {
-  const [tokens, setTokens] = useState<TokenWithMarket[]>([]);
+export default function HomePage() {
+  const [tokens, setTokens] = useState<TokenItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
     "all"
   );
-  const [minLiquidity, setMinLiquidity] = useState<string>("0");
-  const [search, setSearch] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(false);
+  const [minLiquidity, setMinLiquidity] = useState<number>(0);
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  // ---------- загрузка токенов + мердж маркет-данных ----------
+  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>({});
+  const [profileLoading, setProfileLoading] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [hoveredUsername, setHoveredUsername] = useState<string | null>(null);
 
-  const load = async () => {
+  // загрузка токенов
+  async function loadTokens() {
     try {
-      setLoading(true);
-      const res = await fetch("/api/tokens");
-      if (!res.ok) throw new Error("Failed to load /api/tokens");
-      const data: ApiResponse = await res.json();
-      const fresh: TokenWithMarket[] = data.items ?? [];
+      setIsLoading(true);
+      setError(null);
 
-      setTokens((prev) => {
-        const prevMap = new Map<string, TokenWithMarket>(
-          prev.map((t) => [t.token_address.toLowerCase(), t])
-        );
+      const res = await fetch("/api/tokens", { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`Tokens API error: ${res.status}`);
+      }
 
-        const merged: TokenWithMarket[] = fresh.map((t) => {
-          const key = t.token_address.toLowerCase();
-          const old = prevMap.get(key);
-
-          if (!old) return t;
-
-          return {
-            ...t,
-            // не стираем старые значения, если новые undefined
-            price_usd: t.price_usd ?? old.price_usd,
-            liquidity_usd: t.liquidity_usd ?? old.liquidity_usd,
-            volume_24h: t.volume_24h ?? old.volume_24h,
-
-            farcaster_username: old.farcaster_username ?? t.farcaster_username,
-            farcaster_display_name:
-              old.farcaster_display_name ?? t.farcaster_display_name,
-            farcaster_pfp_url: old.farcaster_pfp_url ?? t.farcaster_pfp_url,
-            farcaster_followers:
-              old.farcaster_followers ?? t.farcaster_followers,
-            farcaster_following:
-              old.farcaster_following ?? t.farcaster_following,
-          };
-        });
-
-        return merged;
-      });
-    } catch (e) {
+      const data: TokensResponse = await res.json();
+      setTokens(data.items || []);
+    } catch (e: any) {
       console.error(e);
+      setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }
 
+  // авто-обновление
   useEffect(() => {
-    load();
-    const id = setInterval(load, 30000); // автообновление раз в 30 сек
+    loadTokens();
+    const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
 
-  // ---------- дозагрузка профилей Farcaster ----------
-
-  useEffect(() => {
-    const seenUsernames = new Set<string>();
-    const toLoad: { username: string; address: string }[] = [];
-
-    for (const t of tokens) {
-      const username = extractFarcasterUsername(t.farcaster_url);
-      if (!username) continue;
-
-      // если у нас уже есть какие-то данные — не трогаем
-      if (
-        t.farcaster_display_name ||
-        t.farcaster_pfp_url ||
-        t.farcaster_followers !== undefined ||
-        t.farcaster_following !== undefined
-      ) {
-        continue;
-      }
-
-      if (seenUsernames.has(username)) continue;
-      seenUsernames.add(username);
-      toLoad.push({ username, address: t.token_address });
-    }
-
-    const limited = toLoad.slice(0, 25);
-    if (!limited.length) return;
-
-    limited.forEach(({ username, address }) => {
-      (async () => {
-        try {
-          const url = `https://client.farcaster.xyz/v2/user-by-username?username=${encodeURIComponent(
-            username
-          )}`;
-          const res = await fetch(url);
-          if (!res.ok) return;
-          const data = await res.json();
-          const user =
-            data.result?.user || data.user || data; // возможные форматы
-
-          const displayName =
-            user?.display_name || user?.username || username;
-          const rawPfp = user?.pfp?.url || user?.pfp_url;
-          const pfpUrl = normalizePfpUrl(rawPfp);
-
-          const followers: number | undefined =
-            user?.follower_count ??
-            user?.followers ??
-            user?.followers_count ??
-            undefined;
-
-          const following: number | undefined =
-            user?.following_count ??
-            user?.following ??
-            user?.following_users ??
-            undefined;
-
-          setTokens((prev) =>
-            prev.map((t) =>
-              t.token_address.toLowerCase() === address.toLowerCase()
-                ? {
-                    ...t,
-                    farcaster_username: username,
-                    farcaster_display_name: displayName,
-                    farcaster_pfp_url: pfpUrl,
-                    farcaster_followers: followers,
-                    farcaster_following: following,
-                  }
-                : t
-            )
-          );
-        } catch (e) {
-          console.error("farcaster profile error", e);
-        }
-      })();
-    });
-  }, [tokens]);
-
-  // ---------- фильтр / поиск ----------
-
+  // фильтрация токенов
   const filteredTokens = useMemo(() => {
-    const minLiq = Number(minLiquidity) || 0;
-    const q = search.trim().toLowerCase();
-
     return tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
-
-      const liq = t.liquidity_usd ?? 0;
-      if (liq < minLiq) return false;
-
-      if (q) {
-        const inName = (t.name || "").toLowerCase().includes(q);
-        const inSymbol = (t.symbol || "").toLowerCase().includes(q);
-        const inAddress = t.token_address.toLowerCase().includes(q);
-        if (!inName && !inSymbol && !inAddress) return false;
+      if (minLiquidity > 0) {
+        const liq = t.liquidity_usd ?? 0;
+        if (liq < minLiquidity) return false;
       }
-
+      if (search.trim()) {
+        const s = search.trim().toLowerCase();
+        const name = (t.name || "").toLowerCase();
+        const symbol = (t.symbol || "").toLowerCase();
+        const addr = (t.token_address || "").toLowerCase();
+        if (!name.includes(s) && !symbol.includes(s) && !addr.includes(s)) {
+          return false;
+        }
+      }
       return true;
     });
   }, [tokens, sourceFilter, minLiquidity, search]);
 
-  // ---------- рендер ----------
+  // загрузка профиля Neynar (через наш API-роут)
+  async function ensureProfile(username: string) {
+    if (!username) return;
+    if (profiles[username] || profileLoading[username]) return;
+
+    setProfileLoading((prev) => ({ ...prev, [username]: true }));
+    try {
+      const res = await fetch(
+        `/api/farcaster-profile?username=${encodeURIComponent(username)}`
+      );
+      if (!res.ok) {
+        console.warn("Profile API error for", username, res.status);
+        return;
+      }
+      const data: FarcasterProfile = await res.json();
+      setProfiles((prev) => ({ ...prev, [username]: data }));
+    } catch (e) {
+      console.error("Profile fetch failed for", username, e);
+    } finally {
+      setProfileLoading((prev) => ({ ...prev, [username]: false }));
+    }
+  }
 
   return (
-    <main
+    <div
       style={{
-        maxWidth: "1200px",
-        margin: "0 auto",
-        padding: "24px 16px 40px",
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif',
+        minHeight: "100vh",
+        backgroundColor: "#f5f5f5",
+        padding: "24px",
+        fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif",
       }}
     >
-      <header style={{ marginBottom: "16px" }}>
-        <h1
-          style={{
-            fontSize: "20px",
-            fontWeight: 600,
-            margin: 0,
-            marginBottom: "4px",
-          }}
-        >
-          New Base Tokens (Zora + Clanker)
-        </h1>
-        <p style={{ margin: 0, fontSize: "13px", opacity: 0.7 }}>
-          Auto-refresh every 30 seconds. Market data from DexScreener.
-        </p>
-      </header>
-
-      {/* Панель фильтров */}
-      <section
+      <main
         style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "12px",
-          alignItems: "center",
-          marginBottom: "16px",
+          maxWidth: "1200px",
+          margin: "0 auto",
+          backgroundColor: "#ffffff",
+          borderRadius: "12px",
+          padding: "20px 24px 24px",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
         }}
       >
-        <label style={{ fontSize: "13px" }}>
-          Source:&nbsp;
-          <select
-            value={sourceFilter}
-            onChange={(e) =>
-              setSourceFilter(e.target.value as "all" | "clanker" | "zora")
-            }
-            style={{ fontSize: "13px", padding: "4px 6px" }}
+        <header
+          style={{
+            marginBottom: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+          }}
+        >
+          <h1 style={{ fontSize: "20px", margin: 0 }}>
+            New Base Tokens (Zora + Clanker)
+          </h1>
+          <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
+            Auto-refresh every 30 seconds. Market data from DexScreener.
+          </p>
+        </header>
+
+        {/* Фильтры + поиск */}
+        <section
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "12px",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "12px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <label
+              style={{
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              Source:
+              <select
+                value={sourceFilter}
+                onChange={(e) =>
+                  setSourceFilter(e.target.value as "all" | "clanker" | "zora")
+                }
+                style={{
+                  fontSize: "13px",
+                  padding: "4px 8px",
+                  borderRadius: "6px",
+                  border: "1px solid #ddd",
+                  background: "#fff",
+                }}
+              >
+                <option value="all">All</option>
+                <option value="clanker">Clanker</option>
+                <option value="zora">Zora</option>
+              </select>
+            </label>
+
+            <label
+              style={{
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              Min Liquidity (USD):
+              <input
+                type="number"
+                value={minLiquidity}
+                onChange={(e) =>
+                  setMinLiquidity(Number(e.target.value) || 0)
+                }
+                style={{
+                  width: "90px",
+                  fontSize: "13px",
+                  padding: "4px 6px",
+                  borderRadius: "6px",
+                  border: "1px solid #ddd",
+                }}
+              />
+            </label>
+          </div>
+
+          <div style={{ flex: "0 0 260px" }}>
+            <input
+              type="text"
+              placeholder="Search name / symbol / address"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                fontSize: "13px",
+                padding: "6px 10px",
+                borderRadius: "999px",
+                border: "1px solid #ddd",
+              }}
+            />
+          </div>
+        </section>
+
+        {error && (
+          <div
+            style={{
+              marginBottom: "12px",
+              padding: "8px 10px",
+              borderRadius: "8px",
+              backgroundColor: "#ffe5e5",
+              color: "#b00020",
+              fontSize: "13px",
+            }}
           >
-            {SOURCE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            {error}
+          </div>
+        )}
 
-        <label style={{ fontSize: "13px" }}>
-          Min Liquidity (USD):&nbsp;
-          <input
-            type="number"
-            min={0}
-            value={minLiquidity}
-            onChange={(e) => setMinLiquidity(e.target.value)}
-            style={{ fontSize: "13px", padding: "4px 6px", width: "100px" }}
-          />
-        </label>
-
-        <div style={{ flex: 1, minWidth: "220px", textAlign: "right" }}>
-          <input
-            type="text"
-            placeholder="Search name / symbol / address"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+        {/* Таблица */}
+        <div
+          style={{
+            borderRadius: "10px",
+            border: "1px solid #eee",
+            overflow: "hidden",
+            backgroundColor: "#fff",
+          }}
+        >
+          <table
             style={{
               width: "100%",
-              maxWidth: "260px",
+              borderCollapse: "collapse",
               fontSize: "13px",
-              padding: "4px 8px",
-            }}
-          />
-        </div>
-      </section>
-
-      {/* Таблица */}
-      <section
-        style={{
-          borderRadius: "8px",
-          border: "1px solid #e5e7eb",
-          overflow: "hidden",
-          background: "#ffffff",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: "13px",
-          }}
-        >
-          <thead
-            style={{
-              background: "#f9fafb",
-              borderBottom: "1px solid #e5e7eb",
             }}
           >
-            <tr>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>Address</th>
-              <th style={thStyle}>Source</th>
-              <th style={thStyle}>Liquidity</th>
-              <th style={thStyle}>Price</th>
-              <th style={thStyle}>Vol 24h</th>
-              <th style={thStyle}>Socials</th>
-              <th style={thStyle}>Seen</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredTokens.length === 0 && (
-              <tr>
-                <td
-                  colSpan={8}
-                  style={{
-                    padding: "16px",
-                    textAlign: "center",
-                    color: "#6b7280",
-                    fontSize: "13px",
-                  }}
-                >
-                  Пока пусто. Обнови страницу позже.
-                </td>
+            <thead>
+              <tr
+                style={{
+                  backgroundColor: "#fafafa",
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                {[
+                  "Name",
+                  "Address",
+                  "Source",
+                  "Liquidity",
+                  "Price",
+                  "Vol 24h",
+                  "Socials",
+                  "Seen",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      textAlign: h === "Name" ? "left" : "right",
+                      padding: "8px 10px",
+                      fontWeight: 500,
+                      color: "#555",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
-            )}
+            </thead>
+            <tbody>
+              {filteredTokens.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    style={{
+                      padding: "18px 10px",
+                      textAlign: "center",
+                      color: "#777",
+                      fontSize: "13px",
+                    }}
+                  >
+                    {isLoading
+                      ? "Загружаем данные…"
+                      : "Пока пусто. Обнови страницу позже."}
+                  </td>
+                </tr>
+              )}
 
-            {filteredTokens.map((t) => {
-              const usernameRaw =
-                t.farcaster_username || extractFarcasterUsername(t.farcaster_url);
-              const username = usernameRaw
-                ? usernameRaw.replace(/^@/, "")
-                : undefined;
-              const usernameLabel = username ? `@${username}` : undefined;
-              const displayName = t.farcaster_display_name || usernameLabel;
+              {filteredTokens.map((token) => {
+                const username = extractFarcasterUsername(
+                  token.farcaster_url || undefined
+                );
+                const profile = username ? profiles[username] : undefined;
+                const isHovered = hoveredUsername === username;
 
-              const hasAnyProfileInfo =
-                (t.farcaster_pfp_url || displayName) && t.farcaster_url;
-
-              return (
-                <tr key={t.token_address}>
-                  {/* Name + symbol (кликабельно на Clanker/Zora) */}
-                  <td style={tdStyle}>
-                    {t.source_url ? (
+                return (
+                  <tr
+                    key={`${token.source}-${token.token_address}`}
+                    style={{
+                      borderBottom: "1px solid #f2f2f2",
+                    }}
+                  >
+                    {/* Name (кликабельно на Clanker/Zora) */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "left",
+                        maxWidth: "260px",
+                      }}
+                    >
                       <a
-                        href={t.source_url}
+                        href={token.source_url}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         style={{
+                          display: "flex",
+                          flexDirection: "column",
                           textDecoration: "none",
                           color: "#111827",
                         }}
                       >
-                        <div>{t.name || "—"}</div>
-                        {t.symbol && (
-                          <div style={{ opacity: 0.6, fontSize: "11px" }}>
-                            {t.symbol}
-                          </div>
+                        <span
+                          style={{
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {token.name || token.symbol || "—"}
+                        </span>
+                        {token.symbol && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "#6b7280",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {token.symbol}
+                          </span>
                         )}
                       </a>
-                    ) : (
-                      <div>
-                        <div>{t.name || "—"}</div>
-                        {t.symbol && (
-                          <div style={{ opacity: 0.6, fontSize: "11px" }}>
-                            {t.symbol}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </td>
+                    </td>
 
-                  {/* Address */}
-                  <td style={tdStyle}>
-                    <code>{shortAddress(t.token_address)}</code>
-                  </td>
+                    {/* Address */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                        fontFamily: "monospace",
+                        fontSize: "12px",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {token.token_address
+                        ? token.token_address.slice(0, 6) +
+                          "..." +
+                          token.token_address.slice(-4)
+                        : "—"}
+                    </td>
 
-                  {/* Source */}
-                  <td style={tdStyle}>{t.source || "—"}</td>
+                    {/* Source */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                        textTransform: "lowercase",
+                      }}
+                    >
+                      {token.source}
+                    </td>
 
-                  {/* Liquidity */}
-                  <td style={tdStyle}>
-                    {t.liquidity_usd !== undefined
-                      ? `$${formatNumber(t.liquidity_usd, 0)}`
-                      : "—"}
-                  </td>
+                    {/* Liquidity */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatNumber(token.liquidity_usd)}
+                    </td>
 
-                  {/* Price */}
-                  <td style={tdStyle}>
-                    {t.price_usd !== undefined
-                      ? `$${formatNumber(t.price_usd, 6)}`
-                      : "—"}
-                  </td>
+                    {/* Price */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatNumber(token.price_usd)}
+                    </td>
 
-                  {/* Volume 24h */}
-                  <td style={tdStyle}>
-                    {t.volume_24h !== undefined
-                      ? `$${formatNumber(t.volume_24h, 0)}`
-                      : "—"}
-                  </td>
+                    {/* Vol 24h */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                      }}
+                    >
+                      {formatNumber(token.volume_24h_usd)}
+                    </td>
 
-                  {/* Socials: аватар Farcaster или иконка */}
-                  <td style={tdStyle}>
-                    {t.farcaster_url && hasAnyProfileInfo && (
-                      <FarcasterProfileBadge
-                        url={t.farcaster_url}
-                        displayName={displayName}
-                        usernameLabel={usernameLabel}
-                        pfpUrl={t.farcaster_pfp_url}
-                        followers={t.farcaster_followers}
-                        following={t.farcaster_following}
-                      />
-                    )}
+                    {/* Socials (Farcaster аватар + попап) */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                        position: "relative",
+                      }}
+                    >
+                      {username ? (
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            position: "relative",
+                          }}
+                          onMouseEnter={() => {
+                            setHoveredUsername(username);
+                            ensureProfile(username);
+                          }}
+                          onMouseLeave={() => setHoveredUsername(null)}
+                        >
+                          <a
+                            href={`https://farcaster.xyz/${username}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "3px 8px",
+                              borderRadius: "999px",
+                              backgroundColor: "#5b3ded",
+                              color: "#fff",
+                              textDecoration: "none",
+                              fontSize: "12px",
+                            }}
+                          >
+                            {/* Аватар или fallback-иконка */}
+                            {profile?.pfp_url ? (
+                              <img
+                                src={profile.pfp_url}
+                                alt={profile.display_name || username}
+                                style={{
+                                  width: "18px",
+                                  height: "18px",
+                                  borderRadius: "999px",
+                                  objectFit: "cover",
+                                  backgroundColor: "#1f2933",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: "18px",
+                                  height: "18px",
+                                  borderRadius: "999px",
+                                  background:
+                                    "linear-gradient(135deg,#7c3aed,#4f46e5)",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                F
+                              </div>
+                            )}
 
-                    {/* Фоллбек: ссылка есть, но профиля нет */}
-                    {t.farcaster_url && !hasAnyProfileInfo && (
-                      <a
-                        href={t.farcaster_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={iconLinkStyle}
-                        title="Farcaster"
-                      >
-                        <FarcasterIcon />
-                      </a>
-                    )}
-                  </td>
+                            <span
+                              style={{
+                                maxWidth: "110px",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              @{username}
+                            </span>
+                          </a>
 
-                  {/* Seen */}
-                  <td style={tdStyle}>{formatDateTime(t.first_seen_at)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
+                          {/* Попап профиля */}
+                          {isHovered && profile && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "110%",
+                                right: 0,
+                                marginTop: "6px",
+                                padding: "10px 12px",
+                                borderRadius: "10px",
+                                backgroundColor: "#111827",
+                                color: "#f9fafb",
+                                minWidth: "220px",
+                                boxShadow:
+                                  "0 12px 30px rgba(0,0,0,0.35)",
+                                zIndex: 20,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "10px",
+                                  marginBottom: "8px",
+                                }}
+                              >
+                                {profile.pfp_url ? (
+                                  <img
+                                    src={profile.pfp_url}
+                                    alt={profile.display_name || username}
+                                    style={{
+                                      width: "38px",
+                                      height: "38px",
+                                      borderRadius: "999px",
+                                      objectFit: "cover",
+                                      backgroundColor: "#1f2933",
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    style={{
+                                      width: "38px",
+                                      height: "38px",
+                                      borderRadius: "999px",
+                                      background:
+                                        "linear-gradient(135deg,#7c3aed,#4f46e5)",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    F
+                                  </div>
+                                )}
+                                <div>
+                                  <div
+                                    style={{
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                      marginBottom: "2px",
+                                    }}
+                                  >
+                                    {profile.display_name ||
+                                      profile.username}
+                                  </div>
+                                  <div
+                                    style={{
+                                      fontSize: "12px",
+                                      color: "#9ca3af",
+                                    }}
+                                  >
+                                    @{profile.username}
+                                  </div>
+                                </div>
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: "12px",
+                                  fontSize: "11px",
+                                  color: "#e5e7eb",
+                                }}
+                              >
+                                <span>
+                                  <strong>
+                                    {profile.follower_count}
+                                  </strong>{" "}
+                                  followers
+                                </span>
+                                <span>
+                                  <strong>
+                                    {profile.following_count}
+                                  </strong>{" "}
+                                  following
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
 
-      {loading && (
-        <div
-          style={{
-            marginTop: "8px",
-            fontSize: "11px",
-            opacity: 0.6,
-          }}
-        >
-          Updating…
+                    {/* Seen */}
+                    <td
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "right",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {token.first_seen_at
+                        ? formatDate(token.first_seen_at)
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      )}
-    </main>
+      </main>
+    </div>
   );
 }
