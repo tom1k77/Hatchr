@@ -52,7 +52,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
-  const [minMc, setMinMc] = useState<number>(0);
+  const [minLiq, setMinLiq] = useState<number>(0);
   const [search, setSearch] = useState("");
 
   const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>(
@@ -60,7 +60,7 @@ export default function HomePage() {
   );
   const [hovered, setHovered] = useState<HoverState>(null);
 
-  // автообновление каждые 30 сек
+  // автообновление каждые 30 секунд
   useEffect(() => {
     let cancelled = false;
 
@@ -102,8 +102,8 @@ export default function HomePage() {
         return false;
       }
 
-      if (minMc > 0) {
-        if (!t.marketCapUsd || t.marketCapUsd < minMc) return false;
+      if (minLiq > 0) {
+        if (!t.liquidityUsd || t.liquidityUsd < minLiq) return false;
       }
 
       if (search.trim()) {
@@ -122,7 +122,7 @@ export default function HomePage() {
 
       return true;
     });
-  }, [tokens, sourceFilter, minMc, search]);
+  }, [tokens, sourceFilter, minLiq, search]);
 
   const handleHoverStart = (token: AggregatedToken) => {
     const username = getFarcasterUsername(token.farcaster_url);
@@ -159,7 +159,7 @@ export default function HomePage() {
             New Base Tokens (Zora + Clanker)
           </h1>
           <p className="text-sm text-slate-600">
-            Auto-refresh every 30 seconds. Market Cap from DexScreener.
+            Auto-refresh every 30 seconds. Market data from DexScreener.
           </p>
         </header>
 
@@ -176,21 +176,20 @@ export default function HomePage() {
             >
               <option value="all">All</option>
               <option value="clanker">Clanker</option>
-              {/* Zora можно добавить позже */}
             </select>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-sm text-slate-600">
-              Min Market Cap (USD):
+              Min Liquidity (USD):
             </span>
             <input
               type="number"
               min={0}
               className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
-              value={minMc}
+              value={minLiq}
               onChange={(e) =>
-                setMinMc(Number(e.target.value) || 0)
+                setMinLiq(Number(e.target.value) || 0)
               }
             />
           </div>
@@ -220,7 +219,10 @@ export default function HomePage() {
                   Source
                 </th>
                 <th className="px-4 py-2 text-right font-medium text-slate-700">
-                  Market Cap (USD)
+                  Liquidity (USD)
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-slate-700">
+                  Price (USD)
                 </th>
                 <th className="px-4 py-2 text-right font-medium text-slate-700">
                   Vol 24h
@@ -237,7 +239,7 @@ export default function HomePage() {
               {loading && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-6 text-center text-slate-500"
                   >
                     Загрузка…
@@ -248,7 +250,7 @@ export default function HomePage() {
               {!loading && error && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-6 text-center text-red-500"
                   >
                     {error}
@@ -259,7 +261,7 @@ export default function HomePage() {
               {!loading && !error && filteredTokens.length === 0 && (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-6 text-center text-slate-500"
                   >
                     Пока пусто. Обнови страницу позже.
@@ -310,14 +312,22 @@ export default function HomePage() {
                         {t.source}
                       </td>
 
-                      {/* Market Cap */}
+                      {/* Liquidity */}
                       <td className="px-4 py-2 text-right whitespace-nowrap">
-                        {t.marketCapUsd
-                          ? `$${t.marketCapUsd.toLocaleString(
+                        {t.liquidityUsd
+                          ? `$${t.liquidityUsd.toLocaleString(
                               undefined,
-                              {
-                                maximumFractionDigits: 0,
-                              }
+                              { maximumFractionDigits: 0 }
+                            )}`
+                          : "—"}
+                      </td>
+
+                      {/* Price */}
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {t.priceUsd
+                          ? `$${t.priceUsd.toLocaleString(
+                              undefined,
+                              { maximumFractionDigits: 6 }
                             )}`
                           : "—"}
                       </td>
@@ -327,9 +337,7 @@ export default function HomePage() {
                         {t.volume24hUsd
                           ? `$${t.volume24hUsd.toLocaleString(
                               undefined,
-                              {
-                                maximumFractionDigits: 0,
-                              }
+                              { maximumFractionDigits: 0 }
                             )}`
                           : "—"}
                       </td>
