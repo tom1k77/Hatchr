@@ -1,676 +1,429 @@
+// app/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { AggregatedToken } from "@/lib/providers";
 
-type TokenItem = {
-  token_address: string;
-  name: string;
-  symbol: string;
-  source: string;
-  source_url: string;
-  first_seen_at: string;
-  price_usd: number | null;
-  liquidity_usd: number | null;
-  volume_24h_usd: number | null;
-  farcaster_url?: string | null;
-};
-
-type TokensResponse = {
-  count: number;
-  items: TokenItem[];
-};
+type SourceFilter = "all" | "clanker";
 
 type FarcasterProfile = {
   username: string;
-  display_name: string;
-  pfp_url: string | null;
-  follower_count: number;
-  following_count: number;
+  displayName: string | null;
+  pfpUrl: string | null;
+  followers: number;
+  following: number;
+  bio: string;
+  fid: number | null;
 };
 
-const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 секунд
+type HoverState = {
+  username: string;
+  tokenAddress: string;
+} | null;
 
-function formatNumber(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return "—";
-  if (Math.abs(value) < 1) return value.toFixed(6);
-  if (Math.abs(value) < 10) return value.toFixed(4);
-  if (Math.abs(value) < 1000) return value.toFixed(2);
-  if (Math.abs(value) < 1_000_000)
-    return (value / 1_000).toFixed(1) + "K";
-  return (value / 1_000_000).toFixed(1) + "M";
+function getFarcasterUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    let path = u.pathname || "";
+    path = path.replace(/^\/@?/, "");
+    const [username] = path.split("/");
+    return username || null;
+  } catch {
+    return null;
+  }
 }
 
-function formatDate(dateString: string) {
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return dateString;
+function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("ru-RU", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 }
 
-function extractFarcasterUsername(url?: string | null): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split("/").filter(Boolean);
-    if (!parts.length) return null;
-    return parts[parts.length - 1];
-  } catch {
-    return null;
-  }
-}
-
-// простая «арка» Farcaster вместо буквы F
-function FarcasterFallbackIcon() {
-  return (
-    <div
-      style={{
-        width: 18,
-        height: 18,
-        borderRadius: 6,
-        background: "#5b3ded",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        style={{
-          width: 11,
-          height: 11,
-          borderRadius: 3,
-          border: "2px solid #fff",
-          borderTopWidth: 0,
-          boxSizing: "border-box",
-        }}
-      />
-    </div>
-  );
-}
-
 export default function HomePage() {
-  const [tokens, setTokens] = useState<TokenItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
-    "all"
-  );
-  const [minLiquidity, setMinLiquidity] = useState<number>(0);
-  const [search, setSearch] = useState("");
+  const [tokens, setTokens] = useState<AggregatedToken[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>({});
-  const [profileLoading, setProfileLoading] = useState<Record<string, boolean>>(
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [minMc, setMinMc] = useState<number>(0);
+  const [search, setSearch] = useState("");
+
+  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>(
     {}
   );
+  const [hovered, setHovered] = useState<HoverState>(null);
 
-  // теперь храним не username, а уникальный ключ строки
-  const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-
-  async function loadTokens() {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const res = await fetch("/api/tokens", { cache: "no-store" });
-      if (!res.ok) {
-        throw new Error(`Tokens API error: ${res.status}`);
-      }
-
-      const data: TokensResponse = await res.json();
-      setTokens(data.items || []);
-    } catch (e: any) {
-      console.error(e);
-      setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
+  // автообновление каждые 30 сек
   useEffect(() => {
-    loadTokens();
-    const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
-    return () => clearInterval(id);
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setError(null);
+        const res = await fetch("/api/tokens", {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const data = await res.json();
+        if (!cancelled) {
+          setTokens(data.items ?? []);
+          setLoading(false);
+        }
+      } catch (e: any) {
+        console.error("Failed to load tokens", e);
+        if (!cancelled) {
+          setError("Ошибка загрузки данных");
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
+    const id = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
+  // фильтрация
   const filteredTokens = useMemo(() => {
     return tokens.filter((t) => {
-      if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
-      if (minLiquidity > 0) {
-        const liq = t.liquidity_usd ?? 0;
-        if (liq < minLiquidity) return false;
+      if (sourceFilter !== "all" && t.source !== sourceFilter) {
+        return false;
       }
+
+      if (minMc > 0) {
+        if (!t.marketCapUsd || t.marketCapUsd < minMc) return false;
+      }
+
       if (search.trim()) {
-        const s = search.trim().toLowerCase();
+        const q = search.trim().toLowerCase();
+        const address = t.token_address.toLowerCase();
         const name = (t.name || "").toLowerCase();
         const symbol = (t.symbol || "").toLowerCase();
-        const addr = (t.token_address || "").toLowerCase();
-        if (!name.includes(s) && !symbol.includes(s) && !addr.includes(s)) {
+        if (
+          !address.includes(q) &&
+          !name.includes(q) &&
+          !symbol.includes(q)
+        ) {
           return false;
         }
       }
+
       return true;
     });
-  }, [tokens, sourceFilter, minLiquidity, search]);
+  }, [tokens, sourceFilter, minMc, search]);
 
-  async function ensureProfile(username: string) {
+  const handleHoverStart = (token: AggregatedToken) => {
+    const username = getFarcasterUsername(token.farcaster_url);
     if (!username) return;
-    if (profiles[username] || profileLoading[username]) return;
 
-    setProfileLoading((prev) => ({ ...prev, [username]: true }));
-    try {
-      const res = await fetch(
-        `/api/farcaster-profile?username=${encodeURIComponent(username)}`
-      );
-      if (!res.ok) {
-        console.warn("Profile API error for", username, res.status);
-        return;
-      }
-      const data: FarcasterProfile = await res.json();
-      setProfiles((prev) => ({ ...prev, [username]: data }));
-    } catch (e) {
-      console.error("Profile fetch failed for", username, e);
-    } finally {
-      setProfileLoading((prev) => ({ ...prev, [username]: false }));
-    }
-  }
+    setHovered({ username, tokenAddress: token.token_address });
+
+    if (profiles[username]) return;
+
+    // загружаем профиль Neynar
+    fetch(`/api/farcaster-profile?username=${encodeURIComponent(username)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data || !data.username) return;
+        setProfiles((prev) => ({
+          ...prev,
+          [data.username]: data,
+        }));
+      })
+      .catch((e) => {
+        console.error("Farcaster profile error", e);
+      });
+  };
+
+  const handleHoverEnd = () => {
+    setHovered(null);
+  };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#f5f5f5",
-        padding: "24px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-      }}
-    >
-      <main
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          backgroundColor: "#ffffff",
-          borderRadius: "12px",
-          padding: "20px 24px 24px",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-        }}
-      >
-        <header
-          style={{
-            marginBottom: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-          }}
-        >
-          <h1 style={{ fontSize: "20px", margin: 0 }}>
+    <main className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto max-w-6xl px-4 py-6">
+        <header className="mb-4">
+          <h1 className="text-xl font-semibold">
             New Base Tokens (Zora + Clanker)
           </h1>
-          <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
-            Auto-refresh every 30 seconds. Market data from DexScreener.
+          <p className="text-sm text-slate-600">
+            Auto-refresh every 30 seconds. Market Cap from DexScreener.
           </p>
         </header>
 
-        {/* фильтры */}
-        <section
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "12px",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "12px",
-          }}
-        >
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <label
-              style={{
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
+        {/* Фильтры */}
+        <div className="mb-4 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">Source:</span>
+            <select
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+              value={sourceFilter}
+              onChange={(e) =>
+                setSourceFilter(e.target.value as SourceFilter)
+              }
             >
-              Source:
-              <select
-                value={sourceFilter}
-                onChange={(e) =>
-                  setSourceFilter(e.target.value as "all" | "clanker" | "zora")
-                }
-                style={{
-                  fontSize: "13px",
-                  padding: "4px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
-                  background: "#fff",
-                }}
-              >
-                <option value="all">All</option>
-                <option value="clanker">Clanker</option>
-                <option value="zora">Zora</option>
-              </select>
-            </label>
-
-            <label
-              style={{
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              Min Liquidity (USD):
-              <input
-                type="number"
-                value={minLiquidity}
-                onChange={(e) =>
-                  setMinLiquidity(Number(e.target.value) || 0)
-                }
-                style={{
-                  width: "90px",
-                  fontSize: "13px",
-                  padding: "4px 6px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
-                }}
-              />
-            </label>
+              <option value="all">All</option>
+              <option value="clanker">Clanker</option>
+              {/* Zora можно добавить позже */}
+            </select>
           </div>
 
-          <div style={{ flex: "0 0 260px" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-slate-600">
+              Min Market Cap (USD):
+            </span>
+            <input
+              type="number"
+              min={0}
+              className="w-24 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+              value={minMc}
+              onChange={(e) =>
+                setMinMc(Number(e.target.value) || 0)
+              }
+            />
+          </div>
+
+          <div className="ml-auto flex items-center gap-2">
             <input
               type="text"
               placeholder="Search name / symbol / address"
+              className="w-64 rounded border border-slate-300 bg-white px-3 py-1 text-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "100%",
-                fontSize: "13px",
-                padding: "6px 10px",
-                borderRadius: "999px",
-                border: "1px solid #ddd",
-              }}
             />
           </div>
-        </section>
+        </div>
 
-        {error && (
-          <div
-            style={{
-              marginBottom: "12px",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              backgroundColor: "#ffe5e5",
-              color: "#b00020",
-              fontSize: "13px",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* таблица */}
-        <div
-          style={{
-            borderRadius: "10px",
-            border: "1px solid #eee",
-            overflow: "hidden",
-            backgroundColor: "#fff",
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: "#fafafa",
-                  borderBottom: "1px solid #eee",
-                }}
-              >
-                {[
-                  "Name",
-                  "Address",
-                  "Source",
-                  "Liquidity",
-                  "Price",
-                  "Vol 24h",
-                  "Socials",
-                  "Seen",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      textAlign: h === "Name" ? "left" : "right",
-                      padding: "8px 10px",
-                      fontWeight: 500,
-                      color: "#555",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="px-4 py-2 text-left font-medium text-slate-700">
+                  Name
+                </th>
+                <th className="px-4 py-2 text-left font-medium text-slate-700">
+                  Address
+                </th>
+                <th className="px-4 py-2 text-left font-medium text-slate-700">
+                  Source
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-slate-700">
+                  Market Cap (USD)
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-slate-700">
+                  Vol 24h
+                </th>
+                <th className="px-4 py-2 text-left font-medium text-slate-700">
+                  Socials
+                </th>
+                <th className="px-4 py-2 text-right font-medium text-slate-700">
+                  Seen
+                </th>
               </tr>
             </thead>
             <tbody>
-              {filteredTokens.length === 0 && (
+              {loading && (
                 <tr>
                   <td
-                    colSpan={8}
-                    style={{
-                      padding: "18px 10px",
-                      textAlign: "center",
-                      color: "#777",
-                      fontSize: "13px",
-                    }}
+                    colSpan={7}
+                    className="px-4 py-6 text-center text-slate-500"
                   >
-                    {isLoading
-                      ? "Загружаем данные…"
-                      : "Пока пусто. Обнови страницу позже."}
+                    Загрузка…
                   </td>
                 </tr>
               )}
 
-              {filteredTokens.map((token) => {
-                const username = extractFarcasterUsername(
-                  token.farcaster_url || undefined
-                );
-                const profile = username ? profiles[username] : undefined;
-
-                const rowKey = `${token.source}-${token.token_address}`;
-                const isHovered = hoveredRowKey === rowKey;
-
-                return (
-                  <tr
-                    key={rowKey}
-                    style={{
-                      borderBottom: "1px solid #f2f2f2",
-                    }}
+              {!loading && error && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-6 text-center text-red-500"
                   >
-                    {/* Name */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "left",
-                        maxWidth: "260px",
-                      }}
+                    {error}
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !error && filteredTokens.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-6 text-center text-slate-500"
+                  >
+                    Пока пусто. Обнови страницу позже.
+                  </td>
+                </tr>
+              )}
+
+              {!loading &&
+                !error &&
+                filteredTokens.map((t) => {
+                  const username = getFarcasterUsername(
+                    t.farcaster_url
+                  );
+                  const profile = username
+                    ? profiles[username]
+                    : undefined;
+                  const isHovered =
+                    hovered &&
+                    username &&
+                    hovered.username === username &&
+                    hovered.tokenAddress === t.token_address;
+
+                  return (
+                    <tr
+                      key={`${t.source}-${t.token_address}-${t.first_seen_at}`}
+                      className="border-t border-slate-100"
                     >
-                      <a
-                        href={token.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          textDecoration: "none",
-                          color: "#111827",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontWeight: 500,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
-                          }}
+                      <td className="px-4 py-2">
+                        <a
+                          href={t.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm font-medium text-blue-600 hover:underline"
                         >
-                          {token.name || token.symbol || "—"}
-                        </span>
-                        {token.symbol && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color: "#6b7280",
-                              textTransform: "uppercase",
+                          {t.name}
+                        </a>
+                        <div className="text-xs uppercase text-slate-500">
+                          {t.symbol}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-2 font-mono text-xs text-slate-700">
+                        {t.token_address.slice(0, 6)}…
+                        {t.token_address.slice(-4)}
+                      </td>
+
+                      <td className="px-4 py-2 text-xs lowercase text-slate-600">
+                        {t.source}
+                      </td>
+
+                      {/* Market Cap */}
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {t.marketCapUsd
+                          ? `$${t.marketCapUsd.toLocaleString(
+                              undefined,
+                              {
+                                maximumFractionDigits: 0,
+                              }
+                            )}`
+                          : "—"}
+                      </td>
+
+                      {/* Vol 24h */}
+                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                        {t.volume24hUsd
+                          ? `$${t.volume24hUsd.toLocaleString(
+                              undefined,
+                              {
+                                maximumFractionDigits: 0,
+                              }
+                            )}`
+                          : "—"}
+                      </td>
+
+                      {/* Socials */}
+                      <td className="relative px-4 py-2">
+                        {username ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-2 rounded-full bg-[#5A3DF4] px-3 py-1 text-xs font-medium text-white hover:bg-[#4b32cc]"
+                            onMouseEnter={() =>
+                              handleHoverStart(t)
+                            }
+                            onMouseLeave={handleHoverEnd}
+                            onClick={() => {
+                              window.open(
+                                t.farcaster_url!,
+                                "_blank"
+                              );
                             }}
                           >
-                            {token.symbol}
-                          </span>
-                        )}
-                      </a>
-                    </td>
-
-                    {/* Address */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        fontFamily: "monospace",
-                        fontSize: "12px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {token.token_address
-                        ? token.token_address.slice(0, 6) +
-                          "..." +
-                          token.token_address.slice(-4)
-                        : "—"}
-                    </td>
-
-                    {/* Source */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        textTransform: "lowercase",
-                      }}
-                    >
-                      {token.source}
-                    </td>
-
-                    {/* Liquidity */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {formatNumber(token.liquidity_usd)}
-                    </td>
-
-                    {/* Price */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {formatNumber(token.price_usd)}
-                    </td>
-
-                    {/* Vol 24h */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {formatNumber(token.volume_24h_usd)}
-                    </td>
-
-                    {/* Socials */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        position: "relative",
-                      }}
-                    >
-                      {username ? (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            position: "relative",
-                          }}
-                          onMouseEnter={() => {
-                            setHoveredRowKey(rowKey);
-                            ensureProfile(username);
-                          }}
-                          onMouseLeave={() => setHoveredRowKey(null)}
-                        >
-                          <a
-                            href={`https://farcaster.xyz/${username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              padding: "3px 8px",
-                              borderRadius: "999px",
-                              backgroundColor: "#5b3ded",
-                              color: "#fff",
-                              textDecoration: "none",
-                              fontSize: "12px",
-                            }}
-                          >
-                            {profile?.pfp_url ? (
+                            {profile?.pfpUrl ? (
                               <img
-                                src={profile.pfp_url}
-                                alt={profile.display_name || username}
-                                style={{
-                                  width: 18,
-                                  height: 18,
-                                  borderRadius: "999px",
-                                  objectFit: "cover",
-                                  backgroundColor: "#1f2933",
-                                }}
+                                src={profile.pfpUrl}
+                                alt={username}
+                                className="h-5 w-5 rounded-full border border-slate-900/20 bg-slate-900/20 object-cover"
                               />
                             ) : (
-                              <FarcasterFallbackIcon />
+                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[10px]">
+                                F
+                              </span>
                             )}
+                            <span>@{username}</span>
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400">
+                            —
+                          </span>
+                        )}
 
-                            <span
-                              style={{
-                                maxWidth: "110px",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              @{username}
-                            </span>
-                          </a>
-
-                          {isHovered && profile && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "110%",
-                                right: 0,
-                                marginTop: "6px",
-                                padding: "10px 12px",
-                                borderRadius: "10px",
-                                backgroundColor: "#111827",
-                                color: "#f9fafb",
-                                minWidth: "220px",
-                                boxShadow:
-                                  "0 12px 30px rgba(0,0,0,0.35)",
-                                zIndex: 20,
-                              }}
-                            >
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "10px",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                {profile.pfp_url ? (
-                                  <img
-                                    src={profile.pfp_url}
-                                    alt={profile.display_name || username}
-                                    style={{
-                                      width: 38,
-                                      height: 38,
-                                      borderRadius: "999px",
-                                      objectFit: "cover",
-                                      backgroundColor: "#1f2933",
-                                    }}
-                                  />
-                                ) : (
-                                  <FarcasterFallbackIcon />
-                                )}
-
-                                <div>
-                                  <div
-                                    style={{
-                                      fontSize: "13px",
-                                      fontWeight: 600,
-                                      marginBottom: "2px",
-                                    }}
-                                  >
-                                    {profile.display_name ||
-                                      profile.username}
-                                  </div>
-                                  <div
-                                    style={{
-                                      fontSize: "12px",
-                                      color: "#9ca3af",
-                                    }}
-                                  >
-                                    @{profile.username}
-                                  </div>
+                        {isHovered && profile && (
+                          <div className="absolute z-20 mt-1 w-64 rounded-lg bg-slate-900 px-3 py-2 text-xs text-slate-50 shadow-lg">
+                            <div className="mb-2 flex items-center gap-2">
+                              {profile.pfpUrl && (
+                                <img
+                                  src={profile.pfpUrl}
+                                  alt={profile.username}
+                                  className="h-8 w-8 rounded-full border border-slate-700 object-cover"
+                                />
+                              )}
+                              <div>
+                                <div className="font-semibold">
+                                  {profile.displayName ??
+                                    profile.username}
+                                </div>
+                                <div className="text-[11px] text-slate-300">
+                                  @{profile.username}
                                 </div>
                               </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: "12px",
-                                  fontSize: "11px",
-                                  color: "#e5e7eb",
-                                }}
-                              >
-                                <span>
-                                  <strong>
-                                    {profile.follower_count}
-                                  </strong>{" "}
-                                  followers
-                                </span>
-                                <span>
-                                  <strong>
-                                    {profile.following_count}
-                                  </strong>{" "}
-                                  following
-                                </span>
-                              </div>
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
+                            <div className="mb-1 flex gap-3 text-[11px] text-slate-200">
+                              <span>
+                                <span className="font-semibold">
+                                  {profile.followers.toLocaleString()}
+                                </span>{" "}
+                                followers
+                              </span>
+                              <span>
+                                <span className="font-semibold">
+                                  {profile.following.toLocaleString()}
+                                </span>{" "}
+                                following
+                              </span>
+                            </div>
+                            {profile.bio && (
+                              <div className="mt-1 text-[11px] text-slate-300">
+                                {profile.bio}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
 
-                    {/* Seen */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {token.first_seen_at
-                        ? formatDate(token.first_seen_at)
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
+                      {/* Seen */}
+                      <td className="px-4 py-2 text-right text-xs text-slate-500">
+                        {formatDateTime(t.first_seen_at)}
+                      </td>
+                    </tr>
+                  );
+                })}
             </tbody>
           </table>
         </div>
-      </main>
-    </div>
+      </div>
+    </main>
   );
 }
