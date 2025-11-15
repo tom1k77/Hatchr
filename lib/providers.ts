@@ -1,5 +1,6 @@
 // lib/providers.ts
 
+// Тип, который использует и API, и главная страница
 export type AggregatedToken = {
   token_address: string;
   name: string;
@@ -53,6 +54,7 @@ export async function fetchDexScreenerData(
         ? pair.volume.h24
         : null;
 
+    // marketCap или fdv
     const marketCapUsd =
       typeof pair.marketCap === "number"
         ? pair.marketCap
@@ -87,27 +89,51 @@ async function fetchTokensFromClanker(): Promise<AggregatedToken[]> {
 
   const json = await res.json();
 
-  const rawItems: any[] =
-    (json && (json.items || json.data || json.tokens)) ?? [];
+  // Разбираем ответ очень защищённо,
+  // т.к. структура может быть разной
+  let rawItems: any[] = [];
 
-  const now = Date.now();
-  const cutoff = now - 60 * 60 * 1000; // последние 60 минут
+  if (Array.isArray(json)) {
+    rawItems = json;
+  } else if (json.items && Array.isArray(json.items)) {
+    rawItems = json.items;
+  } else if (json.data && Array.isArray(json.data)) {
+    rawItems = json.data;
+  } else if (json.tokens && Array.isArray(json.tokens)) {
+    rawItems = json.tokens;
+  } else {
+    const firstArray = Object.values(json).find((v) => Array.isArray(v));
+    if (Array.isArray(firstArray)) {
+      rawItems = firstArray as any[];
+    }
+  }
+
+  // Если совсем пусто – хотя бы не крашимся
+  if (!rawItems || rawItems.length === 0) {
+    console.warn("Clanker: no items in response");
+    return [];
+  }
 
   const mapped: AggregatedToken[] = rawItems
     .map((t: any) => {
-      const firstSeen = t.first_seen_at ?? t.created_at ?? t.created ?? null;
+      const firstSeen =
+        t.first_seen_at ?? t.created_at ?? t.created ?? null;
       if (!firstSeen) return null;
+
+      const tokenAddress =
+        t.token_address ?? t.address ?? t.token ?? null;
+      if (!tokenAddress) return null;
 
       const sourceUrl =
         t.source_url ??
-        (t.token_address
-          ? `https://www.clanker.world/clanker/${t.token_address}`
+        (tokenAddress
+          ? `https://www.clanker.world/clanker/${tokenAddress}`
           : "");
 
       return {
-        token_address: t.token_address,
-        name: t.name,
-        symbol: t.symbol,
+        token_address: tokenAddress,
+        name: t.name ?? "",
+        symbol: t.symbol ?? "",
         source: "clanker",
         source_url: sourceUrl,
         first_seen_at: firstSeen,
@@ -119,19 +145,14 @@ async function fetchTokensFromClanker(): Promise<AggregatedToken[]> {
     })
     .filter(Boolean) as AggregatedToken[];
 
-  // фильтруем по времени
-  const recent = mapped.filter((t) => {
-    const ts = Date.parse(t.first_seen_at);
-    return !Number.isNaN(ts) && ts >= cutoff;
-  });
-
-  // новые сверху
-  recent.sort(
+  // СОРТИРУЕМ по времени (новые сверху),
+  // но НЕ ФИЛЬТРУЕМ по последнему часу, чтобы точно что-то показывать
+  mapped.sort(
     (a, b) =>
       Date.parse(b.first_seen_at) - Date.parse(a.first_seen_at)
   );
 
-  return recent;
+  return mapped;
 }
 
 // ---------- Aggregator ----------
@@ -139,7 +160,7 @@ async function fetchTokensFromClanker(): Promise<AggregatedToken[]> {
 export async function fetchAggregatedTokens(): Promise<AggregatedToken[]> {
   const clankerTokens = await fetchTokensFromClanker();
 
-  // ограничим количество запросов к DexScreener, чтобы не словить rate limit
+  // ограничим количество запросов к DexScreener
   const MAX_DEX_REQUESTS = 40;
   const tokensForDex = clankerTokens.slice(0, MAX_DEX_REQUESTS);
 
@@ -154,6 +175,6 @@ export async function fetchAggregatedTokens(): Promise<AggregatedToken[]> {
     })
   );
 
-  // остальные токены остаются без marketCapUsd (покажем "—")
+  // остальные токены будут без marketCapUsd (покажем "—")
   return clankerTokens;
 }
