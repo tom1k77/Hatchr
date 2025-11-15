@@ -33,13 +33,68 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-function pickUrl(urls: any[], predicate: (u: string) => boolean): string | undefined {
-  for (const s of urls || []) {
-    const u = typeof s === "string" ? s : s?.url;
+// аккуратно раскладываем соцсети по категориям
+function extractSocials(
+  rawSocials: any[]
+): {
+  website_url?: string;
+  x_url?: string;
+  farcaster_url?: string;
+  telegram_url?: string;
+} {
+  let website: string | undefined;
+  let x: string | undefined;
+  let farcaster: string | undefined;
+  let telegram: string | undefined;
+
+  for (const item of rawSocials || []) {
+    const u = typeof item === "string" ? item : item?.url;
     if (!u || typeof u !== "string") continue;
-    if (predicate(u)) return u;
+
+    const url = u.trim();
+    const lower = url.toLowerCase();
+
+    if (!farcaster && lower.includes("warpcast.com")) {
+      farcaster = url;
+      continue;
+    }
+
+    if (
+      !x &&
+      (lower.includes("twitter.com") ||
+        lower.includes("x.com/") ||
+        lower.includes("://x.com"))
+    ) {
+      x = url;
+      continue;
+    }
+
+    if (
+      !telegram &&
+      (lower.includes("t.me/") ||
+        lower.includes("telegram.me/") ||
+        lower.includes("telegram.org/"))
+    ) {
+      telegram = url;
+      continue;
+    }
+
+    // сайт: всё, что не соцсети
+    if (
+      !website &&
+      lower.startsWith("http") &&
+      !lower.includes("warpcast.com") &&
+      !lower.includes("twitter.com") &&
+      !lower.includes("x.com/") &&
+      !lower.includes("t.me/") &&
+      !lower.includes("telegram.me") &&
+      !lower.includes("telegram.org")
+    ) {
+      website = url;
+    }
   }
-  return undefined;
+
+  return { website_url: website, x_url: x, farcaster_url: farcaster, telegram_url: telegram };
 }
 
 // --- CLANKER: все токены за последний час на Base ---
@@ -52,7 +107,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 10; // 10 * 20 = максимум 200 токенов за час
+  const MAX_PAGES = 10; // до ~200 токенов за час
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
@@ -97,26 +152,9 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         ? creator.socialMediaUrls
         : [];
 
+      // токен + криэйтор вместе → одна Farcaster/X/Website-иконка
       const socials = [...tokenSocials, ...creatorSocials];
-
-      const xUrl = pickUrl(
-        socials,
-        (u) => u.includes("twitter.com") || u.includes("x.com")
-      );
-      const farcasterUrl = pickUrl(socials, (u) => u.includes("warpcast.com"));
-      const telegramUrl = pickUrl(
-        socials,
-        (u) => u.includes("t.me") || u.includes("telegram.me")
-      );
-      const websiteUrl = pickUrl(
-        socials,
-        (u) =>
-          !u.includes("twitter.com") &&
-          !u.includes("x.com") &&
-          !u.includes("warpcast.com") &&
-          !u.includes("t.me") &&
-          !u.includes("telegram.me")
-      );
+      const { website_url, x_url, farcaster_url, telegram_url } = extractSocials(socials);
 
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
@@ -126,18 +164,18 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         name,
         symbol,
         source: "clanker",
-        // ✅ правильный URL страницы токена на Clanker
+        // правильный URL страницы токена на Clanker
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
-        website_url: websiteUrl,
-        x_url: xUrl,
-        farcaster_url: farcasterUrl,
-        telegram_url: telegramUrl,
+        website_url,
+        x_url,
+        farcaster_url,
+        telegram_url,
       } as Token;
     })
     .filter(Boolean) as Token[];
 
-  // на всякий случай ещё раз фильтруем по последнему часу
+  // допфильтр последнего часа (на всякий случай)
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
