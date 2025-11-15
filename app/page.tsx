@@ -65,6 +65,34 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+// простая «арка» Farcaster вместо буквы F
+function FarcasterFallbackIcon() {
+  return (
+    <div
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 6,
+        background: "#5b3ded",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 11,
+          height: 11,
+          borderRadius: 3,
+          border: "2px solid #fff",
+          borderTopWidth: 0,
+          boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,9 +107,10 @@ export default function HomePage() {
   const [profileLoading, setProfileLoading] = useState<Record<string, boolean>>(
     {}
   );
-  const [hoveredUsername, setHoveredUsername] = useState<string | null>(null);
 
-  // загрузка токенов
+  // теперь храним не username, а уникальный ключ строки
+  const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
+
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -102,14 +131,12 @@ export default function HomePage() {
     }
   }
 
-  // авто-обновление
   useEffect(() => {
     loadTokens();
     const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
 
-  // фильтрация токенов
   const filteredTokens = useMemo(() => {
     return tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
@@ -130,7 +157,6 @@ export default function HomePage() {
     });
   }, [tokens, sourceFilter, minLiquidity, search]);
 
-  // загрузка профиля Neynar (через наш API-роут)
   async function ensureProfile(username: string) {
     if (!username) return;
     if (profiles[username] || profileLoading[username]) return;
@@ -188,7 +214,7 @@ export default function HomePage() {
           </p>
         </header>
 
-        {/* Фильтры + поиск */}
+        {/* фильтры */}
         <section
           style={{
             display: "flex",
@@ -286,7 +312,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Таблица */}
+        {/* таблица */}
         <div
           style={{
             borderRadius: "10px",
@@ -358,16 +384,18 @@ export default function HomePage() {
                   token.farcaster_url || undefined
                 );
                 const profile = username ? profiles[username] : undefined;
-                const isHovered = hoveredUsername === username;
+
+                const rowKey = `${token.source}-${token.token_address}`;
+                const isHovered = hoveredRowKey === rowKey;
 
                 return (
                   <tr
-                    key={`${token.source}-${token.token_address}`}
+                    key={rowKey}
                     style={{
                       borderBottom: "1px solid #f2f2f2",
                     }}
                   >
-                    {/* Name (кликабельно на Clanker/Zora) */}
+                    {/* Name */}
                     <td
                       style={{
                         padding: "8px 10px",
@@ -468,7 +496,7 @@ export default function HomePage() {
                       {formatNumber(token.volume_24h_usd)}
                     </td>
 
-                    {/* Socials (Farcaster аватар + попап) */}
+                    {/* Socials */}
                     <td
                       style={{
                         padding: "8px 10px",
@@ -484,10 +512,10 @@ export default function HomePage() {
                             position: "relative",
                           }}
                           onMouseEnter={() => {
-                            setHoveredUsername(username);
+                            setHoveredRowKey(rowKey);
                             ensureProfile(username);
                           }}
-                          onMouseLeave={() => setHoveredUsername(null)}
+                          onMouseLeave={() => setHoveredRowKey(null)}
                         >
                           <a
                             href={`https://farcaster.xyz/${username}`}
@@ -505,36 +533,20 @@ export default function HomePage() {
                               fontSize: "12px",
                             }}
                           >
-                            {/* Аватар или fallback-иконка */}
                             {profile?.pfp_url ? (
                               <img
                                 src={profile.pfp_url}
                                 alt={profile.display_name || username}
                                 style={{
-                                  width: "18px",
-                                  height: "18px",
+                                  width: 18,
+                                  height: 18,
                                   borderRadius: "999px",
                                   objectFit: "cover",
                                   backgroundColor: "#1f2933",
                                 }}
                               />
                             ) : (
-                              <div
-                                style={{
-                                  width: "18px",
-                                  height: "18px",
-                                  borderRadius: "999px",
-                                  background:
-                                    "linear-gradient(135deg,#7c3aed,#4f46e5)",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: "11px",
-                                  fontWeight: 700,
-                                }}
-                              >
-                                F
-                              </div>
+                              <FarcasterFallbackIcon />
                             )}
 
                             <span
@@ -549,7 +561,6 @@ export default function HomePage() {
                             </span>
                           </a>
 
-                          {/* Попап профиля */}
                           {isHovered && profile && (
                             <div
                               style={{
@@ -580,30 +591,17 @@ export default function HomePage() {
                                     src={profile.pfp_url}
                                     alt={profile.display_name || username}
                                     style={{
-                                      width: "38px",
-                                      height: "38px",
+                                      width: 38,
+                                      height: 38,
                                       borderRadius: "999px",
                                       objectFit: "cover",
                                       backgroundColor: "#1f2933",
                                     }}
                                   />
                                 ) : (
-                                  <div
-                                    style={{
-                                      width: "38px",
-                                      height: "38px",
-                                      borderRadius: "999px",
-                                      background:
-                                        "linear-gradient(135deg,#7c3aed,#4f46e5)",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    F
-                                  </div>
+                                  <FarcasterFallbackIcon />
                                 )}
+
                                 <div>
                                   <div
                                     style={{
