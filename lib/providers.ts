@@ -1,6 +1,7 @@
 // lib/providers.ts
 
-// Базовый тип токена для фронта
+// -------- Типы --------
+
 export interface Token {
   token_address: string;
   name?: string;
@@ -9,25 +10,26 @@ export interface Token {
   source_url?: string;
   first_seen_at?: string;
 
-  // для Clanker мы будем использовать только farcaster_url
+  // Socials
+  farcaster_url?: string;
   website_url?: string;
   x_url?: string;
-  farcaster_url?: string;
   telegram_url?: string;
 }
 
-// Тип токена + рынок
 export interface TokenWithMarket extends Token {
   price_usd?: number;
   liquidity_usd?: number;
   volume_24h?: number;
 }
 
+// -------- Константы --------
+
 const CLANKER_API = "https://www.clanker.world/api/tokens";
 const CLANKER_FRONT = "https://www.clanker.world";
 const DEX_URL = "https://api.dexscreener.com/latest/dex/tokens";
 
-// --- helpers ---
+// -------- Вспомогательная функция --------
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: "no-store" });
@@ -35,42 +37,17 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-// рекурсивно собираем все строки-URL из объекта
-function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
-  if (!obj || depth > 5) return acc;
-
-  if (typeof obj === "string") {
-    const s = obj.trim();
-    if (s.startsWith("http://") || s.startsWith("https://")) acc.push(s);
-    return acc;
-  }
-
-  if (Array.isArray(obj)) {
-    for (const v of obj) collectUrls(v, depth + 1, acc);
-    return acc;
-  }
-
-  if (typeof obj === "object") {
-    for (const key of Object.keys(obj)) {
-      const v = (obj as any)[key];
-      collectUrls(v, depth + 1, acc);
-    }
-  }
-
-  return acc;
-}
-
-// --- CLANKER: токены Base за последний час, только Farcaster в соцсетях ---
+// -------- Fetch Clanker Tokens --------
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
   const ONE_HOUR = 60 * 60 * 1000;
   const oneHourAgo = now - ONE_HOUR;
-  const startDateUnix = Math.floor(oneHourAgo / 1000); // Unix timestamp (секунды)
+  const startDateUnix = Math.floor(oneHourAgo / 1000);
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 10; // до ~200 токенов за час
+  const MAX_PAGES = 10;
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
@@ -80,6 +57,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       includeUser: "true",
       includeMarket: "false",
     });
+
     if (cursor) params.set("cursor", cursor);
 
     const url = `${CLANKER_API}?${params.toString()}`;
@@ -96,29 +74,26 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
   const tokens: Token[] = collected
     .map((t: any) => {
-      // только Base
       if (t.chain_id && t.chain_id !== 8453) return null;
 
-      const addr = (t.contract_address || "").toString().toLowerCase();
+      const addr = (t.contract_address || "").toLowerCase();
       if (!addr) return null;
 
       const name = (t.name || "").toString();
       const symbol = (t.symbol || "").toString();
 
-      const meta = t.metadata || {};
-      const creator = t.related?.user || {};
+      // --- FID creator ---
+      let fid: number | string | undefined;
 
-      // собираем все URL из metadata и creator
-      const urlsMeta = collectUrls(meta);
-      const urlsCreator = collectUrls(creator);
-      const allUrls = [...urlsMeta, ...urlsCreator];
+      if (Array.isArray(t.fids) && t.fids.length > 0) {
+        fid = t.fids[0];
+      } else if (typeof t.fid !== "undefined") {
+        fid = t.fid;
+      }
 
-      // ИЩЕМ ТОЛЬКО FARCASTER: warpcast или farcaster.xyz
-      const farcasterUrl =
-        allUrls.find((u) => {
-          const lower = u.toLowerCase();
-          return lower.includes("farcaster.xyz") || lower.includes("warpcast.com");
-        }) || undefined;
+      const farcaster_url = fid
+        ? `https://farcaster.xyz/profiles/${fid}`
+        : undefined;
 
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
@@ -131,8 +106,8 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
 
-        // для Clanker заполняем только farcaster_url
-        farcaster_url: farcasterUrl,
+        // Only Farcaster for Clanker
+        farcaster_url,
         website_url: undefined,
         x_url: undefined,
         telegram_url: undefined,
@@ -140,7 +115,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     })
     .filter(Boolean) as Token[];
 
-  // на всякий случай ещё раз фильтруем по последнему часу
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
@@ -148,7 +122,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
-// --- DexScreener: цена / ликвидность / объём ---
+// -------- DexScreener enrich --------
 
 export async function enrichWithDexScreener(
   tokens: Token[]
