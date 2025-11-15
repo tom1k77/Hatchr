@@ -84,6 +84,12 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       includeUser: "true",
       includeMarket: "false",
     });
+    // ----- Обёртка для старого API -----
+export async function getTokens() {
+  // НИЧЕГО не меняем в логике – просто прокидываем вызов,
+  // чтобы route.ts снова работал как раньше.
+  return fetchTokensFromClanker();
+}
 
     if (cursor) params.set("cursor", cursor);
 
