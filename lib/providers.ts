@@ -29,7 +29,7 @@ const CLANKER_API = "https://www.clanker.world/api/tokens";
 const CLANKER_FRONT = "https://www.clanker.world";
 const DEX_URL = "https://api.dexscreener.com/latest/dex/tokens";
 
-// -------- Вспомогательная функция --------
+// -------- Вспомогательные функции --------
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: "no-store" });
@@ -37,7 +37,34 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-// -------- Fetch Clanker Tokens --------
+// Рекурсивно собираем все URL в объекте (metadata, related.user и т.п.)
+function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
+  if (!obj || depth > 6) return acc;
+
+  if (typeof obj === "string") {
+    const s = obj.trim();
+    if (s.startsWith("http://") || s.startsWith("https://")) {
+      acc.push(s);
+    }
+    return acc;
+  }
+
+  if (Array.isArray(obj)) {
+    for (const v of obj) collectUrls(v, depth + 1, acc);
+    return acc;
+  }
+
+  if (typeof obj === "object") {
+    for (const key of Object.keys(obj)) {
+      const v = (obj as any)[key];
+      collectUrls(v, depth + 1, acc);
+    }
+  }
+
+  return acc;
+}
+
+// -------- Clanker: токены Base за последний час --------
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
@@ -47,7 +74,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 10;
+  const MAX_PAGES = 10; // до ~200 токенов за час
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
@@ -74,26 +101,28 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
   const tokens: Token[] = collected
     .map((t: any) => {
+      // только Base
       if (t.chain_id && t.chain_id !== 8453) return null;
 
-      const addr = (t.contract_address || "").toLowerCase();
+      const addr = (t.contract_address || "").toString().toLowerCase();
       if (!addr) return null;
 
       const name = (t.name || "").toString();
       const symbol = (t.symbol || "").toString();
 
-      // --- FID creator ---
-      let fid: number | string | undefined;
+      // Берём ссылки из metadata и related.user
+      const meta = t.metadata || {};
+      const creator = t.related?.user || {};
 
-      if (Array.isArray(t.fids) && t.fids.length > 0) {
-        fid = t.fids[0];
-      } else if (typeof t.fid !== "undefined") {
-        fid = t.fid;
-      }
+      const urlsMeta = collectUrls(meta);
+      const urlsCreator = collectUrls(creator);
+      const allUrls = [...urlsMeta, ...urlsCreator];
 
-      const farcaster_url = fid
-        ? `https://farcaster.xyz/profiles/${fid}`
-        : undefined;
+      // Ищем первую ссылку на farcaster.xyz
+      const farcasterUrl =
+        allUrls.find((u) =>
+          u.toLowerCase().includes("farcaster.xyz")
+        ) || undefined;
 
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
@@ -106,8 +135,8 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
 
-        // Only Farcaster for Clanker
-        farcaster_url,
+        // для Clanker — только Farcaster (готовый URL из API)
+        farcaster_url: farcasterUrl,
         website_url: undefined,
         x_url: undefined,
         telegram_url: undefined,
@@ -115,6 +144,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     })
     .filter(Boolean) as Token[];
 
+  // допфильтр "последний час"
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
@@ -122,7 +152,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
-// -------- DexScreener enrich --------
+// -------- DexScreener: цена / ликвидность / объём --------
 
 export async function enrichWithDexScreener(
   tokens: Token[]
@@ -162,6 +192,7 @@ export async function enrichWithDexScreener(
           : undefined,
       });
     } catch {
+      // в случае ошибки по DEX — просто возвращаем токен как есть
       result.push({ ...t });
     }
   }
