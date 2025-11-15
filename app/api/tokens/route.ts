@@ -7,10 +7,7 @@ import {
 
 export async function GET() {
   try {
-    // 1) базовые данные из Clanker
     const baseTokens = await fetchTokensFromClanker();
-
-    // 2) обогащаем ценой / ликвидностью / объёмом
     const withMarket: TokenWithMarket[] = await enrichWithDexScreener(baseTokens);
 
     return NextResponse.json(
