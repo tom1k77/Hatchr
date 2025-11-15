@@ -1,228 +1,159 @@
 // lib/providers.ts
 
-// -------- Типы --------
-
-export interface Token {
+export type AggregatedToken = {
   token_address: string;
-  name?: string;
-  symbol?: string;
-  source?: string;
-  source_url?: string;
-  first_seen_at?: string;
+  name: string;
+  symbol: string;
+  source: string;
+  source_url: string;
+  first_seen_at: string;
+  farcaster_url?: string | null;
 
-  // Socials
-  farcaster_url?: string;
-  website_url?: string;
-  x_url?: string;
-  telegram_url?: string;
-}
-
-export interface TokenWithMarket extends Token {
-  price_usd?: number;
-  liquidity_usd?: number;
-  volume_24h?: number;
-}
-
-// -------- Константы --------
+  // рыночные данные
+  priceUsd?: number | null;
+  volume24hUsd?: number | null;
+  marketCapUsd?: number | null;
+};
 
 const CLANKER_API = "https://www.clanker.world/api/tokens";
-const CLANKER_FRONT = "https://www.clanker.world";
-const DEX_URL = "https://api.dexscreener.com/latest/dex/tokens";
 
-// -------- Вспомогательные функции --------
+// ---------- DexScreener ----------
 
-async function fetchJson(url: string) {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`${url} ${res.status}`);
-  return res.json();
-}
+export type DexScreenerData = {
+  priceUsd: number | null;
+  volume24hUsd: number | null;
+  marketCapUsd: number | null;
+};
 
-// Рекурсивно собираем все URL в объекте (metadata, related.user и т.п.)
-function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
-  if (!obj || depth > 6) return acc;
-
-  if (typeof obj === "string") {
-    const s = obj.trim();
-    if (s.startsWith("http://") || s.startsWith("https://")) {
-      acc.push(s);
-    }
-    return acc;
-  }
-
-  if (Array.isArray(obj)) {
-    for (const v of obj) collectUrls(v, depth + 1, acc);
-    return acc;
-  }
-
-  if (typeof obj === "object") {
-    for (const key of Object.keys(obj)) {
-      const v = (obj as any)[key];
-      collectUrls(v, depth + 1, acc);
-    }
-  }
-
-  return acc;
-}
-
-// -------- Clanker: токены Base за последний час --------
-
-export async function fetchTokensFromClanker(): Promise<Token[]> {
-  const now = Date.now();
-  const ONE_HOUR = 60 * 60 * 1000;
-  const oneHourAgo = now - ONE_HOUR;
-  const startDateUnix = Math.floor(oneHourAgo / 1000);
-
-  let cursor: string | undefined = undefined;
-  const collected: any[] = [];
-  const MAX_PAGES = 10; // до ~200 токенов за час
-
-  for (let i = 0; i < MAX_PAGES; i++) {
-    const params = new URLSearchParams({
-      limit: "20",
-      sort: "desc",
-      startDate: String(startDateUnix),
-      includeUser: "true",
-      includeMarket: "false",
+export async function fetchDexScreenerData(
+  tokenAddress: string
+): Promise<DexScreenerData | null> {
+  try {
+    const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
+    const res = await fetch(url, {
+      next: { revalidate: 30 }, // кэшируем на 30 сек
     });
 
-    if (cursor) params.set("cursor", cursor);
+    if (!res.ok) return null;
 
-    const url = `${CLANKER_API}?${params.toString()}`;
-    const raw: any = await fetchJson(url);
+    const data = await res.json();
 
-    const data: any[] = Array.isArray(raw?.data) ? raw.data : [];
-    if (!data.length) break;
+    if (!data.pairs || !Array.isArray(data.pairs) || data.pairs.length === 0) {
+      return null;
+    }
 
-    collected.push(...data);
+    // берём пару на Base, если есть
+    const pair =
+      data.pairs.find((p: any) => p.chainId === "base") ?? data.pairs[0];
 
-    cursor = raw?.cursor;
-    if (!cursor) break;
+    const priceUsd = pair.priceUsd ? Number(pair.priceUsd) : null;
+
+    const volume24hUsd =
+      pair.volume && typeof pair.volume.h24 === "number"
+        ? pair.volume.h24
+        : null;
+
+    const marketCapUsd =
+      typeof pair.marketCap === "number"
+        ? pair.marketCap
+        : typeof pair.fdv === "number"
+        ? pair.fdv
+        : null;
+
+    return {
+      priceUsd,
+      volume24hUsd,
+      marketCapUsd,
+    };
+  } catch (e) {
+    console.error("DexScreener error", e);
+    return null;
   }
-
-  const tokens: Token[] = collected
-    .map((t: any) => {
-      // только Base
-      if (t.chain_id && t.chain_id !== 8453) return null;
-
-      const addr = (t.contract_address || "").toString().toLowerCase();
-      if (!addr) return null;
-
-      const name = (t.name || "").toString();
-      const symbol = (t.symbol || "").toString();
-
-      const meta = t.metadata || {};
-      const creator = t.related?.user || {};
-
-      // 1) собираем все URL и ищем готовый farcaster.xyz
-      const urlsMeta = collectUrls(meta);
-      const urlsCreator = collectUrls(creator);
-      const allUrls = [...urlsMeta, ...urlsCreator];
-
-      let farcasterUrl =
-        allUrls.find((u) =>
-          u.toLowerCase().includes("farcaster.xyz")
-        ) || undefined;
-
-      // 2) если прямого URL нет — строим по username / handle / fname
-      let fid: number | string | undefined;
-      if (Array.isArray(t.fids) && t.fids.length > 0) {
-        fid = t.fids[0];
-      } else if (typeof t.fid !== "undefined") {
-        fid = t.fid;
-      }
-
-      const rawUsername =
-        creator.username ||
-        creator.handle ||
-        creator.fname ||
-        creator.name ||
-        "";
-
-      const username =
-        typeof rawUsername === "string"
-          ? rawUsername.replace(/^@/, "").trim()
-          : "";
-
-      if (!farcasterUrl) {
-        if (username) {
-          farcasterUrl = `https://farcaster.xyz/${username}`;
-        } else if (typeof fid !== "undefined") {
-          farcasterUrl = `https://farcaster.xyz/profiles/${fid}`;
-        }
-      }
-
-      const firstSeen =
-        t.created_at || t.deployed_at || t.last_indexed || undefined;
-
-      return {
-        token_address: addr,
-        name,
-        symbol,
-        source: "clanker",
-        source_url: `${CLANKER_FRONT}/clanker/${addr}`,
-        first_seen_at: firstSeen,
-
-        // для Clanker — только Farcaster
-        farcaster_url: farcasterUrl,
-        website_url: undefined,
-        x_url: undefined,
-        telegram_url: undefined,
-      } as Token;
-    })
-    .filter(Boolean) as Token[];
-
-  // допфильтр "последний час"
-  return tokens.filter((t) => {
-    if (!t.first_seen_at) return true;
-    const ts = new Date(t.first_seen_at).getTime();
-    return now - ts <= ONE_HOUR;
-  });
 }
 
-// -------- DexScreener: цена / ликвидность / объём --------
+// ---------- Clanker ----------
 
-export async function enrichWithDexScreener(
-  tokens: Token[]
-): Promise<TokenWithMarket[]> {
-  const result: TokenWithMarket[] = [];
+async function fetchTokensFromClanker(): Promise<AggregatedToken[]> {
+  const url = `${CLANKER_API}?sort=desc&limit=200`;
 
-  for (const t of tokens) {
-    try {
-      const res = await fetch(`${DEX_URL}/${t.token_address}`, {
-        cache: "no-store",
-      });
+  const res = await fetch(url, {
+    cache: "no-store",
+  });
 
-      if (!res.ok) {
-        result.push({ ...t });
-        continue;
-      }
-
-      const data: any = await res.json();
-      const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
-      const pair =
-        pairs.find((p: any) => p.chainId === "base") ||
-        (pairs.length ? pairs[0] : null);
-
-      if (!pair) {
-        result.push({ ...t });
-        continue;
-      }
-
-      result.push({
-        ...t,
-        price_usd: pair.priceUsd ? Number(pair.priceUsd) : undefined,
-        liquidity_usd: pair.liquidity?.usd
-          ? Number(pair.liquidity.usd)
-          : undefined,
-        volume_24h: pair.volume?.h24
-          ? Number(pair.volume.h24)
-          : undefined,
-      });
-    } catch {
-      // в случае ошибки по DEX — просто возвращаем токен как есть
-      result.push({ ...t });
-    }
+  if (!res.ok) {
+    console.error("Clanker API error", await res.text());
+    return [];
   }
 
-  return result;
+  const json = await res.json();
+
+  const rawItems: any[] =
+    (json && (json.items || json.data || json.tokens)) ?? [];
+
+  const now = Date.now();
+  const cutoff = now - 60 * 60 * 1000; // последние 60 минут
+
+  const mapped: AggregatedToken[] = rawItems
+    .map((t: any) => {
+      const firstSeen = t.first_seen_at ?? t.created_at ?? t.created ?? null;
+      if (!firstSeen) return null;
+
+      const sourceUrl =
+        t.source_url ??
+        (t.token_address
+          ? `https://www.clanker.world/clanker/${t.token_address}`
+          : "");
+
+      return {
+        token_address: t.token_address,
+        name: t.name,
+        symbol: t.symbol,
+        source: "clanker",
+        source_url: sourceUrl,
+        first_seen_at: firstSeen,
+        farcaster_url: t.farcaster_url ?? null,
+        priceUsd: null,
+        volume24hUsd: null,
+        marketCapUsd: null,
+      } as AggregatedToken;
+    })
+    .filter(Boolean) as AggregatedToken[];
+
+  // фильтруем по времени
+  const recent = mapped.filter((t) => {
+    const ts = Date.parse(t.first_seen_at);
+    return !Number.isNaN(ts) && ts >= cutoff;
+  });
+
+  // новые сверху
+  recent.sort(
+    (a, b) =>
+      Date.parse(b.first_seen_at) - Date.parse(a.first_seen_at)
+  );
+
+  return recent;
+}
+
+// ---------- Aggregator ----------
+
+export async function fetchAggregatedTokens(): Promise<AggregatedToken[]> {
+  const clankerTokens = await fetchTokensFromClanker();
+
+  // ограничим количество запросов к DexScreener, чтобы не словить rate limit
+  const MAX_DEX_REQUESTS = 40;
+  const tokensForDex = clankerTokens.slice(0, MAX_DEX_REQUESTS);
+
+  await Promise.all(
+    tokensForDex.map(async (token) => {
+      const dex = await fetchDexScreenerData(token.token_address);
+      if (dex) {
+        token.priceUsd = dex.priceUsd;
+        token.volume24hUsd = dex.volume24hUsd;
+        token.marketCapUsd = dex.marketCapUsd;
+      }
+    })
+  );
+
+  // остальные токены остаются без marketCapUsd (покажем "—")
+  return clankerTokens;
 }
