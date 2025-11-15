@@ -1,6 +1,6 @@
 // lib/providers.ts
 
-// Базовый тип токена, который мы возвращаем на фронт
+// Базовый тип токена для фронта
 export interface Token {
   token_address: string;
   name?: string;
@@ -14,96 +14,139 @@ export interface Token {
   telegram_url?: string;
 }
 
-// Тип с данными рынка
+// Тип токена + рынок
 export interface TokenWithMarket extends Token {
   price_usd?: number;
   liquidity_usd?: number;
   volume_24h?: number;
 }
 
-// URL Clanker (пока без пагинации — берём первую страницу)
-const CLANKER_URL = "https://www.clanker.world/api/tokens";
-
-// DexScreener токены
+const CLANKER_API = "https://www.clanker.world/api/tokens";
+const CLANKER_FRONT = "https://www.clanker.world";
 const DEX_URL = "https://api.dexscreener.com/latest/dex/tokens";
 
-// --- общий fetch ---
+// --- helpers ---
+
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 
-/**
- * Забираем токены из Clanker и приводим их в наш формат
- */
+function pickUrl(urls: any[], predicate: (u: string) => boolean): string | undefined {
+  for (const s of urls || []) {
+    const u = typeof s === "string" ? s : s?.url;
+    if (!u || typeof u !== "string") continue;
+    if (predicate(u)) return u;
+  }
+  return undefined;
+}
+
+// --- CLANKER: все токены за последний час на Base ---
+
 export async function fetchTokensFromClanker(): Promise<Token[]> {
-  const raw = await fetchJson(CLANKER_URL);
+  const now = Date.now();
+  const ONE_HOUR = 60 * 60 * 1000;
+  const oneHourAgo = now - ONE_HOUR;
+  const startDateUnix = Math.floor(oneHourAgo / 1000); // Unix timestamp (секунды)
 
-  // Clanker может вернуть массив или объект вида { data: [...] } или { items: [...] }
-  let items: any[] = [];
+  let cursor: string | undefined = undefined;
+  const collected: any[] = [];
+  const MAX_PAGES = 10; // 10 * 20 = максимум 200 токенов за час
 
-  if (Array.isArray(raw)) {
-    items = raw;
-  } else if (Array.isArray((raw as any).data)) {
-    items = (raw as any).data;
-  } else if (Array.isArray((raw as any).items)) {
-    items = (raw as any).items;
-  } else {
-    return [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const params = new URLSearchParams({
+      limit: "20",
+      sort: "desc",
+      startDate: String(startDateUnix),
+      includeUser: "true",
+      includeMarket: "false",
+    });
+    if (cursor) params.set("cursor", cursor);
+
+    const url = `${CLANKER_API}?${params.toString()}`;
+    const raw: any = await fetchJson(url);
+
+    const data: any[] = Array.isArray(raw?.data) ? raw.data : [];
+    if (!data.length) break;
+
+    collected.push(...data);
+
+    cursor = raw?.cursor;
+    if (!cursor) break;
   }
 
-  const normalized: Token[] = items
-    .map((item: any) => {
-      const d = item?.data ?? item;
+  const tokens: Token[] = collected
+    .map((t: any) => {
+      // только Base
+      if (t.chain_id && t.chain_id !== 8453) return null;
 
-      const addr = (d.contract_address || d.contractAddress || "").toString().toLowerCase();
+      const addr = (t.contract_address || "").toString().toLowerCase();
       if (!addr) return null;
 
-      // Пытаемся разделить нормальное название и тикер
-      const name = (d.name || d.tokenName || d.ticker || d.symbol || "").toString();
-      const symbol = (d.ticker || d.symbol || d.name || "").toString();
+      const name = (t.name || "").toString();
+      const symbol = (t.symbol || "").toString();
 
-      // соцсети/сайт (и проекта, и создателя, если поля так называются)
-      const website =
-        d.website || d.site || d.projectWebsite || d.social_website || undefined;
-      const twitter =
-        d.creatorTwitter ||
-        d.creatorX ||
-        d.twitter ||
-        d.x ||
-        d.social_twitter ||
-        undefined;
-      const farcaster =
-        d.creatorFarcaster ||
-        d.Farcaster ||
-        d.farcaster ||
-        d.social_farcaster ||
-        undefined;
-      const telegram =
-        d.telegram || d.social_telegram || undefined;
+      const meta = t.metadata || {};
+      const tokenSocials = Array.isArray(meta.socialMediaUrls)
+        ? meta.socialMediaUrls
+        : [];
+
+      const creator = t.related?.user || {};
+      const creatorSocials = Array.isArray(creator.socialMediaUrls)
+        ? creator.socialMediaUrls
+        : [];
+
+      const socials = [...tokenSocials, ...creatorSocials];
+
+      const xUrl = pickUrl(
+        socials,
+        (u) => u.includes("twitter.com") || u.includes("x.com")
+      );
+      const farcasterUrl = pickUrl(socials, (u) => u.includes("warpcast.com"));
+      const telegramUrl = pickUrl(
+        socials,
+        (u) => u.includes("t.me") || u.includes("telegram.me")
+      );
+      const websiteUrl = pickUrl(
+        socials,
+        (u) =>
+          !u.includes("twitter.com") &&
+          !u.includes("x.com") &&
+          !u.includes("warpcast.com") &&
+          !u.includes("t.me") &&
+          !u.includes("telegram.me")
+      );
+
+      const firstSeen =
+        t.created_at || t.deployed_at || t.last_indexed || undefined;
 
       return {
         token_address: addr,
         name,
         symbol,
         source: "clanker",
-        source_url: `https://www.clanker.world/token/${addr}`,
-        first_seen_at: d.created_at || d.indexed || d.createdAt,
-        website_url: website,
-        x_url: twitter,
-        farcaster_url: farcaster,
-        telegram_url: telegram,
+        // ✅ правильный URL страницы токена на Clanker
+        source_url: `${CLANKER_FRONT}/clanker/${addr}`,
+        first_seen_at: firstSeen,
+        website_url: websiteUrl,
+        x_url: xUrl,
+        farcaster_url: farcasterUrl,
+        telegram_url: telegramUrl,
       } as Token;
     })
     .filter(Boolean) as Token[];
 
-  return normalized;
+  // на всякий случай ещё раз фильтруем по последнему часу
+  return tokens.filter((t) => {
+    if (!t.first_seen_at) return true;
+    const ts = new Date(t.first_seen_at).getTime();
+    return now - ts <= ONE_HOUR;
+  });
 }
 
-/**
- * Обогащаем токены ценой / ликвидностью / объёмом через DexScreener
- */
+// --- DexScreener: цена / ликвидность / объём ---
+
 export async function enrichWithDexScreener(
   tokens: Token[]
 ): Promise<TokenWithMarket[]> {
@@ -114,16 +157,17 @@ export async function enrichWithDexScreener(
       const res = await fetch(`${DEX_URL}/${t.token_address}`, {
         cache: "no-store",
       });
+
       if (!res.ok) {
         result.push({ ...t });
         continue;
       }
 
-      const data = await res.json();
+      const data: any = await res.json();
       const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
-      // Ищем пару на Base, если нет — берём первую попавшуюся
       const pair =
-        pairs.find((p: any) => p.chainId === "base") || (pairs.length ? pairs[0] : null);
+        pairs.find((p: any) => p.chainId === "base") ||
+        (pairs.length ? pairs[0] : null);
 
       if (!pair) {
         result.push({ ...t });
@@ -133,34 +177,17 @@ export async function enrichWithDexScreener(
       result.push({
         ...t,
         price_usd: pair.priceUsd ? Number(pair.priceUsd) : undefined,
-        liquidity_usd: pair.liquidity?.usd ? Number(pair.liquidity.usd) : undefined,
-        volume_24h: pair.volume?.h24 ? Number(pair.volume.h24) : undefined,
+        liquidity_usd: pair.liquidity?.usd
+          ? Number(pair.liquidity.usd)
+          : undefined,
+        volume_24h: pair.volume?.h24
+          ? Number(pair.volume.h24)
+          : undefined,
       });
     } catch {
-      // Если что-то пошло не так — просто возвращаем токен как есть
       result.push({ ...t });
     }
   }
 
   return result;
 }
-
-/**
- * (Шаблон на будущее) — как тянуть несколько страниц с Clanker.
- * Когда разберёшься в их параметрах пагинации (page / limit / perPage),
- * можно будет заменить fetchTokensFromClanker на версию, которая в цикле
- * забирает все страницы и склеивает их.
- *
- * Пример структуры:
- *
- * async function fetchAllPagesFromClanker(): Promise<Token[]> {
- *   let page = 1;
- *   const all: any[] = [];
- *   while (page <= 5) {
- *     const raw = await fetchJson(`https://www.clanker.world/api/tokens?page=${page}`);
- *     // обработка raw как выше...
- *     page++;
- *   }
- *   return allNormalised;
- * }
- */
