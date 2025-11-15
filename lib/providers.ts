@@ -33,9 +33,34 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
+// Собираем все URL из объекта рекурсивно
+function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
+  if (!obj || depth > 5) return acc;
+
+  if (typeof obj === "string") {
+    const s = obj.trim();
+    if (s.startsWith("http://") || s.startsWith("https://")) acc.push(s);
+    return acc;
+  }
+
+  if (Array.isArray(obj)) {
+    for (const v of obj) collectUrls(v, depth + 1, acc);
+    return acc;
+  }
+
+  if (typeof obj === "object") {
+    for (const key of Object.keys(obj)) {
+      const v = (obj as any)[key];
+      collectUrls(v, depth + 1, acc);
+    }
+  }
+
+  return acc;
+}
+
 // аккуратно раскладываем соцсети по категориям
 function extractSocials(
-  rawSocials: any[]
+  urls: string[]
 ): {
   website_url?: string;
   x_url?: string;
@@ -47,28 +72,30 @@ function extractSocials(
   let farcaster: string | undefined;
   let telegram: string | undefined;
 
-  for (const item of rawSocials || []) {
-    const u = typeof item === "string" ? item : item?.url;
+  for (const u of urls) {
     if (!u || typeof u !== "string") continue;
 
     const url = u.trim();
     const lower = url.toLowerCase();
 
+    // Farcaster / Warpcast
     if (!farcaster && lower.includes("warpcast.com")) {
       farcaster = url;
       continue;
     }
 
+    // X / Twitter
     if (
       !x &&
       (lower.includes("twitter.com") ||
-        lower.includes("x.com/") ||
-        lower.includes("://x.com"))
+        lower.includes("://x.com/") ||
+        lower.includes(" x.com/"))
     ) {
       x = url;
       continue;
     }
 
+    // Telegram
     if (
       !telegram &&
       (lower.includes("t.me/") ||
@@ -79,13 +106,13 @@ function extractSocials(
       continue;
     }
 
-    // сайт: всё, что не соцсети
+    // Website — всё остальное, что не соцсети
     if (
       !website &&
       lower.startsWith("http") &&
       !lower.includes("warpcast.com") &&
       !lower.includes("twitter.com") &&
-      !lower.includes("x.com/") &&
+      !lower.includes("://x.com/") &&
       !lower.includes("t.me/") &&
       !lower.includes("telegram.me") &&
       !lower.includes("telegram.org")
@@ -143,18 +170,15 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const symbol = (t.symbol || "").toString();
 
       const meta = t.metadata || {};
-      const tokenSocials = Array.isArray(meta.socialMediaUrls)
-        ? meta.socialMediaUrls
-        : [];
-
       const creator = t.related?.user || {};
-      const creatorSocials = Array.isArray(creator.socialMediaUrls)
-        ? creator.socialMediaUrls
-        : [];
 
-      // токен + криэйтор вместе → одна Farcaster/X/Website-иконка
-      const socials = [...tokenSocials, ...creatorSocials];
-      const { website_url, x_url, farcaster_url, telegram_url } = extractSocials(socials);
+      // вытаскиваем все URL из metadata и creator
+      const urlsMeta = collectUrls(meta);
+      const urlsCreator = collectUrls(creator);
+      const allUrls = [...urlsMeta, ...urlsCreator];
+
+      const { website_url, x_url, farcaster_url, telegram_url } =
+        extractSocials(allUrls);
 
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
@@ -164,7 +188,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         name,
         symbol,
         source: "clanker",
-        // правильный URL страницы токена на Clanker
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
         website_url,
