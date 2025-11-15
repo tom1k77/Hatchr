@@ -1,26 +1,17 @@
+// app/api/tokens/route.ts
 import { NextResponse } from "next/server";
-import {
-  fetchTokensFromClanker,
-  enrichWithDexScreener,
-  TokenWithMarket,
-} from "../../../lib/providers";
+import { fetchAggregatedTokens } from "@/lib/providers";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const baseTokens = await fetchTokensFromClanker();
-    const withMarket: TokenWithMarket[] = await enrichWithDexScreener(baseTokens);
-
+    const items = await fetchAggregatedTokens();
+    return NextResponse.json({ count: items.length, items });
+  } catch (e) {
+    console.error("/api/tokens error", e);
     return NextResponse.json(
-      { count: withMarket.length, items: withMarket },
-      {
-        headers: {
-          "cache-control": "public, s-maxage=5, stale-while-revalidate=5",
-        },
-      }
-    );
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message || "failed" },
+      { error: "internal_error" },
       { status: 500 }
     );
   }
