@@ -110,19 +110,46 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const name = (t.name || "").toString();
       const symbol = (t.symbol || "").toString();
 
-      // Берём ссылки из metadata и related.user
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
+      // 1) собираем все URL и ищем готовый farcaster.xyz
       const urlsMeta = collectUrls(meta);
       const urlsCreator = collectUrls(creator);
       const allUrls = [...urlsMeta, ...urlsCreator];
 
-      // Ищем первую ссылку на farcaster.xyz
-      const farcasterUrl =
+      let farcasterUrl =
         allUrls.find((u) =>
           u.toLowerCase().includes("farcaster.xyz")
         ) || undefined;
+
+      // 2) если прямого URL нет — строим по username / handle / fname
+      let fid: number | string | undefined;
+      if (Array.isArray(t.fids) && t.fids.length > 0) {
+        fid = t.fids[0];
+      } else if (typeof t.fid !== "undefined") {
+        fid = t.fid;
+      }
+
+      const rawUsername =
+        creator.username ||
+        creator.handle ||
+        creator.fname ||
+        creator.name ||
+        "";
+
+      const username =
+        typeof rawUsername === "string"
+          ? rawUsername.replace(/^@/, "").trim()
+          : "";
+
+      if (!farcasterUrl) {
+        if (username) {
+          farcasterUrl = `https://farcaster.xyz/${username}`;
+        } else if (typeof fid !== "undefined") {
+          farcasterUrl = `https://farcaster.xyz/profiles/${fid}`;
+        }
+      }
 
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
@@ -135,7 +162,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
 
-        // для Clanker — только Farcaster (готовый URL из API)
+        // для Clanker — только Farcaster
         farcaster_url: farcasterUrl,
         website_url: undefined,
         x_url: undefined,
