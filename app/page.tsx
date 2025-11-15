@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 
-// ==== Типы (должны совпадать с тем, что отдаёт /api/tokens) ====
+// ==== Типы данных ====
 
 interface Token {
   token_address: string;
@@ -17,10 +17,12 @@ interface Token {
   x_url?: string;
   telegram_url?: string;
 
-  // будем дополнять их на клиенте
+  // Дополняем на клиенте
   farcaster_username?: string;
   farcaster_display_name?: string;
   farcaster_pfp_url?: string;
+  farcaster_followers?: number;
+  farcaster_following?: number;
 }
 
 interface TokenWithMarket extends Token {
@@ -74,15 +76,25 @@ const extractFarcasterUsername = (url?: string) => {
   }
 };
 
-// простая иконка Farcaster (фиолетовый квадрат с «аркой», без F)
+// ipfs://… -> https://ipfs.io/ipfs/…
+const normalizePfpUrl = (url?: string) => {
+  if (!url) return undefined;
+  if (url.startsWith("ipfs://")) {
+    const hash = url.slice("ipfs://".length);
+    return `https://ipfs.io/ipfs/${hash}`;
+  }
+  return url;
+};
+
+// простая иконка Farcaster (фоллбек)
 const FarcasterIcon: React.FC = () => (
   <svg
-    width={18}
-    height={18}
+    width={24}
+    height={24}
     viewBox="0 0 24 24"
-    style={{ display: "block", borderRadius: 6 }}
+    style={{ display: "block", borderRadius: 8 }}
   >
-    <rect x="0" y="0" width="24" height="24" rx="6" fill="#855DFF" />
+    <rect x="0" y="0" width="24" height="24" rx="8" fill="#855DFF" />
     <path
       d="M7 17V12.5C7 9.5 8.8 8 12 8s5 1.5 5 4.5V17"
       stroke="white"
@@ -117,6 +129,155 @@ const iconLinkStyle: React.CSSProperties = {
   textDecoration: "none",
 };
 
+// ===== Hover-карточка профиля Farcaster =====
+
+interface FarcasterProfileBadgeProps {
+  url: string;
+  displayName?: string;
+  usernameLabel?: string; // @username
+  pfpUrl?: string;
+  followers?: number;
+  following?: number;
+}
+
+const tooltipStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  marginTop: 6,
+  padding: "10px 12px",
+  borderRadius: 12,
+  background: "rgba(17, 24, 39, 0.98)",
+  color: "white",
+  fontSize: "11px",
+  whiteSpace: "nowrap",
+  zIndex: 20,
+  boxShadow:
+    "0 20px 25px -5px rgba(0,0,0,0.4), 0 10px 10px -5px rgba(0,0,0,0.3)",
+  minWidth: 220,
+};
+
+const FarcasterProfileBadge: React.FC<FarcasterProfileBadgeProps> = ({
+  url,
+  displayName,
+  usernameLabel,
+  pfpUrl,
+  followers,
+  following,
+}) => {
+  const [hover, setHover] = useState(false);
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      style={{
+        ...iconLinkStyle,
+        gap: 6,
+        alignItems: "center",
+        position: "relative",
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      {/* маленький вид в таблице */}
+      {pfpUrl ? (
+        <img
+          src={pfpUrl}
+          alt={displayName || "Farcaster user"}
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            objectFit: "cover",
+          }}
+        />
+      ) : (
+        <FarcasterIcon />
+      )}
+
+      {displayName && (
+        <span style={{ fontSize: "11px" }}>{displayName}</span>
+      )}
+
+      {/* всплывающее окно как мини-профиль */}
+      {hover && (
+        <div style={tooltipStyle}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 8,
+            }}
+          >
+            <div>
+              {pfpUrl ? (
+                <img
+                  src={pfpUrl}
+                  alt={displayName || "Farcaster user"}
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <FarcasterIcon />
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 2,
+                }}
+              >
+                {displayName || "Farcaster user"}
+              </span>
+              {usernameLabel && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    opacity: 0.7,
+                  }}
+                >
+                  {usernameLabel}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {(followers !== undefined || following !== undefined) && (
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                fontSize: 11,
+                opacity: 0.9,
+              }}
+            >
+              {following !== undefined && (
+                <span>
+                  <strong>{following.toLocaleString()}</strong> Following
+                </span>
+              )}
+              {followers !== undefined && (
+                <span>
+                  <strong>{followers.toLocaleString()}</strong> Followers
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </a>
+  );
+};
+
 // ====== Страница ======
 
 export default function Page() {
@@ -128,7 +289,7 @@ export default function Page() {
   const [search, setSearch] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
-  // ---------- Загрузка токенов с мерджем маркет-данных ----------
+  // ---------- загрузка токенов + мердж маркет-данных ----------
 
   const load = async () => {
     try {
@@ -149,18 +310,21 @@ export default function Page() {
 
           if (!old) return t;
 
-          // Не затираем старые значения, если новые undefined
           return {
             ...t,
+            // не стираем старые значения, если новые undefined
             price_usd: t.price_usd ?? old.price_usd,
             liquidity_usd: t.liquidity_usd ?? old.liquidity_usd,
             volume_24h: t.volume_24h ?? old.volume_24h,
 
-            // сохраняем уже загруженные данные фаркастера
             farcaster_username: old.farcaster_username ?? t.farcaster_username,
             farcaster_display_name:
               old.farcaster_display_name ?? t.farcaster_display_name,
             farcaster_pfp_url: old.farcaster_pfp_url ?? t.farcaster_pfp_url,
+            farcaster_followers:
+              old.farcaster_followers ?? t.farcaster_followers,
+            farcaster_following:
+              old.farcaster_following ?? t.farcaster_following,
           };
         });
 
@@ -179,19 +343,27 @@ export default function Page() {
     return () => clearInterval(id);
   }, []);
 
-  // ---------- Дозагрузка имени и аватара Farcaster создателя ----------
+  // ---------- дозагрузка профилей Farcaster ----------
 
   useEffect(() => {
-    // Берём максимум 25 уникальных юзернеймов за раз, чтобы не спамить API
     const seenUsernames = new Set<string>();
     const toLoad: { username: string; address: string }[] = [];
 
     for (const t of tokens) {
       const username = extractFarcasterUsername(t.farcaster_url);
       if (!username) continue;
-      if (t.farcaster_display_name || t.farcaster_pfp_url) continue;
-      if (seenUsernames.has(username)) continue;
 
+      // если у нас уже есть какие-то данные — не трогаем
+      if (
+        t.farcaster_display_name ||
+        t.farcaster_pfp_url ||
+        t.farcaster_followers !== undefined ||
+        t.farcaster_following !== undefined
+      ) {
+        continue;
+      }
+
+      if (seenUsernames.has(username)) continue;
       seenUsernames.add(username);
       toLoad.push({ username, address: t.token_address });
     }
@@ -209,11 +381,24 @@ export default function Page() {
           if (!res.ok) return;
           const data = await res.json();
           const user =
-            data.result?.user || data.user || data; // на всякий случай разные форматы
+            data.result?.user || data.user || data; // возможные форматы
 
           const displayName =
             user?.display_name || user?.username || username;
-          const pfpUrl = user?.pfp?.url || user?.pfp_url;
+          const rawPfp = user?.pfp?.url || user?.pfp_url;
+          const pfpUrl = normalizePfpUrl(rawPfp);
+
+          const followers: number | undefined =
+            user?.follower_count ??
+            user?.followers ??
+            user?.followers_count ??
+            undefined;
+
+          const following: number | undefined =
+            user?.following_count ??
+            user?.following ??
+            user?.following_users ??
+            undefined;
 
           setTokens((prev) =>
             prev.map((t) =>
@@ -223,6 +408,8 @@ export default function Page() {
                     farcaster_username: username,
                     farcaster_display_name: displayName,
                     farcaster_pfp_url: pfpUrl,
+                    farcaster_followers: followers,
+                    farcaster_following: following,
                   }
                 : t
             )
@@ -234,7 +421,7 @@ export default function Page() {
     });
   }, [tokens]);
 
-  // ---------- Фильтрация / поиск ----------
+  // ---------- фильтр / поиск ----------
 
   const filteredTokens = useMemo(() => {
     const minLiq = Number(minLiquidity) || 0;
@@ -257,7 +444,7 @@ export default function Page() {
     });
   }, [tokens, sourceFilter, minLiquidity, search]);
 
-  // ---------- Рендер ----------
+  // ---------- рендер ----------
 
   return (
     <main
@@ -390,8 +577,16 @@ export default function Page() {
             )}
 
             {filteredTokens.map((t) => {
-              const username =
+              const usernameRaw =
                 t.farcaster_username || extractFarcasterUsername(t.farcaster_url);
+              const username = usernameRaw
+                ? usernameRaw.replace(/^@/, "")
+                : undefined;
+              const usernameLabel = username ? `@${username}` : undefined;
+              const displayName = t.farcaster_display_name || usernameLabel;
+
+              const hasAnyProfileInfo =
+                (t.farcaster_pfp_url || displayName) && t.farcaster_url;
 
               return (
                 <tr key={t.token_address}>
@@ -455,53 +650,31 @@ export default function Page() {
                       : "—"}
                   </td>
 
-                  {/* Socials: Farcaster icon + аватарка и имя */}
+                  {/* Socials: аватар Farcaster или иконка */}
                   <td style={tdStyle}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      {t.farcaster_url && (
-                        <a
-                          href={t.farcaster_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Farcaster"
-                          style={iconLinkStyle}
-                        >
-                          <FarcasterIcon />
-                        </a>
-                      )}
+                    {t.farcaster_url && hasAnyProfileInfo && (
+                      <FarcasterProfileBadge
+                        url={t.farcaster_url}
+                        displayName={displayName}
+                        usernameLabel={usernameLabel}
+                        pfpUrl={t.farcaster_pfp_url}
+                        followers={t.farcaster_followers}
+                        following={t.farcaster_following}
+                      />
+                    )}
 
-                      {(t.farcaster_display_name || username) && (
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          {t.farcaster_pfp_url && (
-                            <img
-                              src={t.farcaster_pfp_url}
-                              alt={t.farcaster_display_name || username || ""}
-                              style={{
-                                width: 20,
-                                height: 20,
-                                borderRadius: "50%",
-                                objectFit: "cover",
-                              }}
-                            />
-                          )}
-                          <span style={{ fontSize: "11px" }}>
-                            {t.farcaster_display_name || username}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                    {/* Фоллбек: ссылка есть, но профиля нет */}
+                    {t.farcaster_url && !hasAnyProfileInfo && (
+                      <a
+                        href={t.farcaster_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={iconLinkStyle}
+                        title="Farcaster"
+                      >
+                        <FarcasterIcon />
+                      </a>
+                    )}
                   </td>
 
                   {/* Seen */}
