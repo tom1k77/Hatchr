@@ -1,17 +1,25 @@
 // app/api/tokens/route.ts
 import { NextResponse } from "next/server";
-import { fetchAggregatedTokens } from "@/lib/providers";
+import { fetchClankerTokens, AggregatedToken } from "@/lib/providers";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const items = await fetchAggregatedTokens();
-    return NextResponse.json({ count: items.length, items });
-  } catch (e) {
-    console.error("/api/tokens error", e);
+    // просто берём последние 200 токенов с Clanker
+    const clankerTokens: AggregatedToken[] = await fetchClankerTokens(200);
+
     return NextResponse.json(
-      { error: "internal_error" },
+      {
+        count: clankerTokens.length,
+        items: clankerTokens,
+      },
+      { status: 200 }
+    );
+  } catch (e) {
+    console.error("/api/tokens failed", e);
+    return NextResponse.json(
+      { count: 0, items: [], error: "internal_error" },
       { status: 500 }
     );
   }
