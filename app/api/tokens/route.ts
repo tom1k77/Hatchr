@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // просто берём последние 200 токенов с Clanker
     const clankerTokens: AggregatedToken[] = await fetchClankerTokens(200);
 
     return NextResponse.json(
