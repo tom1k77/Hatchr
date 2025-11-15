@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
-// Типы такие же, как в lib/providers.ts
+// ==== Типы (должны совпадать с тем, что отдаёт /api/tokens) ====
+
 interface Token {
   token_address: string;
   name?: string;
@@ -15,6 +16,11 @@ interface Token {
   website_url?: string;
   x_url?: string;
   telegram_url?: string;
+
+  // будем дополнять их на клиенте
+  farcaster_username?: string;
+  farcaster_display_name?: string;
+  farcaster_pfp_url?: string;
 }
 
 interface TokenWithMarket extends Token {
@@ -34,6 +40,85 @@ const SOURCE_OPTIONS = [
   { value: "zora", label: "Zora" },
 ];
 
+// ===== Утилиты =====
+
+const formatNumber = (value?: number, decimals = 2) => {
+  if (value === undefined || Number.isNaN(value)) return "—";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+};
+
+const formatDateTime = (iso?: string) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("ru-RU");
+};
+
+const shortAddress = (addr: string) => {
+  if (!addr) return "";
+  return addr.slice(0, 6) + "..." + addr.slice(-4);
+};
+
+const extractFarcasterUsername = (url?: string) => {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    if (!u.hostname.endsWith("farcaster.xyz")) return undefined;
+    const segments = u.pathname.split("/").filter(Boolean);
+    return segments[0] || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+// простая иконка Farcaster (фиолетовый квадрат с «аркой», без F)
+const FarcasterIcon: React.FC = () => (
+  <svg
+    width={18}
+    height={18}
+    viewBox="0 0 24 24"
+    style={{ display: "block", borderRadius: 6 }}
+  >
+    <rect x="0" y="0" width="24" height="24" rx="6" fill="#855DFF" />
+    <path
+      d="M7 17V12.5C7 9.5 8.8 8 12 8s5 1.5 5 4.5V17"
+      stroke="white"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
+// ====== Стили таблицы ======
+
+const thStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  textAlign: "left",
+  fontWeight: 500,
+  fontSize: "12px",
+  color: "#4b5563",
+  borderBottom: "1px solid #e5e7eb",
+  whiteSpace: "nowrap",
+};
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  borderBottom: "1px solid #f3f4f6",
+  verticalAlign: "middle",
+};
+
+const iconLinkStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  textDecoration: "none",
+};
+
+// ====== Страница ======
+
 export default function Page() {
   const [tokens, setTokens] = useState<TokenWithMarket[]>([]);
   const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
@@ -43,7 +128,7 @@ export default function Page() {
   const [search, setSearch] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
 
-  // ---------- Загрузка с мерджем старых маркет-данных ----------
+  // ---------- Загрузка токенов с мерджем маркет-данных ----------
 
   const load = async () => {
     try {
@@ -54,7 +139,6 @@ export default function Page() {
       const fresh: TokenWithMarket[] = data.items ?? [];
 
       setTokens((prev) => {
-        // карта старых токенов по адресу
         const prevMap = new Map<string, TokenWithMarket>(
           prev.map((t) => [t.token_address.toLowerCase(), t])
         );
@@ -63,18 +147,20 @@ export default function Page() {
           const key = t.token_address.toLowerCase();
           const old = prevMap.get(key);
 
-          if (!old) {
-            // новый токен — просто берём как есть
-            return t;
-          }
+          if (!old) return t;
 
-          // если в новом ответе поле undefined, но в старом было значение —
-          // сохраняем старое (чтобы цена/ликвидность/объём не пропадали)
+          // Не затираем старые значения, если новые undefined
           return {
             ...t,
             price_usd: t.price_usd ?? old.price_usd,
             liquidity_usd: t.liquidity_usd ?? old.liquidity_usd,
             volume_24h: t.volume_24h ?? old.volume_24h,
+
+            // сохраняем уже загруженные данные фаркастера
+            farcaster_username: old.farcaster_username ?? t.farcaster_username,
+            farcaster_display_name:
+              old.farcaster_display_name ?? t.farcaster_display_name,
+            farcaster_pfp_url: old.farcaster_pfp_url ?? t.farcaster_pfp_url,
           };
         });
 
@@ -82,7 +168,6 @@ export default function Page() {
       });
     } catch (e) {
       console.error(e);
-      // при ошибке просто оставляем старые данные
     } finally {
       setLoading(false);
     }
@@ -90,10 +175,64 @@ export default function Page() {
 
   useEffect(() => {
     load();
-    // автообновление раз в 30 секунд (можно поменять на 60, если захочешь)
-    const id = setInterval(load, 30000);
+    const id = setInterval(load, 30000); // автообновление раз в 30 сек
     return () => clearInterval(id);
   }, []);
+
+  // ---------- Дозагрузка имени и аватара Farcaster создателя ----------
+
+  useEffect(() => {
+    // Берём максимум 25 уникальных юзернеймов за раз, чтобы не спамить API
+    const seenUsernames = new Set<string>();
+    const toLoad: { username: string; address: string }[] = [];
+
+    for (const t of tokens) {
+      const username = extractFarcasterUsername(t.farcaster_url);
+      if (!username) continue;
+      if (t.farcaster_display_name || t.farcaster_pfp_url) continue;
+      if (seenUsernames.has(username)) continue;
+
+      seenUsernames.add(username);
+      toLoad.push({ username, address: t.token_address });
+    }
+
+    const limited = toLoad.slice(0, 25);
+    if (!limited.length) return;
+
+    limited.forEach(({ username, address }) => {
+      (async () => {
+        try {
+          const url = `https://client.farcaster.xyz/v2/user-by-username?username=${encodeURIComponent(
+            username
+          )}`;
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const data = await res.json();
+          const user =
+            data.result?.user || data.user || data; // на всякий случай разные форматы
+
+          const displayName =
+            user?.display_name || user?.username || username;
+          const pfpUrl = user?.pfp?.url || user?.pfp_url;
+
+          setTokens((prev) =>
+            prev.map((t) =>
+              t.token_address.toLowerCase() === address.toLowerCase()
+                ? {
+                    ...t,
+                    farcaster_username: username,
+                    farcaster_display_name: displayName,
+                    farcaster_pfp_url: pfpUrl,
+                  }
+                : t
+            )
+          );
+        } catch (e) {
+          console.error("farcaster profile error", e);
+        }
+      })();
+    });
+  }, [tokens]);
 
   // ---------- Фильтрация / поиск ----------
 
@@ -117,28 +256,6 @@ export default function Page() {
       return true;
     });
   }, [tokens, sourceFilter, minLiquidity, search]);
-
-  // ---------- Утилиты отображения ----------
-
-  const formatNumber = (value?: number, decimals = 2) => {
-    if (value === undefined || Number.isNaN(value)) return "—";
-    return value.toLocaleString(undefined, {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    });
-  };
-
-  const formatDateTime = (iso?: string) => {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString("ru-RU");
-  };
-
-  const shortAddress = (addr: string) => {
-    if (!addr) return "";
-    return addr.slice(0, 6) + "..." + addr.slice(-4);
-  };
 
   // ---------- Рендер ----------
 
@@ -272,147 +389,126 @@ export default function Page() {
               </tr>
             )}
 
-            {filteredTokens.map((t) => (
-              <tr key={t.token_address}>
-                {/* Name + symbol (кликабельно на Clanker/Zora) */}
-                <td style={tdStyle}>
-                  {t.source_url ? (
-                    <a
-                      href={t.source_url}
-                      target="_blank"
-                      rel="noreferrer"
+            {filteredTokens.map((t) => {
+              const username =
+                t.farcaster_username || extractFarcasterUsername(t.farcaster_url);
+
+              return (
+                <tr key={t.token_address}>
+                  {/* Name + symbol (кликабельно на Clanker/Zora) */}
+                  <td style={tdStyle}>
+                    {t.source_url ? (
+                      <a
+                        href={t.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          textDecoration: "none",
+                          color: "#111827",
+                        }}
+                      >
+                        <div>{t.name || "—"}</div>
+                        {t.symbol && (
+                          <div style={{ opacity: 0.6, fontSize: "11px" }}>
+                            {t.symbol}
+                          </div>
+                        )}
+                      </a>
+                    ) : (
+                      <div>
+                        <div>{t.name || "—"}</div>
+                        {t.symbol && (
+                          <div style={{ opacity: 0.6, fontSize: "11px" }}>
+                            {t.symbol}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Address */}
+                  <td style={tdStyle}>
+                    <code>{shortAddress(t.token_address)}</code>
+                  </td>
+
+                  {/* Source */}
+                  <td style={tdStyle}>{t.source || "—"}</td>
+
+                  {/* Liquidity */}
+                  <td style={tdStyle}>
+                    {t.liquidity_usd !== undefined
+                      ? `$${formatNumber(t.liquidity_usd, 0)}`
+                      : "—"}
+                  </td>
+
+                  {/* Price */}
+                  <td style={tdStyle}>
+                    {t.price_usd !== undefined
+                      ? `$${formatNumber(t.price_usd, 6)}`
+                      : "—"}
+                  </td>
+
+                  {/* Volume 24h */}
+                  <td style={tdStyle}>
+                    {t.volume_24h !== undefined
+                      ? `$${formatNumber(t.volume_24h, 0)}`
+                      : "—"}
+                  </td>
+
+                  {/* Socials: Farcaster icon + аватарка и имя */}
+                  <td style={tdStyle}>
+                    <div
                       style={{
-                        textDecoration: "none",
-                        color: "#111827",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
                       }}
                     >
-                      <div>{t.name || "—"}</div>
-                      {t.symbol && (
-                        <div style={{ opacity: 0.6, fontSize: "11px" }}>
-                          {t.symbol}
-                        </div>
+                      {t.farcaster_url && (
+                        <a
+                          href={t.farcaster_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Farcaster"
+                          style={iconLinkStyle}
+                        >
+                          <FarcasterIcon />
+                        </a>
                       )}
-                    </a>
-                  ) : (
-                    <div>
-                      <div>{t.name || "—"}</div>
-                      {t.symbol && (
-                        <div style={{ opacity: 0.6, fontSize: "11px" }}>
-                          {t.symbol}
+
+                      {(t.farcaster_display_name || username) && (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                          }}
+                        >
+                          {t.farcaster_pfp_url && (
+                            <img
+                              src={t.farcaster_pfp_url}
+                              alt={t.farcaster_display_name || username || ""}
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          )}
+                          <span style={{ fontSize: "11px" }}>
+                            {t.farcaster_display_name || username}
+                          </span>
                         </div>
                       )}
                     </div>
-                  )}
-                </td>
+                  </td>
 
-                {/* Address */}
-                <td style={tdStyle}>
-                  <code>{shortAddress(t.token_address)}</code>
-                </td>
-
-                {/* Source */}
-                <td style={tdStyle}>{t.source || "—"}</td>
-
-                {/* Liquidity */}
-                <td style={tdStyle}>
-                  {t.liquidity_usd !== undefined
-                    ? `$${formatNumber(t.liquidity_usd, 0)}`
-                    : "—"}
-                </td>
-
-                {/* Price */}
-                <td style={tdStyle}>
-                  {t.price_usd !== undefined
-                    ? `$${formatNumber(t.price_usd, 6)}`
-                    : "—"}
-                </td>
-
-                {/* Volume 24h */}
-                <td style={tdStyle}>
-                  {t.volume_24h !== undefined
-                    ? `$${formatNumber(t.volume_24h, 0)}`
-                    : "—"}
-                </td>
-
-                {/* Socials */}
-                <td style={tdStyle}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "6px",
-                      alignItems: "center",
-                    }}
-                  >
-                    {t.farcaster_url && (
-                      <a
-                        href={t.farcaster_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Farcaster"
-                        style={iconLinkStyle}
-                      >
-                        {/* простая «фиолетовая плитка» под Farcaster */}
-                        <span
-                          style={{
-                            display: "inline-block",
-                            width: "18px",
-                            height: "18px",
-                            borderRadius: "4px",
-                            background: "#855DFF",
-                            color: "white",
-                            fontSize: "12px",
-                            fontWeight: 700,
-                            lineHeight: "18px",
-                            textAlign: "center",
-                          }}
-                        >
-                          F
-                        </span>
-                      </a>
-                    )}
-
-                    {t.website_url && (
-                      <a
-                        href={t.website_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Website"
-                        style={iconLinkStyle}
-                      >
-                        🌐
-                      </a>
-                    )}
-
-                    {t.x_url && (
-                      <a
-                        href={t.x_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="X (Twitter)"
-                        style={iconLinkStyle}
-                      >
-                        𝕏
-                      </a>
-                    )}
-
-                    {t.telegram_url && (
-                      <a
-                        href={t.telegram_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Telegram"
-                        style={iconLinkStyle}
-                      >
-                        ✈️
-                      </a>
-                    )}
-                  </div>
-                </td>
-
-                {/* Seen */}
-                <td style={tdStyle}>{formatDateTime(t.first_seen_at)}</td>
-              </tr>
-            ))}
+                  {/* Seen */}
+                  <td style={tdStyle}>{formatDateTime(t.first_seen_at)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>
@@ -431,29 +527,3 @@ export default function Page() {
     </main>
   );
 }
-
-// Общие стили ячеек
-
-const thStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  textAlign: "left",
-  fontWeight: 500,
-  fontSize: "12px",
-  color: "#4b5563",
-  borderBottom: "1px solid #e5e7eb",
-  whiteSpace: "nowrap",
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: "8px 10px",
-  borderBottom: "1px solid #f3f4f6",
-  verticalAlign: "middle",
-};
-
-const iconLinkStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  textDecoration: "none",
-  fontSize: "14px",
-};
