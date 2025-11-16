@@ -24,14 +24,9 @@ export interface TokenWithMarket extends Token {
 }
 
 // --- Blacklist Farcaster creators (боты и спамеры) ---
-const BLOCKED_FARCASTER_USERS = [
-  "primatirta",
-  "pinmad",
-  "senang",
-  "mybrandio",
-];
+const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "mybrandio"];
 
-// helper: вытащить ник из farcaster_url
+// helper: вытащить ник из farcaster_url и проверить по блэклисту
 function isBlockedCreator(farcasterUrl?: string | null): boolean {
   if (!farcasterUrl) return false;
 
@@ -43,7 +38,7 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
     const handle = parts[0].toLowerCase();
     return BLOCKED_FARCASTER_USERS.includes(handle);
   } catch {
-    // если невалидный URL — не блокировать
+    // если невалидный URL — не блокируем
     return false;
   }
 }
@@ -52,7 +47,9 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
 
 const CLANKER_API = "https://www.clanker.world/api/tokens";
 const CLANKER_FRONT = "https://www.clanker.world";
-const DEX_URL = "https://api.dexscreener.com/latest/dex/tokens";
+
+// GeckoTerminal (вместо DexScreener)
+const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
 
 // -------- Вспомогательные функции --------
 
@@ -124,6 +121,9 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     if (!cursor) break;
   }
 
+  const nowTs = Date.now();
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+
   const tokens: Token[] = collected
     .map((t: any) => {
       // только Base
@@ -179,7 +179,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
 
-      return {
+      const token: Token = {
         token_address: addr,
         name,
         symbol,
@@ -192,26 +192,29 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         website_url: undefined,
         x_url: undefined,
         telegram_url: undefined,
-      } as Token;
+      };
+
+      // фильтр по чёрному списку создателей
+      if (isBlockedCreator(token.farcaster_url)) {
+        return null;
+      }
+
+      // допфильтр: только за последний час
+      if (token.first_seen_at) {
+        const ts = new Date(token.first_seen_at).getTime();
+        if (!Number.isNaN(ts) && nowTs - ts > ONE_HOUR_MS) {
+          return null;
+        }
+      }
+
+      return token;
     })
     .filter(Boolean) as Token[];
 
-  // 1) допфильтр "последний час"
-  const filteredByTime = tokens.filter((t) => {
-    if (!t.first_seen_at) return true;
-    const ts = new Date(t.first_seen_at).getTime();
-    return now - ts <= ONE_HOUR;
-  });
-
-  // 2) фильтр по заблокированным создателям в Farcaster
-  const filteredByCreator = filteredByTime.filter(
-    (t) => !isBlockedCreator(t.farcaster_url)
-  );
-
-  return filteredByCreator;
+  return tokens;
 }
 
-// -------- DexScreener: цена / ликвидность / объём --------
+// -------- GeckoTerminal: цена / ликвидность / объём --------
 
 export async function enrichWithDexScreener(
   tokens: Token[]
@@ -220,38 +223,48 @@ export async function enrichWithDexScreener(
 
   for (const t of tokens) {
     try {
-      const res = await fetch(`${DEX_URL}/${t.token_address}`, {
-        cache: "no-store",
-      });
+      // Один запрос на токен к GeckoTerminal
+      const res = await fetch(
+        `${GECKO_BASE}/networks/base/tokens/${t.token_address}`,
+        { cache: "no-store" }
+      );
 
       if (!res.ok) {
         result.push({ ...t });
         continue;
       }
 
-      const data: any = await res.json();
-      const pairs = Array.isArray(data?.pairs) ? data.pairs : [];
-      const pair =
-        pairs.find((p: any) => p.chainId === "base") ||
-        (pairs.length ? pairs[0] : null);
+      const json: any = await res.json();
+      // GeckoTerminal обычно JSON:API — data.attributes
+      const attrs =
+        json?.data?.attributes ||
+        (Array.isArray(json?.data) ? json.data[0]?.attributes : null) ||
+        {};
 
-      if (!pair) {
-        result.push({ ...t });
-        continue;
-      }
+      const priceUsd = attrs.price_usd
+        ? Number(attrs.price_usd)
+        : undefined;
+
+      const liquidityUsd = attrs.liquidity_usd
+        ? Number(attrs.liquidity_usd)
+        : undefined;
+
+      // пробуем несколько вариантов названия поля для объёма
+      const volume24h =
+        attrs.volume_usd_24h
+          ? Number(attrs.volume_usd_24h)
+          : attrs.volume_usd?.h24
+          ? Number(attrs.volume_usd.h24)
+          : undefined;
 
       result.push({
         ...t,
-        price_usd: pair.priceUsd ? Number(pair.priceUsd) : undefined,
-        liquidity_usd: pair.liquidity?.usd
-          ? Number(pair.liquidity.usd)
-          : undefined,
-        volume_24h: pair.volume?.h24
-          ? Number(pair.volume.h24)
-          : undefined,
+        price_usd: priceUsd,
+        liquidity_usd: liquidityUsd,
+        volume_24h: volume24h,
       });
     } catch {
-      // в случае ошибки по DEX — просто возвращаем токен как есть
+      // если Gecko ложится — просто возвращаем токен как есть
       result.push({ ...t });
     }
   }
