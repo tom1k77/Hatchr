@@ -23,6 +23,31 @@ export interface TokenWithMarket extends Token {
   volume_24h?: number;
 }
 
+// --- Blacklist Farcaster creators (боты и спамеры) ---
+const BLOCKED_FARCASTER_USERS = [
+  "primatirta",
+  "pinmad",
+  "senang",
+  "mybrandio",
+];
+
+// helper: вытащить ник из farcaster_url
+function isBlockedCreator(farcasterUrl?: string | null): boolean {
+  if (!farcasterUrl) return false;
+
+  try {
+    const url = new URL(farcasterUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (!parts[0]) return false;
+
+    const handle = parts[0].toLowerCase();
+    return BLOCKED_FARCASTER_USERS.includes(handle);
+  } catch {
+    // если невалидный URL — не блокировать
+    return false;
+  }
+}
+
 // -------- Константы --------
 
 const CLANKER_API = "https://www.clanker.world/api/tokens";
@@ -171,12 +196,19 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     })
     .filter(Boolean) as Token[];
 
-  // допфильтр "последний час"
-  return tokens.filter((t) => {
+  // 1) допфильтр "последний час"
+  const filteredByTime = tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
     return now - ts <= ONE_HOUR;
   });
+
+  // 2) фильтр по заблокированным создателям в Farcaster
+  const filteredByCreator = filteredByTime.filter(
+    (t) => !isBlockedCreator(t.farcaster_url)
+  );
+
+  return filteredByCreator;
 }
 
 // -------- DexScreener: цена / ликвидность / объём --------
