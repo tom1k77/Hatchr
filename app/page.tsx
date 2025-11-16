@@ -28,14 +28,15 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 сек
+const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 секунд
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   if (Math.abs(value) < 1) return value.toFixed(6);
   if (Math.abs(value) < 10) return value.toFixed(4);
   if (Math.abs(value) < 1000) return value.toFixed(2);
-  if (Math.abs(value) < 1_000_000) return (value / 1_000).toFixed(1) + "K";
+  if (Math.abs(value) < 1_000_000)
+    return (value / 1_000).toFixed(1) + "K";
   return (value / 1_000_000).toFixed(1) + "M";
 }
 
@@ -64,37 +65,6 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-// Фирменная «арка» Farcaster (похожая на иконку приложения)
-function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
-  const inner = size * 0.6;
-  const border = size * 0.18;
-
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size * 0.3,
-        background: "#5b3ded", // фиолетовый Farcaster
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        style={{
-          width: inner,
-          height: inner,
-          borderRadius: size * 0.22,
-          border: `${border}px solid #ffffff`,
-          borderTopWidth: 0, // «арка»
-          boxSizing: "border-box",
-        }}
-      />
-    </div>
-  );
-}
-
 export default function HomePage() {
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,7 +80,7 @@ export default function HomePage() {
     {}
   );
 
-  // теперь подсвечиваем конкретную строку, а не всех авторов
+  // теперь храним не username, а уникальный ключ строки
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
 
   async function loadTokens() {
@@ -212,7 +182,7 @@ export default function HomePage() {
             New Base Tokens (Zora + Clanker)
           </h1>
           <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
-            Auto-refresh every 30 seconds. Market data from DexScreener.
+            Auto-refresh every 30 seconds. Market data from GeckoTerminal.
           </p>
         </header>
 
@@ -526,17 +496,17 @@ export default function HomePage() {
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: "6px",
+                              gap: "8px",
                               padding: "4px 10px",
                               borderRadius: "999px",
                               backgroundColor: "#5b3ded",
                               color: "#fff",
                               textDecoration: "none",
                               fontSize: "12px",
-                              minHeight: 26,
                             }}
                           >
-                            {profile?.pfp_url ? (
+                            {/* показываем ТОЛЬКО реальный pfp, без подковы */}
+                            {profile?.pfp_url && (
                               <img
                                 src={profile.pfp_url}
                                 alt={profile.display_name || username}
@@ -548,13 +518,11 @@ export default function HomePage() {
                                   backgroundColor: "#1f2933",
                                 }}
                               />
-                            ) : (
-                              <FarcasterFallbackIcon size={22} />
                             )}
 
                             <span
                               style={{
-                                maxWidth: "110px",
+                                maxWidth: "120px",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
@@ -575,7 +543,7 @@ export default function HomePage() {
                                 borderRadius: "10px",
                                 backgroundColor: "#111827",
                                 color: "#f9fafb",
-                                minWidth: "230px",
+                                minWidth: "220px",
                                 boxShadow:
                                   "0 12px 30px rgba(0,0,0,0.35)",
                                 zIndex: 20,
@@ -589,20 +557,18 @@ export default function HomePage() {
                                   marginBottom: "8px",
                                 }}
                               >
-                                {profile.pfp_url ? (
+                                {profile.pfp_url && (
                                   <img
                                     src={profile.pfp_url}
                                     alt={profile.display_name || username}
                                     style={{
-                                      width: 42,
-                                      height: 42,
+                                      width: 44,
+                                      height: 44,
                                       borderRadius: "999px",
                                       objectFit: "cover",
                                       backgroundColor: "#1f2933",
                                     }}
                                   />
-                                ) : (
-                                  <FarcasterFallbackIcon size={32} />
                                 )}
 
                                 <div>
