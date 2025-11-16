@@ -28,15 +28,14 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 секунд
+const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 сек
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   if (Math.abs(value) < 1) return value.toFixed(6);
   if (Math.abs(value) < 10) return value.toFixed(4);
   if (Math.abs(value) < 1000) return value.toFixed(2);
-  if (Math.abs(value) < 1_000_000)
-    return (value / 1_000).toFixed(1) + "K";
+  if (Math.abs(value) < 1_000_000) return (value / 1_000).toFixed(1) + "K";
   return (value / 1_000_000).toFixed(1) + "M";
 }
 
@@ -65,6 +64,37 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+// Фирменная «арка» Farcaster (похожая на иконку приложения)
+function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
+  const inner = size * 0.6;
+  const border = size * 0.18;
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size * 0.3,
+        background: "#5b3ded", // фиолетовый Farcaster
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: inner,
+          height: inner,
+          borderRadius: size * 0.22,
+          border: `${border}px solid #ffffff`,
+          borderTopWidth: 0, // «арка»
+          boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,7 +110,7 @@ export default function HomePage() {
     {}
   );
 
-  // теперь храним не username, а уникальный ключ строки
+  // теперь подсвечиваем конкретную строку, а не всех авторов
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
 
   async function loadTokens() {
@@ -493,28 +523,43 @@ export default function HomePage() {
                             href={`https://farcaster.xyz/${username}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="fc-badge"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                              padding: "4px 10px",
+                              borderRadius: "999px",
+                              backgroundColor: "#5b3ded",
+                              color: "#fff",
+                              textDecoration: "none",
+                              fontSize: "12px",
+                              minHeight: 26,
+                            }}
                           >
-                            <div className="fc-badge-avatar">
-                              {profile?.pfp_url ? (
-                                <img
-                                  src={profile.pfp_url}
-                                  alt={profile.display_name || username}
-                                />
-                              ) : (
-                                <span
-                                  style={{
-                                    fontSize: 14,
-                                    fontWeight: 700,
-                                    color: "#ffffff",
-                                  }}
-                                >
-                                  F
-                                </span>
-                              )}
-                            </div>
+                            {profile?.pfp_url ? (
+                              <img
+                                src={profile.pfp_url}
+                                alt={profile.display_name || username}
+                                style={{
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: "999px",
+                                  objectFit: "cover",
+                                  backgroundColor: "#1f2933",
+                                }}
+                              />
+                            ) : (
+                              <FarcasterFallbackIcon size={22} />
+                            )}
 
-                            <span className="fc-badge-username">
+                            <span
+                              style={{
+                                maxWidth: "110px",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
                               @{username}
                             </span>
                           </a>
@@ -530,7 +575,7 @@ export default function HomePage() {
                                 borderRadius: "10px",
                                 backgroundColor: "#111827",
                                 color: "#f9fafb",
-                                minWidth: "220px",
+                                minWidth: "230px",
                                 boxShadow:
                                   "0 12px 30px rgba(0,0,0,0.35)",
                                 zIndex: 20,
@@ -549,30 +594,15 @@ export default function HomePage() {
                                     src={profile.pfp_url}
                                     alt={profile.display_name || username}
                                     style={{
-                                      width: 38,
-                                      height: 38,
+                                      width: 42,
+                                      height: 42,
                                       borderRadius: "999px",
                                       objectFit: "cover",
                                       backgroundColor: "#1f2933",
                                     }}
                                   />
                                 ) : (
-                                  <div
-                                    style={{
-                                      width: 38,
-                                      height: 38,
-                                      borderRadius: "999px",
-                                      background: "#5b3ded",
-                                      display: "flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      color: "#fff",
-                                      fontWeight: 700,
-                                      fontSize: 16,
-                                    }}
-                                  >
-                                    F
-                                  </div>
+                                  <FarcasterFallbackIcon size={32} />
                                 )}
 
                                 <div>
