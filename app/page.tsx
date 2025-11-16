@@ -65,34 +65,6 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-// простая «арка» Farcaster вместо буквы F
-function FarcasterFallbackIcon() {
-  return (
-    <div
-      style={{
-        width: 18,
-        height: 18,
-        borderRadius: 6,
-        background: "#5b3ded",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        style={{
-          width: 11,
-          height: 11,
-          borderRadius: 3,
-          border: "2px solid #fff",
-          borderTopWidth: 0,
-          boxSizing: "border-box",
-        }}
-      />
-    </div>
-  );
-}
-
 export default function HomePage() {
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -521,42 +493,28 @@ export default function HomePage() {
                             href={`https://farcaster.xyz/${username}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              padding: "3px 8px",
-                              borderRadius: "999px",
-                              backgroundColor: "#5b3ded",
-                              color: "#fff",
-                              textDecoration: "none",
-                              fontSize: "12px",
-                            }}
+                            className="fc-badge"
                           >
-                            {profile?.pfp_url ? (
-                              <img
-                                src={profile.pfp_url}
-                                alt={profile.display_name || username}
-                                style={{
-                                  width: 18,
-                                  height: 18,
-                                  borderRadius: "999px",
-                                  objectFit: "cover",
-                                  backgroundColor: "#1f2933",
-                                }}
-                              />
-                            ) : (
-                              <FarcasterFallbackIcon />
-                            )}
+                            <div className="fc-badge-avatar">
+                              {profile?.pfp_url ? (
+                                <img
+                                  src={profile.pfp_url}
+                                  alt={profile.display_name || username}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: 700,
+                                    color: "#ffffff",
+                                  }}
+                                >
+                                  F
+                                </span>
+                              )}
+                            </div>
 
-                            <span
-                              style={{
-                                maxWidth: "110px",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
+                            <span className="fc-badge-username">
                               @{username}
                             </span>
                           </a>
@@ -599,7 +557,22 @@ export default function HomePage() {
                                     }}
                                   />
                                 ) : (
-                                  <FarcasterFallbackIcon />
+                                  <div
+                                    style={{
+                                      width: 38,
+                                      height: 38,
+                                      borderRadius: "999px",
+                                      background: "#5b3ded",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      color: "#fff",
+                                      fontWeight: 700,
+                                      fontSize: 16,
+                                    }}
+                                  >
+                                    F
+                                  </div>
                                 )}
 
                                 <div>
