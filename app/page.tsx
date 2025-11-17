@@ -28,7 +28,7 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 30000; // 30 секунд
+const REFRESH_INTERVAL_MS = 30000; // 30 секунд авто-обновление
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
@@ -37,38 +37,6 @@ function formatNumber(value: number | null | undefined): string {
   if (Math.abs(value) < 1000) return value.toFixed(2);
   if (Math.abs(value) < 1_000_000) return (value / 1_000).toFixed(1) + "K";
   return (value / 1_000_000).toFixed(1) + "M";
-}
-
-function formatDate(dateString: string) {
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return dateString;
-  return d.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-// для колонки Created: время и дата отдельно
-function formatCreatedParts(dateString: string | null | undefined) {
-  if (!dateString) return { time: "—", date: "" };
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return { time: "—", date: "" };
-
-  const time = d.toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const date = d.toLocaleDateString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  return { time, date };
 }
 
 function extractFarcasterUsername(url?: string | null): string | null {
@@ -83,26 +51,30 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-function formatTimeAgo(dateString: string | null | undefined): string {
-  if (!dateString) return "";
-  const created = new Date(dateString).getTime();
-  if (Number.isNaN(created)) return "";
+function formatCreatedParts(dateString: string | null | undefined): {
+  time: string;
+  date: string;
+} {
+  if (!dateString) return { time: "—", date: "" };
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return { time: dateString, date: "" };
 
-  const diffMs = Date.now() - created;
-  const diffSec = Math.floor(diffMs / 1000);
-  if (diffSec < 60) return `${diffSec}s ago`;
+  const time = d.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 
-  const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
+  const date = d.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
-
-  const diffD = Math.floor(diffH / 24);
-  return `${diffD}d ago`;
+  return { time, date };
 }
 
-// fallback-иконка Farcaster (арка)
+// Fallback-иконка Farcaster (арка)
 function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
   const inner = size - 6;
   return (
@@ -148,13 +120,12 @@ export default function HomePage() {
     Record<string, boolean>
   >({});
 
+  // hoveredRowKey — для тултипа профиля
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<
-    string | null
-  >(null);
-
-  // для индикации "скопировано"
-  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  // hoveredTableRowKey — подсветка строки таблицы
+  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<string | null>(
+    null
+  );
 
   async function loadTokens() {
     try {
@@ -167,7 +138,7 @@ export default function HomePage() {
       setTokens(data.items || []);
     } catch (e) {
       console.error(e);
-      setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
+      setError("Failed to load tokens. Try again a bit later.");
     } finally {
       setIsLoading(false);
     }
@@ -221,15 +192,16 @@ export default function HomePage() {
     }
   }
 
-  // токены с торгами (для правого блока)
-  const tradedFeed = useMemo(() => {
-    const hasTrades = (t: TokenItem) =>
-      (t.price_usd ?? 0) > 0 ||
-      (t.liquidity_usd ?? 0) > 0 ||
-      (t.volume_24h_usd ?? 0) > 0;
+  // --- Live traded feed: только токены с ненулевыми метриками ---
+  const liveFeed = useMemo(() => {
+    const tradable = tokens.filter((t) => {
+      const price = t.price_usd ?? 0;
+      const vol = t.volume_24h_usd ?? 0;
+      const liq = t.liquidity_usd ?? 0;
+      return price > 0 || vol > 0 || liq > 0;
+    });
 
-    const filtered = tokens.filter(hasTrades);
-    const sorted = filtered.sort((a, b) => {
+    const sorted = tradable.sort((a, b) => {
       return (
         new Date(b.first_seen_at).getTime() -
         new Date(a.first_seen_at).getTime()
@@ -239,39 +211,23 @@ export default function HomePage() {
     return sorted.slice(0, 7);
   }, [tokens]);
 
-  // копирование адреса
-  async function handleCopyAddress(addr: string) {
-    try {
-      if (navigator && navigator.clipboard) {
-        await navigator.clipboard.writeText(addr);
-        setCopiedAddress(addr);
-        setTimeout(() => {
-          setCopiedAddress((prev) => (prev === addr ? null : prev));
-        }, 1000);
-      }
-    } catch (e) {
-      console.error("Copy failed", e);
-    }
-  }
-
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
-        {/* Верхняя панель */}
+        {/* Top bar */}
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
-            {/* логотип из /public/hatchr-logo.png */}
             <div className="hatchr-brand-logo">
+              {/* Лого из /public/hatchr-logo.png, если нет — останется буква H */}
               <img
                 src="/hatchr-logo.png"
-                alt="Hatchr"
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  display: "block",
+                alt="Hatchr logo"
+                className="hatchr-brand-logo-img"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
                 }}
               />
+              <span className="hatchr-brand-logo-fallback">H</span>
             </div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
@@ -289,9 +245,9 @@ export default function HomePage() {
           </nav>
         </div>
 
-        {/* Основная сетка: таблица + сайдбар */}
+        {/* Основная сетка: таблица + правый сайдбар */}
         <div className="hatchr-main-grid">
-          {/* Левая часть */}
+          {/* Левая часть: фильтры + таблица */}
           <section>
             {/* Фильтры */}
             <section className="hatchr-filters">
@@ -354,26 +310,9 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Таблица с горизонтальным скроллом */}
-            <div
-              className="hatchr-table-wrapper"
-              style={{
-                borderRadius: 10,
-                border: "1px solid #eee",
-                backgroundColor: "#fff",
-                overflowX: "auto",
-                overflowY: "hidden",
-              }}
-            >
-              <table
-                className="hatchr-table"
-                style={{
-                  width: "100%",
-                  minWidth: 820,
-                  borderCollapse: "collapse",
-                  fontSize: 13,
-                }}
-              >
+            {/* Таблица */}
+            <div className="hatchr-table-wrapper">
+              <table className="hatchr-table">
                 <thead>
                   <tr>
                     {[
@@ -388,8 +327,7 @@ export default function HomePage() {
                       <th
                         key={h}
                         style={{
-                          textAlign:
-                            h === "Name" || h === "Created" ? "left" : "right",
+                          textAlign: h === "Name" ? "left" : "right",
                         }}
                       >
                         {h}
@@ -402,8 +340,8 @@ export default function HomePage() {
                     <tr>
                       <td colSpan={7} className="hatchr-table-empty">
                         {isLoading
-                          ? "Загружаем данные…"
-                          : "Пока пусто. Обнови страницу позже."}
+                          ? "Loading tokens…"
+                          : "No new tokens yet. Check back soon."}
                       </td>
                     </tr>
                   )}
@@ -418,15 +356,11 @@ export default function HomePage() {
                     const isTooltipVisible = hoveredRowKey === rowKey;
                     const isRowHovered = hoveredTableRowKey === rowKey;
 
-                    const { time, date } = formatCreatedParts(
+                    const addr = token.token_address || "";
+                    const last4 = addr.slice(-4);
+                    const createdParts = formatCreatedParts(
                       token.first_seen_at
                     );
-
-                    const shortAddr = token.token_address
-                      ? token.token_address.slice(0, 6) +
-                        "..." +
-                        token.token_address.slice(-4)
-                      : "—";
 
                     return (
                       <tr
@@ -480,7 +414,7 @@ export default function HomePage() {
                           </a>
                         </td>
 
-                        {/* Address + copy */}
+                        {/* Address (0x + последние 4 символа + copy) */}
                         <td
                           style={{
                             padding: "8px 10px",
@@ -488,41 +422,37 @@ export default function HomePage() {
                             fontFamily: "monospace",
                             fontSize: 12,
                             whiteSpace: "nowrap",
+                            maxWidth: 90,
                           }}
                         >
-                          <div
+                          <button
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                token.token_address || ""
+                              )
+                            }
                             style={{
+                              border: "none",
+                              background: "transparent",
+                              padding: 0,
+                              cursor: "pointer",
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: 6,
+                              gap: 4,
+                              color: "#374151",
                             }}
+                            title="Copy contract address"
                           >
-                            <span>{shortAddr}</span>
-                            {token.token_address && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleCopyAddress(token.token_address)
-                                }
-                                style={{
-                                  border: "none",
-                                  background: "transparent",
-                                  cursor: "pointer",
-                                  padding: 0,
-                                  fontSize: 12,
-                                  color:
-                                    copiedAddress === token.token_address
-                                      ? "#16a34a"
-                                      : "#6b7280",
-                                }}
-                                title="Copy address"
-                              >
-                                {copiedAddress === token.token_address
-                                  ? "✓"
-                                  : "⧉"}
-                              </button>
-                            )}
-                          </div>
+                            <span>0x…{last4}</span>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                opacity: 0.7,
+                              }}
+                            >
+                              ⧉
+                            </span>
+                          </button>
                         </td>
 
                         {/* Source */}
@@ -711,11 +641,11 @@ export default function HomePage() {
                           )}
                         </td>
 
-                        {/* Created */}
+                        {/* Created: время + дата в две строки */}
                         <td
                           style={{
                             padding: "8px 10px",
-                            textAlign: "left",
+                            textAlign: "right",
                             whiteSpace: "nowrap",
                           }}
                         >
@@ -723,22 +653,19 @@ export default function HomePage() {
                             style={{
                               display: "flex",
                               flexDirection: "column",
-                              alignItems: "flex-start",
-                              lineHeight: 1.2,
-                              fontVariantNumeric: "tabular-nums",
+                              alignItems: "flex-end",
+                              lineHeight: 1.1,
                             }}
                           >
-                            <span>{time}</span>
-                            {date && (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  color: "#6b7280",
-                                }}
-                              >
-                                {date}
-                              </span>
-                            )}
+                            <span>{createdParts.time}</span>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "#6b7280",
+                              }}
+                            >
+                              {createdParts.date}
+                            </span>
                           </div>
                         </td>
                       </tr>
@@ -749,22 +676,30 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Правая часть — токены с торгами */}
+          {/* Правая часть: Live traded feed */}
           <aside className="hatchr-feed">
             <div className="hatchr-feed-title">
               <span>Live traded feed</span>
               <span className="hatchr-feed-badge">non-zero markets</span>
             </div>
+
             <ul className="hatchr-feed-list">
-              {tradedFeed.length === 0 && (
-                <li className="hatchr-feed-item">
-                  <span className="hatchr-feed-sub">
-                    Ждём первые сделки по новым токенам…
-                  </span>
-                </li>
+              {liveFeed.length === 0 && (
+                <>
+                  <li className="hatchr-feed-item">
+                    <span className="hatchr-feed-sub">
+                      Waiting for the first trades on fresh tokens…
+                    </span>
+                  </li>
+                  <li className="hatchr-feed-item">
+                    <span className="hatchr-feed-sub">
+                      Soon: Base-wide stats &amp; creator leaderboards.
+                    </span>
+                  </li>
+                </>
               )}
 
-              {tradedFeed.map((t) => (
+              {liveFeed.map((t) => (
                 <li
                   key={t.token_address + t.first_seen_at}
                   className="hatchr-feed-item"
@@ -774,44 +709,16 @@ export default function HomePage() {
                       {t.symbol || t.name || "New token"}
                     </span>
                     <span className="meta">
-                      {formatTimeAgo(t.first_seen_at)}
+                      {formatCreatedParts(t.first_seen_at).time}
                     </span>
                   </div>
                   <div className="hatchr-feed-sub">
                     🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
                     {t.name || "Unnamed"}
                   </div>
-                  <div
-                    style={{
-                      marginTop: 4,
-                      fontSize: 11,
-                      color: "#6b7280",
-                      display: "flex",
-                      gap: 10,
-                    }}
-                  >
-                    <span>Price: {formatNumber(t.price_usd)}</span>
-                    <span>Liq: {formatNumber(t.liquidity_usd)}</span>
-                    <span>Vol 24h: {formatNumber(t.volume_24h_usd)}</span>
-                  </div>
                 </li>
               ))}
             </ul>
-
-            {/* маленький второй блок, чтобы визуально добить колонку */}
-            <div
-              style={{
-                marginTop: 12,
-                padding: "10px 12px",
-                borderRadius: 12,
-                border: "1px dashed #e5e7eb",
-                backgroundColor: "#f9fafb",
-                fontSize: 12,
-                color: "#6b7280",
-              }}
-            >
-              Soon: Base-wide stats & creator leaderboards.
-            </div>
           </aside>
         </div>
       </main>
