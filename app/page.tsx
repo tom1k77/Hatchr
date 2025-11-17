@@ -28,15 +28,14 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 30000; // авто-обновление каждые 30 секунд
+const REFRESH_INTERVAL_MS = 30000; // 30 секунд
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   if (Math.abs(value) < 1) return value.toFixed(6);
   if (Math.abs(value) < 10) return value.toFixed(4);
   if (Math.abs(value) < 1000) return value.toFixed(2);
-  if (Math.abs(value) < 1_000_000)
-    return (value / 1_000).toFixed(1) + "K";
+  if (Math.abs(value) < 1_000_000) return (value / 1_000).toFixed(1) + "K";
   return (value / 1_000_000).toFixed(1) + "M";
 }
 
@@ -65,6 +64,54 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+function formatTimeAgo(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const created = new Date(dateString).getTime();
+  if (Number.isNaN(created)) return "";
+
+  const diffMs = Date.now() - created;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec}s ago`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+
+  const diffD = Math.floor(diffH / 24);
+  return `${diffD}d ago`;
+}
+
+// fallback-иконка Farcaster (арка) вместо буквы F
+function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
+  const inner = size - 6;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size,
+        background: "#5b3ded",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: inner * 0.66,
+          height: inner * 0.72,
+          borderRadius: 4,
+          border: `${Math.max(2, inner * 0.18)}px solid #ffffff`,
+          borderTopWidth: 0,
+          boxSizing: "border-box",
+        }}
+      />
+    </div>
+  );
+}
+
 export default function HomePage() {
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -75,13 +122,19 @@ export default function HomePage() {
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>({});
-  const [profileLoading, setProfileLoading] = useState<Record<string, boolean>>(
+  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>(
     {}
   );
+  const [profileLoading, setProfileLoading] = useState<
+    Record<string, boolean>
+  >({});
 
-  // теперь храним не username, а уникальный ключ строки
+  // hoveredRowKey — для тултипа профиля
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
+  // hoveredTableRowKey — для подсветки строки
+  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<string | null>(
+    null
+  );
 
   async function loadTokens() {
     try {
@@ -89,13 +142,10 @@ export default function HomePage() {
       setError(null);
 
       const res = await fetch("/api/tokens", { cache: "no-store" });
-      if (!res.ok) {
-        throw new Error(`Tokens API error: ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`Tokens API error: ${res.status}`);
       const data: TokensResponse = await res.json();
       setTokens(data.items || []);
-    } catch (e: any) {
+    } catch (e) {
       console.error(e);
       setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
     } finally {
@@ -112,10 +162,12 @@ export default function HomePage() {
   const filteredTokens = useMemo(() => {
     return tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
+
       if (minLiquidity > 0) {
         const liq = t.liquidity_usd ?? 0;
         if (liq < minLiquidity) return false;
       }
+
       if (search.trim()) {
         const s = search.trim().toLowerCase();
         const name = (t.name || "").toLowerCase();
@@ -125,6 +177,7 @@ export default function HomePage() {
           return false;
         }
       }
+
       return true;
     });
   }, [tokens, sourceFilter, minLiquidity, search]);
@@ -138,10 +191,7 @@ export default function HomePage() {
       const res = await fetch(
         `/api/farcaster-profile?username=${encodeURIComponent(username)}`
       );
-      if (!res.ok) {
-        console.warn("Profile API error for", username, res.status);
-        return;
-      }
+      if (!res.ok) return;
       const data: FarcasterProfile = await res.json();
       setProfiles((prev) => ({ ...prev, [username]: data }));
     } catch (e) {
@@ -151,493 +201,471 @@ export default function HomePage() {
     }
   }
 
+  // --- Live feed: последние несколько токенов ---
+  const liveFeed = useMemo(() => {
+    const sorted = [...tokens].sort((a, b) => {
+      return (
+        new Date(b.first_seen_at).getTime() -
+        new Date(a.first_seen_at).getTime()
+      );
+    });
+    return sorted.slice(0, 7);
+  }, [tokens]);
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        backgroundColor: "#f5f5f5",
-        padding: "24px",
-        fontFamily: "-apple-system, BlinkMacSystemFont, system-ui, sans-serif",
-      }}
-    >
-      <main
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          backgroundColor: "#ffffff",
-          borderRadius: "12px",
-          padding: "20px 24px 24px",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-        }}
-      >
-        <header
-          style={{
-            marginBottom: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "8px",
-          }}
-        >
-          <h1 style={{ fontSize: "20px", margin: 0 }}>
-            New Base Tokens (Zora + Clanker)
-          </h1>
-          <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
-            Auto-refresh every 30 seconds. Market data from GeckoTerminal.
-          </p>
-        </header>
+    <div className="hatchr-root">
+      <main className="hatchr-shell">
+        {/* Top bar */}
+        <div className="hatchr-topbar">
+          <div className="hatchr-brand">
+            {/* Если загрузишь /public/hatchr-logo.png — можешь заменить этот кружок на img */}
+            <div className="hatchr-brand-logo">H</div>
+            <div className="hatchr-brand-title">
+              <span className="hatchr-brand-title-main">Hatchr</span>
+              <span className="hatchr-brand-title-sub">
+                New Base tokens. Farcaster-native.
+              </span>
+            </div>
+          </div>
 
-        {/* фильтры */}
-        <section
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "12px",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "12px",
-          }}
-        >
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <label
-              style={{
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              Source:
-              <select
-                value={sourceFilter}
-                onChange={(e) =>
-                  setSourceFilter(e.target.value as "all" | "clanker" | "zora")
-                }
+          <nav className="hatchr-nav">
+            <span className="hatchr-nav-pill primary">New tokens</span>
+            <span className="hatchr-nav-pill">Creators</span>
+            <span className="hatchr-nav-pill">Trending</span>
+            <span className="hatchr-nav-pill">API (soon)</span>
+          </nav>
+        </div>
+
+        {/* Основная сетка: таблица + правый сайдбар */}
+        <div className="hatchr-main-grid">
+          {/* Левая часть: фильтры + таблица */}
+          <section>
+            {/* Фильтры */}
+            <section className="hatchr-filters">
+              <div className="hatchr-filters-left">
+                <label className="hatchr-label">
+                  Source:
+                  <select
+                    value={sourceFilter}
+                    onChange={(e) =>
+                      setSourceFilter(
+                        e.target.value as "all" | "clanker" | "zora"
+                      )
+                    }
+                    className="hatchr-select"
+                  >
+                    <option value="all">All</option>
+                    <option value="clanker">Clanker</option>
+                    <option value="zora">Zora</option>
+                  </select>
+                </label>
+
+                <label className="hatchr-label">
+                  Min Liquidity (USD):
+                  <input
+                    type="number"
+                    value={minLiquidity}
+                    onChange={(e) =>
+                      setMinLiquidity(Number(e.target.value) || 0)
+                    }
+                    className="hatchr-input-number"
+                    style={{ width: 90 }}
+                  />
+                </label>
+              </div>
+
+              <div style={{ flex: "0 0 260px" }}>
+                <input
+                  type="text"
+                  placeholder="Search name / symbol / address"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="hatchr-search"
+                />
+              </div>
+            </section>
+
+            {error && (
+              <div
                 style={{
-                  fontSize: "13px",
-                  padding: "4px 8px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
-                  background: "#fff",
+                  marginBottom: 10,
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  backgroundColor: "#fee2e2",
+                  color: "#b91c1c",
+                  fontSize: 12,
+                  border: "1px solid #fecaca",
                 }}
               >
-                <option value="all">All</option>
-                <option value="clanker">Clanker</option>
-                <option value="zora">Zora</option>
-              </select>
-            </label>
+                {error}
+              </div>
+            )}
 
-            <label
-              style={{
-                fontSize: "13px",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              Min Liquidity (USD):
-              <input
-                type="number"
-                value={minLiquidity}
-                onChange={(e) =>
-                  setMinLiquidity(Number(e.target.value) || 0)
-                }
-                style={{
-                  width: "90px",
-                  fontSize: "13px",
-                  padding: "4px 6px",
-                  borderRadius: "6px",
-                  border: "1px solid #ddd",
-                }}
-              />
-            </label>
-          </div>
-
-          <div style={{ flex: "0 0 260px" }}>
-            <input
-              type="text"
-              placeholder="Search name / symbol / address"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "100%",
-                fontSize: "13px",
-                padding: "6px 10px",
-                borderRadius: "999px",
-                border: "1px solid #ddd",
-              }}
-            />
-          </div>
-        </section>
-
-        {error && (
-          <div
-            style={{
-              marginBottom: "12px",
-              padding: "8px 10px",
-              borderRadius: "8px",
-              backgroundColor: "#ffe5e5",
-              color: "#b00020",
-              fontSize: "13px",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* таблица */}
-        <div
-          style={{
-            borderRadius: "10px",
-            border: "1px solid #eee",
-            overflow: "hidden",
-            backgroundColor: "#fff",
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              fontSize: "13px",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: "#fafafa",
-                  borderBottom: "1px solid #eee",
-                }}
-              >
-                {[
-                  "Name",
-                  "Address",
-                  "Source",
-                  "Liquidity",
-                  "Price",
-                  "Vol 24h",
-                  "Socials",
-                  "Seen",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    style={{
-                      textAlign: h === "Name" ? "left" : "right",
-                      padding: "8px 10px",
-                      fontWeight: 500,
-                      color: "#555",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTokens.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    style={{
-                      padding: "18px 10px",
-                      textAlign: "center",
-                      color: "#777",
-                      fontSize: "13px",
-                    }}
-                  >
-                    {isLoading
-                      ? "Загружаем данные…"
-                      : "Пока пусто. Обнови страницу позже."}
-                  </td>
-                </tr>
-              )}
-
-              {filteredTokens.map((token) => {
-                const username = extractFarcasterUsername(
-                  token.farcaster_url || undefined
-                );
-                const profile = username ? profiles[username] : undefined;
-
-                const rowKey = `${token.source}-${token.token_address}`;
-                const isHovered = hoveredRowKey === rowKey;
-
-                return (
-                  <tr
-                    key={rowKey}
-                    style={{
-                      borderBottom: "1px solid #f2f2f2",
-                    }}
-                  >
-                    {/* Name */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "left",
-                        maxWidth: "260px",
-                      }}
-                    >
-                      <a
-                        href={token.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+            {/* Таблица */}
+            <div className="hatchr-table-wrapper">
+              <table className="hatchr-table">
+                <thead>
+                  <tr>
+                    {[
+                      "Name",
+                      "Address",
+                      "Source",
+                      "Liquidity",
+                      "Price",
+                      "Vol 24h",
+                      "Socials",
+                      "Seen",
+                    ].map((h) => (
+                      <th
+                        key={h}
                         style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          textDecoration: "none",
-                          color: "#111827",
+                          textAlign: h === "Name" ? "left" : "right",
                         }}
                       >
-                        <span
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTokens.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="hatchr-table-empty">
+                        {isLoading
+                          ? "Загружаем данные…"
+                          : "Пока пусто. Обнови страницу позже."}
+                      </td>
+                    </tr>
+                  )}
+
+                  {filteredTokens.map((token) => {
+                    const username = extractFarcasterUsername(
+                      token.farcaster_url || undefined
+                    );
+                    const profile = username ? profiles[username] : undefined;
+
+                    const rowKey = `${token.source}-${token.token_address}`;
+                    const isTooltipVisible = hoveredRowKey === rowKey;
+                    const isRowHovered = hoveredTableRowKey === rowKey;
+
+                    return (
+                      <tr
+                        key={rowKey}
+                        className={
+                          "hatchr-table-row" + (isRowHovered ? " hovered" : "")
+                        }
+                        onMouseEnter={() => setHoveredTableRowKey(rowKey)}
+                        onMouseLeave={() => setHoveredTableRowKey(null)}
+                      >
+                        {/* Name */}
+                        <td
                           style={{
-                            fontWeight: 500,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
+                            padding: "8px 10px",
+                            textAlign: "left",
+                            maxWidth: 260,
                           }}
-                        >
-                          {token.name || token.symbol || "—"}
-                        </span>
-                        {token.symbol && (
-                          <span
-                            style={{
-                              fontSize: "11px",
-                              color: "#6b7280",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            {token.symbol}
-                          </span>
-                        )}
-                      </a>
-                    </td>
-
-                    {/* Address */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        fontFamily: "monospace",
-                        fontSize: "12px",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {token.token_address
-                        ? token.token_address.slice(0, 6) +
-                          "..." +
-                          token.token_address.slice(-4)
-                        : "—"}
-                    </td>
-
-                    {/* Source */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        textTransform: "lowercase",
-                      }}
-                    >
-                      {token.source}
-                    </td>
-
-                    {/* Liquidity */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {formatNumber(token.liquidity_usd)}
-                    </td>
-
-                    {/* Price */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {formatNumber(token.price_usd)}
-                    </td>
-
-                    {/* Vol 24h */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                      }}
-                    >
-                      {formatNumber(token.volume_24h_usd)}
-                    </td>
-
-                    {/* Socials */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        position: "relative",
-                      }}
-                    >
-                      {username ? (
-                        <div
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            position: "relative",
-                          }}
-                          onMouseEnter={() => {
-                            setHoveredRowKey(rowKey);
-                            ensureProfile(username);
-                          }}
-                          onMouseLeave={() => setHoveredRowKey(null)}
                         >
                           <a
-                            href={`https://farcaster.xyz/${username}`}
+                            href={token.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "8px",
-                              padding: "4px 10px",
-                              borderRadius: "999px",
-                              backgroundColor: "#5b3ded",
-                              color: "#fff",
+                              display: "flex",
+                              flexDirection: "column",
                               textDecoration: "none",
-                              fontSize: "12px",
+                              color: "#111827",
                             }}
                           >
-                            {/* показываем ТОЛЬКО реальный pfp, без подковы */}
-                            {profile?.pfp_url && (
-                              <img
-                                src={profile.pfp_url}
-                                alt={profile.display_name || username}
-                                style={{
-                                  width: 22,
-                                  height: 22,
-                                  borderRadius: "999px",
-                                  objectFit: "cover",
-                                  backgroundColor: "#1f2933",
-                                }}
-                              />
-                            )}
-
                             <span
                               style={{
-                                maxWidth: "120px",
+                                fontWeight: 500,
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                               }}
                             >
-                              @{username}
+                              {token.name || token.symbol || "—"}
                             </span>
-                          </a>
-
-                          {isHovered && profile && (
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: "110%",
-                                right: 0,
-                                marginTop: "6px",
-                                padding: "10px 12px",
-                                borderRadius: "10px",
-                                backgroundColor: "#111827",
-                                color: "#f9fafb",
-                                minWidth: "220px",
-                                boxShadow:
-                                  "0 12px 30px rgba(0,0,0,0.35)",
-                                zIndex: 20,
-                              }}
-                            >
-                              <div
+                            {token.symbol && (
+                              <span
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "10px",
-                                  marginBottom: "8px",
+                                  fontSize: 11,
+                                  color: "#6b7280",
+                                  textTransform: "uppercase",
                                 }}
                               >
-                                {profile.pfp_url && (
+                                {token.symbol}
+                              </span>
+                            )}
+                          </a>
+                        </td>
+
+                        {/* Address */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                            fontFamily: "monospace",
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {token.token_address
+                            ? token.token_address.slice(0, 6) +
+                              "..." +
+                              token.token_address.slice(-4)
+                            : "—"}
+                        </td>
+
+                        {/* Source */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
+                          <span className="hatchr-source-pill">
+                            {token.source}
+                          </span>
+                        </td>
+
+                        {/* Liquidity */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
+                          {formatNumber(token.liquidity_usd)}
+                        </td>
+
+                        {/* Price */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
+                          {formatNumber(token.price_usd)}
+                        </td>
+
+                        {/* Vol 24h */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
+                          {formatNumber(token.volume_24h_usd)}
+                        </td>
+
+                        {/* Socials */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                            position: "relative",
+                          }}
+                        >
+                          {username ? (
+                            <div
+                              className="hatchr-social-pill"
+                              onMouseEnter={() => {
+                                setHoveredRowKey(rowKey);
+                                ensureProfile(username);
+                              }}
+                              onMouseLeave={() => setHoveredRowKey(null)}
+                            >
+                              <a
+                                href={`https://farcaster.xyz/${username}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 7,
+                                  padding: "4px 11px",
+                                  borderRadius: 999,
+                                  backgroundColor: "#5b3ded",
+                                  color: "#fff",
+                                  textDecoration: "none",
+                                  fontSize: 12,
+                                }}
+                              >
+                                {profile?.pfp_url ? (
                                   <img
                                     src={profile.pfp_url}
                                     alt={profile.display_name || username}
                                     style={{
-                                      width: 44,
-                                      height: 44,
-                                      borderRadius: "999px",
+                                      width: 24,
+                                      height: 24,
+                                      borderRadius: 999,
                                       objectFit: "cover",
                                       backgroundColor: "#1f2933",
                                     }}
                                   />
+                                ) : (
+                                  <FarcasterFallbackIcon size={24} />
                                 )}
 
-                                <div>
+                                <span
+                                  style={{
+                                    maxWidth: 110,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  @{username}
+                                </span>
+                              </a>
+
+                              {isTooltipVisible && profile && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    top: "112%",
+                                    right: 0,
+                                    marginTop: 6,
+                                    padding: "10px 12px",
+                                    borderRadius: 10,
+                                    backgroundColor: "#111827",
+                                    color: "#f9fafb",
+                                    minWidth: 220,
+                                    boxShadow:
+                                      "0 14px 36px rgba(0,0,0,0.45)",
+                                    zIndex: 20,
+                                  }}
+                                >
                                   <div
                                     style={{
-                                      fontSize: "13px",
-                                      fontWeight: 600,
-                                      marginBottom: "2px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 10,
+                                      marginBottom: 8,
                                     }}
                                   >
-                                    {profile.display_name ||
-                                      profile.username}
+                                    {profile.pfp_url ? (
+                                      <img
+                                        src={profile.pfp_url}
+                                        alt={
+                                          profile.display_name || username
+                                        }
+                                        style={{
+                                          width: 40,
+                                          height: 40,
+                                          borderRadius: 999,
+                                          objectFit: "cover",
+                                          backgroundColor: "#1f2933",
+                                        }}
+                                      />
+                                    ) : (
+                                      <FarcasterFallbackIcon size={26} />
+                                    )}
+
+                                    <div>
+                                      <div
+                                        style={{
+                                          fontSize: 13,
+                                          fontWeight: 600,
+                                          marginBottom: 2,
+                                        }}
+                                      >
+                                        {profile.display_name ||
+                                          profile.username}
+                                      </div>
+                                      <div
+                                        style={{
+                                          fontSize: 12,
+                                          color: "#9ca3af",
+                                        }}
+                                      >
+                                        @{profile.username}
+                                      </div>
+                                    </div>
                                   </div>
                                   <div
                                     style={{
-                                      fontSize: "12px",
-                                      color: "#9ca3af",
+                                      display: "flex",
+                                      gap: 12,
+                                      fontSize: 11,
+                                      color: "#e5e7eb",
                                     }}
                                   >
-                                    @{profile.username}
+                                    <span>
+                                      <strong>
+                                        {profile.follower_count}
+                                      </strong>{" "}
+                                      followers
+                                    </span>
+                                    <span>
+                                      <strong>
+                                        {profile.following_count}
+                                      </strong>{" "}
+                                      following
+                                    </span>
                                   </div>
                                 </div>
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  gap: "12px",
-                                  fontSize: "11px",
-                                  color: "#e5e7eb",
-                                }}
-                              >
-                                <span>
-                                  <strong>
-                                    {profile.follower_count}
-                                  </strong>{" "}
-                                  followers
-                                </span>
-                                <span>
-                                  <strong>
-                                    {profile.following_count}
-                                  </strong>{" "}
-                                  following
-                                </span>
-                              </div>
+                              )}
                             </div>
+                          ) : (
+                            "—"
                           )}
-                        </div>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
+                        </td>
 
-                    {/* Seen */}
-                    <td
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "right",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {token.first_seen_at
-                        ? formatDate(token.first_seen_at)
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        {/* Seen */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {token.first_seen_at
+                            ? formatDate(token.first_seen_at)
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Правая часть: Live feed */}
+          <aside className="hatchr-feed">
+            <div className="hatchr-feed-title">
+              <span>Live hatch feed</span>
+              <span className="hatchr-feed-badge">auto · 30s</span>
+            </div>
+            <ul className="hatchr-feed-list">
+              {liveFeed.length === 0 && (
+                <li className="hatchr-feed-item">
+                  <span className="hatchr-feed-sub">
+                    Ждём новых токенов на Base…
+                  </span>
+                </li>
+              )}
+
+              {liveFeed.map((t) => (
+                <li key={t.token_address + t.first_seen_at} className="hatchr-feed-item">
+                  <div className="hatchr-feed-main">
+                    <span className="token">
+                      {t.symbol || t.name || "New token"}
+                    </span>
+                    <span className="meta">
+                      {formatTimeAgo(t.first_seen_at)}
+                    </span>
+                  </div>
+                  <div className="hatchr-feed-sub">
+                    🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
+                    {t.name || "Unnamed"}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </aside>
         </div>
       </main>
     </div>
