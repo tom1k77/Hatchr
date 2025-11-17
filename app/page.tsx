@@ -83,7 +83,7 @@ function formatTimeAgo(dateString: string | null | undefined): string {
   return `${diffD}d ago`;
 }
 
-// fallback-иконка Farcaster (арка) вместо буквы F
+// fallback-иконка Farcaster (арка)
 function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
   const inner = size - 6;
   return (
@@ -129,12 +129,12 @@ export default function HomePage() {
     Record<string, boolean>
   >({});
 
-  // hoveredRowKey — для тултипа профиля
+  // для тултипа профиля
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-  // hoveredTableRowKey — для подсветки строки
-  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<string | null>(
-    null
-  );
+  // для подсветки строки таблицы
+  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<
+    string | null
+  >(null);
 
   async function loadTokens() {
     try {
@@ -201,7 +201,7 @@ export default function HomePage() {
     }
   }
 
-  // --- Live feed: последние несколько токенов ---
+  // live feed: последние несколько токенов
   const liveFeed = useMemo(() => {
     const sorted = [...tokens].sort((a, b) => {
       return (
@@ -215,10 +215,10 @@ export default function HomePage() {
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
-        {/* Top bar */}
+        {/* Верхняя панель */}
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
-            {/* Если загрузишь /public/hatchr-logo.png — можешь заменить этот кружок на img */}
+            {/* сюда можно подставить <img src="/hatchr-logo.png" /> */}
             <div className="hatchr-brand-logo">H</div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
@@ -236,9 +236,9 @@ export default function HomePage() {
           </nav>
         </div>
 
-        {/* Основная сетка: таблица + правый сайдбар */}
+        {/* Основная сетка: таблица + сайдбар */}
         <div className="hatchr-main-grid">
-          {/* Левая часть: фильтры + таблица */}
+          {/* Левая часть */}
           <section>
             {/* Фильтры */}
             <section className="hatchr-filters">
@@ -301,9 +301,26 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Таблица */}
-            <div className="hatchr-table-wrapper">
-              <table className="hatchr-table">
+            {/* Таблица с горизонтальным скроллом */}
+            <div
+              className="hatchr-table-wrapper"
+              style={{
+                borderRadius: 10,
+                border: "1px solid #eee",
+                backgroundColor: "#fff",
+                overflowX: "auto",
+                overflowY: "hidden",
+              }}
+            >
+              <table
+                className="hatchr-table"
+                style={{
+                  width: "100%",
+                  minWidth: 860, // если колонок много — включится горизонтальный скролл
+                  borderCollapse: "collapse",
+                  fontSize: 13,
+                }}
+              >
                 <thead>
                   <tr>
                     {[
@@ -633,7 +650,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Правая часть: Live feed */}
+          {/* Правая часть — live feed */}
           <aside className="hatchr-feed">
             <div className="hatchr-feed-title">
               <span>Live hatch feed</span>
@@ -649,7 +666,10 @@ export default function HomePage() {
               )}
 
               {liveFeed.map((t) => (
-                <li key={t.token_address + t.first_seen_at} className="hatchr-feed-item">
+                <li
+                  key={t.token_address + t.first_seen_at}
+                  className="hatchr-feed-item"
+                >
                   <div className="hatchr-feed-main">
                     <span className="token">
                       {t.symbol || t.name || "New token"}
