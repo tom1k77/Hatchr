@@ -1,8 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f5f7;
+  --foreground: #111827;
+
+  --hatchr-surface: #ffffff;
+  --hatchr-border-subtle: #e5e7eb;
+  --hatchr-border-strong: #d1d5db;
+  --hatchr-header-bg: #f9fafb;
+
+  --hatchr-accent: #5b3ded;     /* фиолетовый Hatchr/Farcaster */
+  --hatchr-accent-soft: #ede9fe;
+  --hatchr-accent-dark: #312e81;
+
+  --hatchr-green: #16a34a;
+  --hatchr-red: #dc2626;
 }
 
 @theme inline {
@@ -14,52 +26,300 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #020617;
+    --foreground: #e5e7eb;
+
+    --hatchr-surface: #020617;
+    --hatchr-border-subtle: #1f2937;
+    --hatchr-border-strong: #374151;
+    --hatchr-header-bg: #020617;
+
+    --hatchr-accent-soft: #1e1b4b;
   }
 }
 
 body {
-  background: var(--background);
+  margin: 0;
+  background: radial-gradient(circle at 0 0, #e5e7ff 0, #f5f5f7 38%, #f9fafb 60%, #f3f4f6 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Segoe UI", sans-serif;
 }
 
+/* Основной контейнер */
+.hatchr-root {
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+}
 
-/* === Farcaster badge styles === */
+/* Карточка приложения */
+.hatchr-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: var(--hatchr-surface);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+  border: 1px solid var(--hatchr-border-subtle);
+  padding: 18px 20px 22px;
+  box-sizing: border-box;
+}
 
-.fc-badge {
-  display: inline-flex;
+/* Top bar */
+.hatchr-topbar {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 4px;
-  border-radius: 999px;
-  background: #5b42ff;
-  color: #ffffff;
-  font-size: 13px;
-  text-decoration: none;
-  border: none;
-  cursor: pointer;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.fc-badge-avatar {
-  width: 30px;            /* 🔥 КРУПНЫЙ круг — хорошо видно */
-  height: 30px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
+.hatchr-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hatchr-brand-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 0, #f9fafb 0, #e5e7eb 25%, #020617 80%);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #3b2bbf;    /* фон если нет картинки */
+  font-weight: 800;
+  color: #f9fafb;
+  font-size: 18px;
 }
 
-.fc-badge-avatar img {
+.hatchr-brand-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.hatchr-brand-title-main {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.hatchr-brand-title-sub {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Навигация */
+.hatchr-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hatchr-nav-pill {
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #6b7280;
+  cursor: default;
+}
+
+.hatchr-nav-pill.primary {
+  background: rgba(91, 61, 237, 0.08);
+  color: var(--hatchr-accent-dark);
+  border-color: rgba(91, 61, 237, 0.35);
+  font-weight: 500;
+}
+
+/* Область с таблицей и сайдбаром */
+.hatchr-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .hatchr-main-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Фильтры */
+.hatchr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hatchr-filters-left {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hatchr-label {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #4b5563;
+}
+
+.hatchr-select,
+.hatchr-input-number,
+.hatchr-search {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--hatchr-border-subtle);
+  background: #ffffff;
+  outline: none;
+}
+
+.hatchr-search {
   width: 100%;
-  height: 100%;
-  object-fit: cover;       /* аватар красиво обрезается в круг */
+  padding: 6px 11px;
+  border-radius: 999px;
 }
 
-.fc-badge-username {
+/* Таблица */
+.hatchr-table-wrapper {
+  border-radius: 12px;
+  border: 1px solid var(--hatchr-border-subtle);
+  overflow: hidden;
+  background: var(--hatchr-surface);
+}
+
+.hatchr-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.hatchr-table thead tr {
+  background: var(--hatchr-header-bg);
+}
+
+.hatchr-table th {
+  padding: 8px 10px;
+  color: #6b7280;
+  font-weight: 500;
+  border-bottom: 1px solid var(--hatchr-border-subtle);
   white-space: nowrap;
+}
+
+.hatchr-table-row {
+  border-bottom: 1px solid rgba(229, 231, 235, 0.7);
+  transition: background-color 0.12s ease;
+}
+
+.hatchr-table-row.hovered {
+  background: linear-gradient(
+    90deg,
+    rgba(91, 61, 237, 0.04),
+    rgba(91, 61, 237, 0.0)
+  );
+}
+
+/* Сообщения в таблице */
+.hatchr-table-empty {
+  padding: 18px 10px;
+  text-align: center;
+  color: #6b7280;
+}
+
+/* Бейджи источников */
+.hatchr-source-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: lowercase;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.02);
+}
+
+/* Social pill */
+.hatchr-social-pill {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+/* Live feed справа */
+.hatchr-feed {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: radial-gradient(circle at 0 0, #eef2ff 0, #f9fafb 40%, #ffffff 100%);
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+}
+
+.hatchr-feed-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.hatchr-feed-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.08);
+  color: #15803d;
+  border: 1px solid rgba(22, 163, 74, 0.25);
+}
+
+.hatchr-feed-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hatchr-feed-item {
+  font-size: 12px;
+  border-radius: 9px;
+  padding: 7px 8px;
+  background: rgba(15, 23, 42, 0.02);
+  border: 1px solid rgba(209, 213, 219, 0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hatchr-feed-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.hatchr-feed-main span.token {
+  font-weight: 600;
+  color: #111827;
+}
+
+.hatchr-feed-main span.meta {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.hatchr-feed-sub {
+  font-size: 11px;
+  color: #6b7280;
 }
