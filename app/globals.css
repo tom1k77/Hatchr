@@ -319,7 +319,51 @@ body {
   color: #6b7280;
 }
 
+
 .hatchr-feed-sub {
   font-size: 11px;
   color: #6b7280;
+}
+/* ===== Двухколоночный layout Hatchr ===== */
+
+.hatchr-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+/* левая колонка (фильтры + таблица) */
+.hatchr-left {
+  flex: 1 1 0;
+  min-width: 0; /* чтобы таблица могла скроллиться, а не ломать layout */
+}
+
+/* правая колонка (Live hatch feed) */
+.hatchr-right {
+  flex: 0 0 280px;   /* фиксированная ширина сайдбара */
+  max-width: 280px;
+}
+
+/* обёртка для таблицы с горизонтальным скроллом */
+.hatchr-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* сама таблица внутри – задаём min-width, чтобы появился скролл */
+.hatchr-table-inner {
+  min-width: 900px;  /* подгони, если нужно больше/меньше колонок */
+}
+
+/* на мобиле – столбцы друг под другом */
+@media (max-width: 1024px) {
+  .hatchr-layout {
+    flex-direction: column;
+  }
+
+  .hatchr-right {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+  }
 }
