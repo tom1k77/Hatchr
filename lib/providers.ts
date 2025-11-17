@@ -24,7 +24,7 @@ export interface TokenWithMarket extends Token {
 }
 
 // --- Blacklist Farcaster creators (боты и спамеры) ---
-const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "hahe", "asba", "lavynta", "mybrandio"];
+const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "hahe", "asba", "lavynta", "buyan", "mybrandio"];
 
 // helper: вытащить ник из farcaster_url
 function isBlockedCreator(farcasterUrl?: string | null): boolean {
