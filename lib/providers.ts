@@ -24,7 +24,12 @@ export interface TokenWithMarket extends Token {
 }
 
 // --- Blacklist Farcaster creators (боты и спамеры) ---
-const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "hahe", "asba", "lavynta", "buyan", "mybrandio"];
+const BLOCKED_FARCASTER_USERS = [
+  "primatirta",
+  "pinmad",
+  "senang",
+  "mybrandio",
+];
 
 // helper: вытащить ник из farcaster_url
 function isBlockedCreator(farcasterUrl?: string | null): boolean {
@@ -48,9 +53,9 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
 const CLANKER_API = "https://www.clanker.world/api/tokens";
 const CLANKER_FRONT = "https://www.clanker.world";
 
-// тут теперь GeckoTerminal, имя переменной оставляем как было,
-// чтобы ничего не ломать в других местах
-const DEX_URL = "https://api.geckoterminal.com/api/v2/networks/base/tokens";
+// GeckoTerminal API (полный переход с DexScreener)
+const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
+const GECKO_NETWORK = "base";
 
 // -------- Вспомогательные функции --------
 
@@ -91,13 +96,13 @@ function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
-  const THREE_HOURS = 3 * 60 * 60 * 1000;
-  const threeHoursAgo = now - THREE_HOURS;
-  const startDateUnix = Math.floor(threeHoursAgo / 1000);
+  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
+  const fromTs = now - WINDOW_MS;
+  const startDateUnix = Math.floor(fromTs / 1000);
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 10; // до ~200 токенов (можно увеличить при необходимости)
+  const MAX_PAGES = 10; // до ~200 токенов за 3 часа
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
@@ -174,42 +179,40 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         }
       }
 
-      // фильтр ботов по нику
-      if (isBlockedCreator(farcasterUrl)) return null;
-
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
 
-      return {
+      const token: Token = {
         token_address: addr,
         name,
         symbol,
         source: "clanker",
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
-
-        // для Clanker — только Farcaster
         farcaster_url: farcasterUrl,
         website_url: undefined,
         x_url: undefined,
         telegram_url: undefined,
-      } as Token;
+      };
+
+      // режем спамерских создателей
+      if (isBlockedCreator(token.farcaster_url)) return null;
+
+      return token;
     })
     .filter(Boolean) as Token[];
 
-  // Допфильтр "в пределах 3 часов"
+  // Доп. фильтр по окну в 3 часа
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
-    return now - ts <= THREE_HOURS;
+    return now - ts <= WINDOW_MS;
   });
 }
 
-// -------- GeckoTerminal: цена / ликвидность / объём --------
-//
-// Мы оставляем имя функции enrichWithDexScreener,
-// чтобы ничего не ломать в route.ts, но внутри используем GeckoTerminal.
+// -------- GeckoTerminal: цена / FDV / ликвидность / объём --------
 
+// Функция оставляет старое имя, чтобы route.ts не ломать
 export async function enrichWithDexScreener(
   tokens: Token[]
 ): Promise<TokenWithMarket[]> {
@@ -217,48 +220,79 @@ export async function enrichWithDexScreener(
 
   for (const t of tokens) {
     try {
-      const res = await fetch(`${DEX_URL}/${t.token_address}`, {
+      const url = `${GECKO_BASE}/networks/${GECKO_NETWORK}/tokens/${t.token_address}?include=top_pools`;
+      const res = await fetch(url, {
+        headers: { accept: "application/json" },
         cache: "no-store",
       });
 
       if (!res.ok) {
+        // если Gecko не знает токен — просто возвращаем без маркет-данных
         result.push({ ...t });
         continue;
       }
 
-      const data: any = await res.json();
-      const attrs: any = data?.data?.attributes ?? {};
+      const json: any = await res.json();
+      const attrs = json?.data?.attributes ?? {};
+      const included = Array.isArray(json?.included) ? json.included : [];
 
-      const price =
-        typeof attrs.price_usd === "string" || typeof attrs.price_usd === "number"
-          ? Number(attrs.price_usd)
-          : undefined;
+      // Цена токена
+      let priceUsd: number | undefined;
+      if (attrs.price_usd !== undefined && attrs.price_usd !== null) {
+        const n = Number(attrs.price_usd);
+        if (Number.isFinite(n)) priceUsd = n;
+      }
 
-      const liquidity =
-        typeof attrs.total_reserve_in_usd === "string" ||
-        typeof attrs.total_reserve_in_usd === "number"
-          ? Number(attrs.total_reserve_in_usd)
-          : undefined;
+      // FDV (будем трактовать как market cap)
+      let fdvUsd: number | undefined;
+      if (attrs.fdv_usd !== undefined && attrs.fdv_usd !== null) {
+        const n = Number(attrs.fdv_usd);
+        if (Number.isFinite(n)) fdvUsd = n;
+      }
 
-      let volume24: number | undefined;
-      const vol = attrs.volume_usd;
-      if (vol && (typeof vol.h24 === "string" || typeof vol.h24 === "number")) {
-        volume24 = Number(vol.h24);
-      } else if (
-        typeof attrs.volume_usd_24h === "string" ||
-        typeof attrs.volume_usd_24h === "number"
-      ) {
-        volume24 = Number(attrs.volume_usd_24h);
+      // Берём первый пул (top pool) и вытаскиваем оттуда ликвидность + объём
+      let liquidityUsd: number | undefined;
+      let volume24h: number | undefined;
+
+      const firstPool =
+        included.find((inc: any) => inc?.type === "pool") ?? included[0];
+
+      if (firstPool?.attributes) {
+        const pa = firstPool.attributes;
+
+        const reserveRaw =
+          pa.reserve_in_usd ??
+          pa.liquidity_usd ??
+          pa.total_reserve_in_usd ??
+          null;
+        const volumeRaw =
+          pa.volume_usd_24h ??
+          pa.volume_usd ??
+          pa.volume_24h_usd ??
+          pa.volume_24h ??
+          null;
+
+        if (reserveRaw !== null && reserveRaw !== undefined) {
+          const n = Number(reserveRaw);
+          if (Number.isFinite(n)) liquidityUsd = n;
+        }
+
+        if (volumeRaw !== null && volumeRaw !== undefined) {
+          const n = Number(volumeRaw);
+          if (Number.isFinite(n)) volume24h = n;
+        }
       }
 
       result.push({
         ...t,
-        price_usd: Number.isFinite(price!) ? price : undefined,
-        liquidity_usd: Number.isFinite(liquidity!) ? liquidity : undefined,
-        volume_24h: Number.isFinite(volume24!) ? volume24 : undefined,
+        price_usd: priceUsd,
+        // fdv можно потом вывести отдельной колонкой, пока кладём в liquidity или оставляем как есть
+        liquidity_usd: liquidityUsd ?? fdvUsd,
+        volume_24h: volume24h,
       });
-    } catch {
-      // в случае любой ошибки просто возвращаем токен как есть
+    } catch (e) {
+      // на любой ошибке Gecko — просто возвращаем токен без маркет-данных
+      console.error("GeckoTerminal error for", t.token_address, e);
       result.push({ ...t });
     }
   }
