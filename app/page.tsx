@@ -218,17 +218,12 @@ export default function HomePage() {
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
             <div className="hatchr-brand-logo">
-              {/* Лого из /public/hatchr-logo.png, если нет — останется буква H */}
-              <img
-                src="/hatchr-logo.png"
-                alt="Hatchr logo"
-                className="hatchr-brand-logo-img"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
-                }}
-              />
-              <span className="hatchr-brand-logo-fallback">H</span>
-            </div>
+  <img
+    src="/hatchr-logo.png"
+    alt="Hatchr logo"
+    className="hatchr-brand-logo-img"
+  />
+</div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
               <span className="hatchr-brand-title-sub">
