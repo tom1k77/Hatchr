@@ -24,9 +24,9 @@ export interface TokenWithMarket extends Token {
 }
 
 // --- Blacklist Farcaster creators (боты и спамеры) ---
-const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "mybrandio"];
+const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "hahe", "asba", "lavynta", "mybrandio"];
 
-// helper: вытащить ник из farcaster_url и проверить по блэклисту
+// helper: вытащить ник из farcaster_url
 function isBlockedCreator(farcasterUrl?: string | null): boolean {
   if (!farcasterUrl) return false;
 
@@ -38,7 +38,7 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
     const handle = parts[0].toLowerCase();
     return BLOCKED_FARCASTER_USERS.includes(handle);
   } catch {
-    // если невалидный URL — не блокируем
+    // если невалидный URL — не блокировать
     return false;
   }
 }
@@ -48,8 +48,9 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
 const CLANKER_API = "https://www.clanker.world/api/tokens";
 const CLANKER_FRONT = "https://www.clanker.world";
 
-// GeckoTerminal (вместо DexScreener)
-const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
+// тут теперь GeckoTerminal, имя переменной оставляем как было,
+// чтобы ничего не ломать в других местах
+const DEX_URL = "https://api.geckoterminal.com/api/v2/networks/base/tokens";
 
 // -------- Вспомогательные функции --------
 
@@ -86,17 +87,17 @@ function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
   return acc;
 }
 
-// -------- Clanker: токены Base за последний час --------
+// -------- Clanker: токены Base за последние 3 часа --------
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
-  const ONE_HOUR = 60 * 60 * 1000;
-  const oneHourAgo = now - ONE_HOUR;
-  const startDateUnix = Math.floor(oneHourAgo / 1000);
+  const THREE_HOURS = 3 * 60 * 60 * 1000;
+  const threeHoursAgo = now - THREE_HOURS;
+  const startDateUnix = Math.floor(threeHoursAgo / 1000);
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 10; // до ~200 токенов за час
+  const MAX_PAGES = 10; // до ~200 токенов (можно увеличить при необходимости)
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
@@ -120,9 +121,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     cursor = raw?.cursor;
     if (!cursor) break;
   }
-
-  const nowTs = Date.now();
-  const ONE_HOUR_MS = 60 * 60 * 1000;
 
   const tokens: Token[] = collected
     .map((t: any) => {
@@ -176,10 +174,13 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         }
       }
 
+      // фильтр ботов по нику
+      if (isBlockedCreator(farcasterUrl)) return null;
+
       const firstSeen =
         t.created_at || t.deployed_at || t.last_indexed || undefined;
 
-      const token: Token = {
+      return {
         token_address: addr,
         name,
         symbol,
@@ -192,29 +193,22 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         website_url: undefined,
         x_url: undefined,
         telegram_url: undefined,
-      };
-
-      // фильтр по чёрному списку создателей
-      if (isBlockedCreator(token.farcaster_url)) {
-        return null;
-      }
-
-      // допфильтр: только за последний час
-      if (token.first_seen_at) {
-        const ts = new Date(token.first_seen_at).getTime();
-        if (!Number.isNaN(ts) && nowTs - ts > ONE_HOUR_MS) {
-          return null;
-        }
-      }
-
-      return token;
+      } as Token;
     })
     .filter(Boolean) as Token[];
 
-  return tokens;
+  // Допфильтр "в пределах 3 часов"
+  return tokens.filter((t) => {
+    if (!t.first_seen_at) return true;
+    const ts = new Date(t.first_seen_at).getTime();
+    return now - ts <= THREE_HOURS;
+  });
 }
 
 // -------- GeckoTerminal: цена / ликвидность / объём --------
+//
+// Мы оставляем имя функции enrichWithDexScreener,
+// чтобы ничего не ломать в route.ts, но внутри используем GeckoTerminal.
 
 export async function enrichWithDexScreener(
   tokens: Token[]
@@ -223,48 +217,48 @@ export async function enrichWithDexScreener(
 
   for (const t of tokens) {
     try {
-      // Один запрос на токен к GeckoTerminal
-      const res = await fetch(
-        `${GECKO_BASE}/networks/base/tokens/${t.token_address}`,
-        { cache: "no-store" }
-      );
+      const res = await fetch(`${DEX_URL}/${t.token_address}`, {
+        cache: "no-store",
+      });
 
       if (!res.ok) {
         result.push({ ...t });
         continue;
       }
 
-      const json: any = await res.json();
-      // GeckoTerminal обычно JSON:API — data.attributes
-      const attrs =
-        json?.data?.attributes ||
-        (Array.isArray(json?.data) ? json.data[0]?.attributes : null) ||
-        {};
+      const data: any = await res.json();
+      const attrs: any = data?.data?.attributes ?? {};
 
-      const priceUsd = attrs.price_usd
-        ? Number(attrs.price_usd)
-        : undefined;
-
-      const liquidityUsd = attrs.liquidity_usd
-        ? Number(attrs.liquidity_usd)
-        : undefined;
-
-      // пробуем несколько вариантов названия поля для объёма
-      const volume24h =
-        attrs.volume_usd_24h
-          ? Number(attrs.volume_usd_24h)
-          : attrs.volume_usd?.h24
-          ? Number(attrs.volume_usd.h24)
+      const price =
+        typeof attrs.price_usd === "string" || typeof attrs.price_usd === "number"
+          ? Number(attrs.price_usd)
           : undefined;
+
+      const liquidity =
+        typeof attrs.total_reserve_in_usd === "string" ||
+        typeof attrs.total_reserve_in_usd === "number"
+          ? Number(attrs.total_reserve_in_usd)
+          : undefined;
+
+      let volume24: number | undefined;
+      const vol = attrs.volume_usd;
+      if (vol && (typeof vol.h24 === "string" || typeof vol.h24 === "number")) {
+        volume24 = Number(vol.h24);
+      } else if (
+        typeof attrs.volume_usd_24h === "string" ||
+        typeof attrs.volume_usd_24h === "number"
+      ) {
+        volume24 = Number(attrs.volume_usd_24h);
+      }
 
       result.push({
         ...t,
-        price_usd: priceUsd,
-        liquidity_usd: liquidityUsd,
-        volume_24h: volume24h,
+        price_usd: Number.isFinite(price!) ? price : undefined,
+        liquidity_usd: Number.isFinite(liquidity!) ? liquidity : undefined,
+        volume_24h: Number.isFinite(volume24!) ? volume24 : undefined,
       });
     } catch {
-      // если Gecko ложится — просто возвращаем токен как есть
+      // в случае любой ошибки просто возвращаем токен как есть
       result.push({ ...t });
     }
   }
