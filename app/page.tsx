@@ -52,6 +52,25 @@ function formatDate(dateString: string) {
   });
 }
 
+// для колонки Created: время и дата отдельно
+function formatCreatedParts(dateString: string | null | undefined) {
+  if (!dateString) return { time: "—", date: "" };
+  const d = new Date(dateString);
+  if (Number.isNaN(d.getTime())) return { time: "—", date: "" };
+
+  const time = d.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const date = d.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  return { time, date };
+}
+
 function extractFarcasterUsername(url?: string | null): string | null {
   if (!url) return null;
   try {
@@ -129,12 +148,13 @@ export default function HomePage() {
     Record<string, boolean>
   >({});
 
-  // для тултипа профиля
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-  // для подсветки строки таблицы
   const [hoveredTableRowKey, setHoveredTableRowKey] = useState<
     string | null
   >(null);
+
+  // для индикации "скопировано"
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
 
   async function loadTokens() {
     try {
@@ -201,16 +221,38 @@ export default function HomePage() {
     }
   }
 
-  // live feed: последние несколько токенов
-  const liveFeed = useMemo(() => {
-    const sorted = [...tokens].sort((a, b) => {
+  // токены с торгами (для правого блока)
+  const tradedFeed = useMemo(() => {
+    const hasTrades = (t: TokenItem) =>
+      (t.price_usd ?? 0) > 0 ||
+      (t.liquidity_usd ?? 0) > 0 ||
+      (t.volume_24h_usd ?? 0) > 0;
+
+    const filtered = tokens.filter(hasTrades);
+    const sorted = filtered.sort((a, b) => {
       return (
         new Date(b.first_seen_at).getTime() -
         new Date(a.first_seen_at).getTime()
       );
     });
+
     return sorted.slice(0, 7);
   }, [tokens]);
+
+  // копирование адреса
+  async function handleCopyAddress(addr: string) {
+    try {
+      if (navigator && navigator.clipboard) {
+        await navigator.clipboard.writeText(addr);
+        setCopiedAddress(addr);
+        setTimeout(() => {
+          setCopiedAddress((prev) => (prev === addr ? null : prev));
+        }, 1000);
+      }
+    } catch (e) {
+      console.error("Copy failed", e);
+    }
+  }
 
   return (
     <div className="hatchr-root">
@@ -218,8 +260,19 @@ export default function HomePage() {
         {/* Верхняя панель */}
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
-            {/* сюда можно подставить <img src="/hatchr-logo.png" /> */}
-            <div className="hatchr-brand-logo">H</div>
+            {/* логотип из /public/hatchr-logo.png */}
+            <div className="hatchr-brand-logo">
+              <img
+                src="/hatchr-logo.png"
+                alt="Hatchr"
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }}
+              />
+            </div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
               <span className="hatchr-brand-title-sub">
@@ -316,7 +369,7 @@ export default function HomePage() {
                 className="hatchr-table"
                 style={{
                   width: "100%",
-                  minWidth: 860, // если колонок много — включится горизонтальный скролл
+                  minWidth: 820,
                   borderCollapse: "collapse",
                   fontSize: 13,
                 }}
@@ -327,16 +380,16 @@ export default function HomePage() {
                       "Name",
                       "Address",
                       "Source",
-                      "Liquidity",
                       "Price",
                       "Vol 24h",
                       "Socials",
-                      "Seen",
+                      "Created",
                     ].map((h) => (
                       <th
                         key={h}
                         style={{
-                          textAlign: h === "Name" ? "left" : "right",
+                          textAlign:
+                            h === "Name" || h === "Created" ? "left" : "right",
                         }}
                       >
                         {h}
@@ -347,7 +400,7 @@ export default function HomePage() {
                 <tbody>
                   {filteredTokens.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="hatchr-table-empty">
+                      <td colSpan={7} className="hatchr-table-empty">
                         {isLoading
                           ? "Загружаем данные…"
                           : "Пока пусто. Обнови страницу позже."}
@@ -364,6 +417,16 @@ export default function HomePage() {
                     const rowKey = `${token.source}-${token.token_address}`;
                     const isTooltipVisible = hoveredRowKey === rowKey;
                     const isRowHovered = hoveredTableRowKey === rowKey;
+
+                    const { time, date } = formatCreatedParts(
+                      token.first_seen_at
+                    );
+
+                    const shortAddr = token.token_address
+                      ? token.token_address.slice(0, 6) +
+                        "..." +
+                        token.token_address.slice(-4)
+                      : "—";
 
                     return (
                       <tr
@@ -417,7 +480,7 @@ export default function HomePage() {
                           </a>
                         </td>
 
-                        {/* Address */}
+                        {/* Address + copy */}
                         <td
                           style={{
                             padding: "8px 10px",
@@ -427,11 +490,39 @@ export default function HomePage() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {token.token_address
-                            ? token.token_address.slice(0, 6) +
-                              "..." +
-                              token.token_address.slice(-4)
-                            : "—"}
+                          <div
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                            }}
+                          >
+                            <span>{shortAddr}</span>
+                            {token.token_address && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleCopyAddress(token.token_address)
+                                }
+                                style={{
+                                  border: "none",
+                                  background: "transparent",
+                                  cursor: "pointer",
+                                  padding: 0,
+                                  fontSize: 12,
+                                  color:
+                                    copiedAddress === token.token_address
+                                      ? "#16a34a"
+                                      : "#6b7280",
+                                }}
+                                title="Copy address"
+                              >
+                                {copiedAddress === token.token_address
+                                  ? "✓"
+                                  : "⧉"}
+                              </button>
+                            )}
+                          </div>
                         </td>
 
                         {/* Source */}
@@ -444,16 +535,6 @@ export default function HomePage() {
                           <span className="hatchr-source-pill">
                             {token.source}
                           </span>
-                        </td>
-
-                        {/* Liquidity */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
-                          {formatNumber(token.liquidity_usd)}
                         </td>
 
                         {/* Price */}
@@ -630,17 +711,35 @@ export default function HomePage() {
                           )}
                         </td>
 
-                        {/* Seen */}
+                        {/* Created */}
                         <td
                           style={{
                             padding: "8px 10px",
-                            textAlign: "right",
+                            textAlign: "left",
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {token.first_seen_at
-                            ? formatDate(token.first_seen_at)
-                            : "—"}
+                          <div
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "flex-start",
+                              lineHeight: 1.2,
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            <span>{time}</span>
+                            {date && (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: "#6b7280",
+                                }}
+                              >
+                                {date}
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -650,22 +749,22 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* Правая часть — live feed */}
+          {/* Правая часть — токены с торгами */}
           <aside className="hatchr-feed">
             <div className="hatchr-feed-title">
-              <span>Live hatch feed</span>
-              <span className="hatchr-feed-badge">auto · 30s</span>
+              <span>Live traded feed</span>
+              <span className="hatchr-feed-badge">non-zero markets</span>
             </div>
             <ul className="hatchr-feed-list">
-              {liveFeed.length === 0 && (
+              {tradedFeed.length === 0 && (
                 <li className="hatchr-feed-item">
                   <span className="hatchr-feed-sub">
-                    Ждём новых токенов на Base…
+                    Ждём первые сделки по новым токенам…
                   </span>
                 </li>
               )}
 
-              {liveFeed.map((t) => (
+              {tradedFeed.map((t) => (
                 <li
                   key={t.token_address + t.first_seen_at}
                   className="hatchr-feed-item"
@@ -682,9 +781,37 @@ export default function HomePage() {
                     🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
                     {t.name || "Unnamed"}
                   </div>
+                  <div
+                    style={{
+                      marginTop: 4,
+                      fontSize: 11,
+                      color: "#6b7280",
+                      display: "flex",
+                      gap: 10,
+                    }}
+                  >
+                    <span>Price: {formatNumber(t.price_usd)}</span>
+                    <span>Liq: {formatNumber(t.liquidity_usd)}</span>
+                    <span>Vol 24h: {formatNumber(t.volume_24h_usd)}</span>
+                  </div>
                 </li>
               ))}
             </ul>
+
+            {/* маленький второй блок, чтобы визуально добить колонку */}
+            <div
+              style={{
+                marginTop: 12,
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: "1px dashed #e5e7eb",
+                backgroundColor: "#f9fafb",
+                fontSize: 12,
+                color: "#6b7280",
+              }}
+            >
+              Soon: Base-wide stats & creator leaderboards.
+            </div>
           </aside>
         </div>
       </main>
