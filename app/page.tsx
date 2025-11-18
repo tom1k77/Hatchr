@@ -35,8 +35,8 @@ const REFRESH_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 20;
 
 // ---------- форматирование чисел ----------
-// ГЛАВНОЕ: 0 теперь показываем как "—", а не как 0.0000
 function formatNumber(value: number | null | undefined): string {
+  // 0, null, NaN → показываем прочерк
   if (value == null || Number.isNaN(value) || value === 0) return "—";
   if (Math.abs(value) < 1) return value.toFixed(6);
   if (Math.abs(value) < 10) return value.toFixed(4);
@@ -98,7 +98,7 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
+function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
   const inner = size - 6;
   return (
     <div
@@ -117,7 +117,7 @@ function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
           width: inner * 0.7,
           height: inner * 0.75,
           borderRadius: 4,
-          border: `${Math.max(2, inner * 0.18)}px solid "#ffffff"`,
+          border: `${Math.max(2, inner * 0.18)}px solid #ffffff`,
           borderTopWidth: 0,
           boxSizing: "border-box",
         }}
@@ -144,14 +144,12 @@ export default function HomePage() {
   >({});
 
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<string | null>(
-    null
-  );
+  const [hoveredTableRowKey, setHoveredTableRowKey] =
+    useState<string | null>(null);
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // ---------- загрузка токенов + кэш цифр ----------
-
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -173,13 +171,10 @@ export default function HomePage() {
 
           if (!old) return t;
 
-          // правим keepNumber:
-          // - если новое значение null / NaN / 0 → берём старое
-          // - если старого нет → оставляем null (будет прочерк)
+          // если новое значение null / NaN / 0 — оставляем старое
           const keepNumber = (field: keyof TokenItem): number | null => {
             const newVal = t[field] as unknown as number | null;
             const oldVal = old[field] as unknown as number | null;
-
             if (
               newVal == null ||
               !Number.isFinite(newVal) ||
@@ -187,7 +182,6 @@ export default function HomePage() {
             ) {
               return oldVal ?? null;
             }
-
             return newVal;
           };
 
@@ -248,7 +242,7 @@ export default function HomePage() {
     [filteredTokens, visibleCount]
   );
 
-  // live feed: только реально торгующиеся (ненулевые)
+  // right column: только реально торгующиеся
   const liveFeed = useMemo(() => {
     const nonZero = filteredTokens.filter(
       (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
@@ -288,7 +282,11 @@ export default function HomePage() {
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
             <div className="hatchr-brand-logo-circle">
-              <span className="hatchr-brand-logo-letter">H</span>
+              <img
+                src="/hatchr-logo.png"
+                alt="Hatchr logo"
+                className="hatchr-brand-logo-img"
+              />
             </div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
@@ -357,11 +355,19 @@ export default function HomePage() {
             {error && <div className="hatchr-error">{error}</div>}
 
             {/* таблица */}
-            <div
-              className="hatchr-table-wrapper"
-              style={{ overflowX: "auto" }}
-            >
+            <div className="hatchr-table-wrapper">
               <table className="hatchr-table">
+                {/* фиксируем ширину колонок, чтобы левая часть не «ездила» */}
+                <colgroup>
+                  <col style={{ width: "26%" }} /> {/* Name */}
+                  <col style={{ width: "16%" }} /> {/* Address */}
+                  <col style={{ width: "10%" }} /> {/* Source */}
+                  <col style={{ width: "14%" }} /> {/* MC */}
+                  <col style={{ width: "14%" }} /> {/* Vol */}
+                  <col style={{ width: "12%" }} /> {/* Socials */}
+                  <col style={{ width: "8%" }} />  {/* Created */}
+                </colgroup>
+
                 <thead>
                   <tr>
                     {[
@@ -422,68 +428,28 @@ export default function HomePage() {
                         onMouseEnter={() => setHoveredTableRowKey(rowKey)}
                         onMouseLeave={() => setHoveredTableRowKey(null)}
                       >
-                        {/* Name — фиксированная ширина, несколько строк */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "left",
-                            maxWidth: 240,
-                            width: 240,
-                          }}
-                        >
+                        {/* Name */}
+                        <td className="hatchr-name-cell">
                           <a
                             href={token.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              textDecoration: "none",
-                              color: "#111827",
-                            }}
+                            className="hatchr-name-link"
                           >
-                            <span
-                              style={{
-                                fontWeight: 500,
-                                overflow: "hidden",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                                lineHeight: 1.25,
-                                maxHeight: "3.6em", // ~3 строки
-                              }}
-                            >
+                            <span className="hatchr-name-main">
                               {token.name || token.symbol || "—"}
                             </span>
                             {token.symbol && (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  color: "#6b7280",
-                                  textTransform: "uppercase",
-                                  marginTop: 2,
-                                }}
-                              >
+                              <span className="hatchr-name-symbol-pill">
                                 {token.symbol}
                               </span>
                             )}
                           </a>
                         </td>
 
-                        {/* Address + copy */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontFamily: "monospace",
-                              fontSize: 12,
-                              marginRight: 6,
-                            }}
-                          >
+                        {/* Address + copy-иконка */}
+                        <td className="hatchr-address-cell">
+                          <span className="hatchr-address-text">
                             {shortAddress || "—"}
                           </span>
                           {fullAddress && (
@@ -494,49 +460,53 @@ export default function HomePage() {
                                   ?.writeText(fullAddress)
                                   .catch(() => {})
                               }
-                              style={{
-                                fontSize: 10,
-                                padding: "2px 6px",
-                                borderRadius: 999,
-                                border: "1px solid #d1d5db",
-                                background: "#f9fafb",
-                                cursor: "pointer",
-                              }}
+                              className="hatchr-copy-btn"
+                              aria-label="Copy address"
                             >
-                              copy
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <rect
+                                  x="9"
+                                  y="9"
+                                  width="11"
+                                  height="11"
+                                  rx="2"
+                                  stroke="#4b5563"
+                                  strokeWidth="1.6"
+                                />
+                                <rect
+                                  x="4"
+                                  y="4"
+                                  width="11"
+                                  height="11"
+                                  rx="2"
+                                  stroke="#9ca3af"
+                                  strokeWidth="1.6"
+                                />
+                              </svg>
                             </button>
                           )}
                         </td>
 
                         {/* Source */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
+                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
                           <span className="hatchr-source-pill">
                             {token.source}
                           </span>
                         </td>
 
                         {/* Market cap */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
+                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
                           {formatNumber(token.market_cap_usd)}
                         </td>
 
                         {/* Vol 24h */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
+                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
                           {formatNumber(token.volume_24h_usd)}
                         </td>
 
@@ -560,17 +530,7 @@ export default function HomePage() {
                                 href={`https://farcaster.xyz/${username}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 7,
-                                  padding: "4px 11px",
-                                  borderRadius: 999,
-                                  backgroundColor: "#5b3ded",
-                                  color: "#fff",
-                                  textDecoration: "none",
-                                  fontSize: 12,
-                                }}
+                                className="hatchr-social-pill"
                               >
                                 {profile?.pfp_url ? (
                                   <img
@@ -583,48 +543,21 @@ export default function HomePage() {
                                       objectFit: "cover",
                                       backgroundColor: "#1f2933",
                                     }}
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer"
                                   />
                                 ) : (
                                   <FarcasterFallbackIcon size={24} />
                                 )}
 
-                                <span
-                                  style={{
-                                    maxWidth: 110,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
+                                <span className="hatchr-social-username">
                                   @{username}
                                 </span>
                               </a>
 
                               {isTooltipVisible && profile && (
-                                <div
-                                  style={{
-                                    position: "absolute",
-                                    top: "112%",
-                                    right: 0,
-                                    marginTop: 6,
-                                    padding: "10px 12px",
-                                    borderRadius: 10,
-                                    backgroundColor: "#111827",
-                                    color: "#f9fafb",
-                                    minWidth: 220,
-                                    boxShadow:
-                                      "0 14px 36px rgba(0,0,0,0.45)",
-                                    zIndex: 20,
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 10,
-                                      marginBottom: 8,
-                                    }}
-                                  >
+                                <div className="hatchr-profile-tooltip">
+                                  <div className="hatchr-profile-header">
                                     {profile.pfp_url ? (
                                       <img
                                         src={profile.pfp_url}
@@ -638,40 +571,24 @@ export default function HomePage() {
                                           objectFit: "cover",
                                           backgroundColor: "#1f2933",
                                         }}
+                                        loading="lazy"
+                                        referrerPolicy="no-referrer"
                                       />
                                     ) : (
                                       <FarcasterFallbackIcon size={26} />
                                     )}
 
                                     <div>
-                                      <div
-                                        style={{
-                                          fontSize: 13,
-                                          fontWeight: 600,
-                                          marginBottom: 2,
-                                        }}
-                                      >
+                                      <div className="hatchr-profile-name">
                                         {profile.display_name ||
                                           profile.username}
                                       </div>
-                                      <div
-                                        style={{
-                                          fontSize: 12,
-                                          color: "#9ca3af",
-                                        }}
-                                      >
+                                      <div className="hatchr-profile-handle">
                                         @{profile.username}
                                       </div>
                                     </div>
                                   </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      gap: 12,
-                                      fontSize: 11,
-                                      color: "#e5e7eb",
-                                    }}
-                                  >
+                                  <div className="hatchr-profile-stats">
                                     <span>
                                       <strong>
                                         {profile.follower_count}
@@ -722,14 +639,7 @@ export default function HomePage() {
                   onClick={() =>
                     setVisibleCount((prev) => prev + PAGE_SIZE)
                   }
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: 12,
-                    borderRadius: 999,
-                    border: "1px solid #d1d5db",
-                    background: "#f9fafb",
-                    cursor: "pointer",
-                  }}
+                  className="hatchr-load-more"
                 >
                   Load more
                 </button>
