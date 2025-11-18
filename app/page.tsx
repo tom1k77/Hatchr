@@ -32,12 +32,14 @@ type FarcasterProfile = {
 };
 
 const REFRESH_INTERVAL_MS = 30_000;
-const PAGE_SIZE = 20;
+const LEFT_PAGE_SIZE = 10;
+const RIGHT_PAGE_SIZE = 7;
 
-// ---------- форматирование чисел ----------
+// ---- форматирование чисел ----
+// важный момент: value === 0 -> "—", чтобы не показывать фейковые нули
 function formatNumber(value: number | null | undefined): string {
-  // 0, null, NaN → показываем прочерк
-  if (value == null || Number.isNaN(value) || value === 0) return "—";
+  if (value == null || Number.isNaN(value)) return "—";
+  if (value === 0) return "—";
   if (Math.abs(value) < 1) return value.toFixed(6);
   if (Math.abs(value) < 10) return value.toFixed(4);
   if (Math.abs(value) < 1000) return value.toFixed(2);
@@ -98,31 +100,20 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+// fallback-аватар Farcaster: используем /public/farcaster-logo.png
 function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
-  const inner = size - 6;
   return (
-    <div
+    <img
+      src="/farcaster-logo.png"
+      alt="Farcaster"
       style={{
         width: size,
         height: size,
         borderRadius: size,
-        background: "#5b3ded",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        objectFit: "cover",
+        backgroundColor: "#1f2933",
       }}
-    >
-      <div
-        style={{
-          width: inner * 0.7,
-          height: inner * 0.75,
-          borderRadius: 4,
-          border: `${Math.max(2, inner * 0.18)}px solid #ffffff`,
-          borderTopWidth: 0,
-          boxSizing: "border-box",
-        }}
-      />
-    </div>
+    />
   );
 }
 
@@ -132,7 +123,7 @@ export default function HomePage() {
   const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
     "all"
   );
-  const [minLiquidity, setMinLiquidity] = useState<number>(0);
+  const [minVolume, setMinVolume] = useState<number>(0); // фильтр по объёму
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -144,12 +135,19 @@ export default function HomePage() {
   >({});
 
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-  const [hoveredTableRowKey, setHoveredTableRowKey] =
-    useState<string | null>(null);
+  const [hoveredTableRowKey, setHoveredTableRowKey] = useState<string | null>(
+    null
+  );
 
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  // сколько строк и карточек справа показываем
+  const [visibleRows, setVisibleRows] = useState(LEFT_PAGE_SIZE);
+  const [visibleFeed, setVisibleFeed] = useState(RIGHT_PAGE_SIZE);
+
+  // какой адрес только что скопировали (для галочки)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // ---------- загрузка токенов + кэш цифр ----------
+
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -171,15 +169,12 @@ export default function HomePage() {
 
           if (!old) return t;
 
-          // если новое значение null / NaN / 0 — оставляем старое
           const keepNumber = (field: keyof TokenItem): number | null => {
             const newVal = t[field] as unknown as number | null;
             const oldVal = old[field] as unknown as number | null;
-            if (
-              newVal == null ||
-              !Number.isFinite(newVal) ||
-              newVal === 0
-            ) {
+
+            // если из Gecko пришёл null/NaN/0 — оставляем старое значение
+            if (newVal == null || !Number.isFinite(newVal) || newVal === 0) {
               return oldVal ?? null;
             }
             return newVal;
@@ -210,17 +205,19 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
+  // при смене фильтров — сбрасываем пагинацию
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
-  }, [sourceFilter, minLiquidity, search]);
+    setVisibleRows(LEFT_PAGE_SIZE);
+    setVisibleFeed(RIGHT_PAGE_SIZE);
+  }, [sourceFilter, minVolume, search]);
 
   const filteredTokens = useMemo(() => {
     return tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
 
-      if (minLiquidity > 0) {
-        const liq = t.liquidity_usd ?? 0;
-        if (liq < minLiquidity) return false;
+      if (minVolume > 0) {
+        const vol = t.volume_24h_usd ?? 0;
+        if (vol < minVolume) return false;
       }
 
       if (search.trim()) {
@@ -235,15 +232,15 @@ export default function HomePage() {
 
       return true;
     });
-  }, [tokens, sourceFilter, minLiquidity, search]);
+  }, [tokens, sourceFilter, minVolume, search]);
 
   const visibleTokens = useMemo(
-    () => filteredTokens.slice(0, visibleCount),
-    [filteredTokens, visibleCount]
+    () => filteredTokens.slice(0, visibleRows),
+    [filteredTokens, visibleRows]
   );
 
-  // right column: только реально торгующиеся
-  const liveFeed = useMemo(() => {
+  // все торгуемые токены для live feed
+  const tradedTokensAll = useMemo(() => {
     const nonZero = filteredTokens.filter(
       (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
     );
@@ -253,8 +250,13 @@ export default function HomePage() {
         new Date(a.first_seen_at || "").getTime()
       );
     });
-    return sorted.slice(0, 15);
+    return sorted;
   }, [filteredTokens]);
+
+  const tradedTokensVisible = useMemo(
+    () => tradedTokensAll.slice(0, visibleFeed),
+    [tradedTokensAll, visibleFeed]
+  );
 
   async function ensureProfile(username: string) {
     if (!username) return;
@@ -275,6 +277,27 @@ export default function HomePage() {
     }
   }
 
+  function handleCopyAddress(address: string) {
+    if (!address) return;
+    const key = address.toLowerCase();
+    navigator.clipboard
+      ?.writeText(address)
+      .then(() => {
+        setCopiedKey(key);
+        setTimeout(
+          () =>
+            setCopiedKey((prev) => (prev === key ? null : prev)),
+          1000
+        );
+      })
+      .catch(() => {});
+  }
+
+  function handleLoadMore() {
+    setVisibleRows((prev) => prev + LEFT_PAGE_SIZE);
+    setVisibleFeed((prev) => prev + RIGHT_PAGE_SIZE);
+  }
+
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
@@ -282,10 +305,21 @@ export default function HomePage() {
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
             <div className="hatchr-brand-logo-circle">
+              {/* если файл называется иначе, просто переименуй его в /public/hatchr-logo.png */}
               <img
                 src="/hatchr-logo.png"
-                alt="Hatchr logo"
-                className="hatchr-brand-logo-img"
+                alt="Hatchr"
+                onError={(e) => {
+                  // fallback — просто буква H, если логотип не найден
+                  e.currentTarget.style.display = "none";
+                  const parent = e.currentTarget.parentElement;
+                  if (parent && !parent.querySelector(".hatchr-brand-logo-letter")) {
+                    const span = document.createElement("span");
+                    span.className = "hatchr-brand-logo-letter";
+                    span.textContent = "H";
+                    parent.appendChild(span);
+                  }
+                }}
               />
             </div>
             <div className="hatchr-brand-title">
@@ -328,20 +362,20 @@ export default function HomePage() {
                 </label>
 
                 <label className="hatchr-label">
-                  Min Liquidity (USD):
+                  Min Volume (USD):
                   <input
                     type="number"
-                    value={minLiquidity}
+                    value={minVolume}
                     onChange={(e) =>
-                      setMinLiquidity(Number(e.target.value) || 0)
+                      setMinVolume(Number(e.target.value) || 0)
                     }
                     className="hatchr-input-number"
-                    style={{ width: 90 }}
+                    style={{ width: 110 }}
                   />
                 </label>
               </div>
 
-              <div style={{ flex: "0 0 260px" }}>
+              <div className="hatchr-filters-search">
                 <input
                   type="text"
                   placeholder="Search name / symbol / address"
@@ -357,37 +391,66 @@ export default function HomePage() {
             {/* таблица */}
             <div className="hatchr-table-wrapper">
               <table className="hatchr-table">
-                {/* фиксируем ширину колонок, чтобы левая часть не «ездила» */}
-                <colgroup>
-                  <col style={{ width: "26%" }} /> {/* Name */}
-                  <col style={{ width: "16%" }} /> {/* Address */}
-                  <col style={{ width: "10%" }} /> {/* Source */}
-                  <col style={{ width: "14%" }} /> {/* MC */}
-                  <col style={{ width: "14%" }} /> {/* Vol */}
-                  <col style={{ width: "12%" }} /> {/* Socials */}
-                  <col style={{ width: "8%" }} />  {/* Created */}
-                </colgroup>
-
                 <thead>
                   <tr>
-                    {[
-                      "Name",
-                      "Address",
-                      "Source",
-                      "Market Cap",
-                      "Vol 24h",
-                      "Socials",
-                      "Created",
-                    ].map((h) => (
-                      <th
-                        key={h}
-                        style={{
-                          textAlign: h === "Name" ? "left" : "right",
-                        }}
-                      >
-                        {h}
-                      </th>
-                    ))}
+                    <th
+                      style={{
+                        textAlign: "left",
+                        width: 240,
+                        maxWidth: 240,
+                      }}
+                    >
+                      Name
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        width: 150,
+                        maxWidth: 150,
+                      }}
+                    >
+                      Address
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        width: 80,
+                      }}
+                    >
+                      Source
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        width: 90,
+                      }}
+                    >
+                      Market Cap
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        width: 90,
+                      }}
+                    >
+                      Vol 24h
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        width: 170,
+                      }}
+                    >
+                      Socials
+                    </th>
+                    <th
+                      style={{
+                        textAlign: "right",
+                        width: 110,
+                      }}
+                    >
+                      Created
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -419,6 +482,9 @@ export default function HomePage() {
                         ? `0x…${fullAddress.slice(-4)}`
                         : fullAddress;
 
+                    const copyKey = fullAddress.toLowerCase();
+                    const isCopied = copiedKey === copyKey;
+
                     return (
                       <tr
                         key={rowKey}
@@ -428,85 +494,127 @@ export default function HomePage() {
                         onMouseEnter={() => setHoveredTableRowKey(rowKey)}
                         onMouseLeave={() => setHoveredTableRowKey(null)}
                       >
-                        {/* Name */}
-                        <td className="hatchr-name-cell">
+                        {/* Name — фиксированная ширина, несколько строк */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "left",
+                            maxWidth: 240,
+                            width: 240,
+                          }}
+                        >
                           <a
                             href={token.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="hatchr-name-link"
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              textDecoration: "none",
+                              color: "#111827",
+                            }}
                           >
-                            <span className="hatchr-name-main">
+                            <span
+                              style={{
+                                fontWeight: 500,
+                                overflow: "hidden",
+                                wordBreak: "break-word",
+                                whiteSpace: "normal",
+                                lineHeight: 1.25,
+                                maxHeight: "3.6em", // ~3 строки
+                              }}
+                            >
                               {token.name || token.symbol || "—"}
                             </span>
                             {token.symbol && (
-                              <span className="hatchr-name-symbol-pill">
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  marginTop: 4,
+                                  textTransform: "uppercase",
+                                  display: "inline-block",
+                                  padding: "2px 8px",
+                                  borderRadius: 999,
+                                  backgroundColor: "#0052ff", // Base blue
+                                  color: "#ffffff",
+                                  letterSpacing: 0.5,
+                                }}
+                              >
                                 {token.symbol}
                               </span>
                             )}
                           </a>
                         </td>
 
-                        {/* Address + copy-иконка */}
-                        <td className="hatchr-address-cell">
-                          <span className="hatchr-address-text">
+                        {/* Address + copy */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: 12,
+                              marginRight: 4,
+                            }}
+                          >
                             {shortAddress || "—"}
                           </span>
                           {fullAddress && (
                             <button
                               type="button"
-                              onClick={() =>
-                                navigator.clipboard
-                                  ?.writeText(fullAddress)
-                                  .catch(() => {})
-                              }
-                              className="hatchr-copy-btn"
-                              aria-label="Copy address"
+                              onClick={() => handleCopyAddress(fullAddress)}
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: 999,
+                                border: "1px solid #d1d5db",
+                                background: "#f9fafb",
+                                cursor: "pointer",
+                                fontSize: 11,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Copy address"
                             >
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <rect
-                                  x="9"
-                                  y="9"
-                                  width="11"
-                                  height="11"
-                                  rx="2"
-                                  stroke="#4b5563"
-                                  strokeWidth="1.6"
-                                />
-                                <rect
-                                  x="4"
-                                  y="4"
-                                  width="11"
-                                  height="11"
-                                  rx="2"
-                                  stroke="#9ca3af"
-                                  strokeWidth="1.6"
-                                />
-                              </svg>
+                              {isCopied ? "✓" : "⧉"}
                             </button>
                           )}
                         </td>
 
                         {/* Source */}
-                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
                           <span className="hatchr-source-pill">
                             {token.source}
                           </span>
                         </td>
 
                         {/* Market cap */}
-                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
                           {formatNumber(token.market_cap_usd)}
                         </td>
 
                         {/* Vol 24h */}
-                        <td style={{ textAlign: "right", padding: "8px 10px" }}>
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "right",
+                          }}
+                        >
                           {formatNumber(token.volume_24h_usd)}
                         </td>
 
@@ -530,40 +638,87 @@ export default function HomePage() {
                                 href={`https://farcaster.xyz/${username}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="hatchr-social-pill"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 7,
+                                  padding: "4px 11px",
+                                  borderRadius: 999,
+                                  backgroundColor: "#5b3ded",
+                                  color: "#fff",
+                                  textDecoration: "none",
+                                  fontSize: 12,
+                                  maxWidth: 160,
+                                }}
                               >
                                 {profile?.pfp_url ? (
                                   <img
                                     src={profile.pfp_url}
                                     alt={profile.display_name || username}
+                                    onError={(e) => {
+                                      e.currentTarget.src =
+                                        "/farcaster-logo.png";
+                                    }}
                                     style={{
                                       width: 24,
                                       height: 24,
                                       borderRadius: 999,
                                       objectFit: "cover",
                                       backgroundColor: "#1f2933",
+                                      flexShrink: 0,
                                     }}
-                                    loading="lazy"
-                                    referrerPolicy="no-referrer"
                                   />
                                 ) : (
                                   <FarcasterFallbackIcon size={24} />
                                 )}
 
-                                <span className="hatchr-social-username">
+                                <span
+                                  style={{
+                                    maxWidth: 100,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
                                   @{username}
                                 </span>
                               </a>
 
                               {isTooltipVisible && profile && (
-                                <div className="hatchr-profile-tooltip">
-                                  <div className="hatchr-profile-header">
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    top: "112%",
+                                    right: 0,
+                                    marginTop: 6,
+                                    padding: "10px 12px",
+                                    borderRadius: 10,
+                                    backgroundColor: "#111827",
+                                    color: "#f9fafb",
+                                    minWidth: 220,
+                                    boxShadow:
+                                      "0 14px 36px rgba(0,0,0,0.45)",
+                                    zIndex: 20,
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 10,
+                                      marginBottom: 8,
+                                    }}
+                                  >
                                     {profile.pfp_url ? (
                                       <img
                                         src={profile.pfp_url}
                                         alt={
                                           profile.display_name || username
                                         }
+                                        onError={(e) => {
+                                          e.currentTarget.src =
+                                            "/farcaster-logo.png";
+                                        }}
                                         style={{
                                           width: 40,
                                           height: 40,
@@ -571,24 +726,40 @@ export default function HomePage() {
                                           objectFit: "cover",
                                           backgroundColor: "#1f2933",
                                         }}
-                                        loading="lazy"
-                                        referrerPolicy="no-referrer"
                                       />
                                     ) : (
                                       <FarcasterFallbackIcon size={26} />
                                     )}
 
                                     <div>
-                                      <div className="hatchr-profile-name">
+                                      <div
+                                        style={{
+                                          fontSize: 13,
+                                          fontWeight: 600,
+                                          marginBottom: 2,
+                                        }}
+                                      >
                                         {profile.display_name ||
                                           profile.username}
                                       </div>
-                                      <div className="hatchr-profile-handle">
+                                      <div
+                                        style={{
+                                          fontSize: 12,
+                                          color: "#9ca3af",
+                                        }}
+                                      >
                                         @{profile.username}
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="hatchr-profile-stats">
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      gap: 12,
+                                      fontSize: 11,
+                                      color: "#e5e7eb",
+                                    }}
+                                  >
                                     <span>
                                       <strong>
                                         {profile.follower_count}
@@ -632,14 +803,19 @@ export default function HomePage() {
             </div>
 
             {/* Load more */}
-            {filteredTokens.length > visibleCount && (
+            {filteredTokens.length > visibleRows && (
               <div style={{ marginTop: 10, textAlign: "center" }}>
                 <button
                   type="button"
-                  onClick={() =>
-                    setVisibleCount((prev) => prev + PAGE_SIZE)
-                  }
-                  className="hatchr-load-more"
+                  onClick={handleLoadMore}
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 12,
+                    borderRadius: 999,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    cursor: "pointer",
+                  }}
                 >
                   Load more
                 </button>
@@ -654,7 +830,7 @@ export default function HomePage() {
               <span className="hatchr-feed-badge">non-zero markets</span>
             </div>
             <ul className="hatchr-feed-list">
-              {liveFeed.length === 0 && (
+              {tradedTokensVisible.length === 0 && (
                 <li className="hatchr-feed-item">
                   <span className="hatchr-feed-sub">
                     Waiting for the first trades on fresh tokens…
@@ -665,7 +841,7 @@ export default function HomePage() {
                 </li>
               )}
 
-              {liveFeed.map((t) => {
+              {tradedTokensVisible.map((t) => {
                 const username = extractFarcasterUsername(
                   t.farcaster_url || undefined
                 );
