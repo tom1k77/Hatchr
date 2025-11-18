@@ -10,13 +10,11 @@ type TokenItem = {
   source_url: string;
   first_seen_at: string | null;
 
-  // market data
   price_usd: number | null;
   market_cap_usd: number | null;
   liquidity_usd: number | null;
   volume_24h_usd: number | null;
 
-  // socials
   farcaster_url?: string | null;
 };
 
@@ -96,7 +94,6 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-// fallback-иконка Farcaster (арка)
 function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
   const inner = size - 6;
   return (
@@ -116,7 +113,7 @@ function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
           width: inner * 0.7,
           height: inner * 0.75,
           borderRadius: 4,
-          border: `${Math.max(2, inner * 0.18)}px solid "#ffffff"`,
+          border: `${Math.max(2, inner * 0.18)}px solid #ffffff`,
           borderTopWidth: 0,
           boxSizing: "border-box",
         }}
@@ -149,7 +146,8 @@ export default function HomePage() {
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  // ----- загрузка токенов + кэш чисел -----
+  // ---------- загрузка токенов + кэш цифр ----------
+
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -171,9 +169,7 @@ export default function HomePage() {
 
           if (!old) return t;
 
-          const keepNumber = (
-            field: keyof TokenItem
-          ): number | null => {
+          const keepNumber = (field: keyof TokenItem): number | null => {
             const newVal = t[field] as unknown as number | null;
             const oldVal = old[field] as unknown as number | null;
             if (newVal == null || !Number.isFinite(newVal)) {
@@ -207,7 +203,6 @@ export default function HomePage() {
     return () => clearInterval(id);
   }, []);
 
-  // при смене фильтров — сбрасываем пагинацию
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [sourceFilter, minLiquidity, search]);
@@ -240,7 +235,7 @@ export default function HomePage() {
     [filteredTokens, visibleCount]
   );
 
-  // live feed: из уже отфильтрованного списка берём токены с ненулевым market_cap
+  // live feed по реально торгуемым
   const liveFeed = useMemo(() => {
     const nonZero = filteredTokens.filter(
       (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
@@ -251,7 +246,7 @@ export default function HomePage() {
         new Date(a.first_seen_at || "").getTime()
       );
     });
-    return sorted.slice(0, 7);
+    return sorted.slice(0, 15); // побольше токенов справа
   }, [filteredTokens]);
 
   async function ensureProfile(username: string) {
@@ -276,11 +271,10 @@ export default function HomePage() {
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
-        {/* Top bar */}
+        {/* top bar */}
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
             <div className="hatchr-brand-logo-circle">
-              {/* сюда можно подложить картинку /hatchr-logo.png через background-image в CSS */}
               <span className="hatchr-brand-logo-letter">H</span>
             </div>
             <div className="hatchr-brand-title">
@@ -300,9 +294,9 @@ export default function HomePage() {
         </div>
 
         <div className="hatchr-main-grid">
-          {/* Левая колонка: фильтры + таблица */}
+          {/* левая колонка */}
           <section>
-            {/* Фильтры */}
+            {/* фильтры */}
             <section className="hatchr-filters">
               <div className="hatchr-filters-left">
                 <label className="hatchr-label">
@@ -347,14 +341,13 @@ export default function HomePage() {
               </div>
             </section>
 
-            {error && (
-              <div className="hatchr-error">
-                {error}
-              </div>
-            )}
+            {error && <div className="hatchr-error">{error}</div>}
 
-            {/* Таблица */}
-            <div className="hatchr-table-wrapper">
+            {/* таблица */}
+            <div
+              className="hatchr-table-wrapper"
+              style={{ overflowX: "auto" }}
+            >
               <table className="hatchr-table">
                 <thead>
                   <tr>
@@ -369,7 +362,9 @@ export default function HomePage() {
                     ].map((h) => (
                       <th
                         key={h}
-                        style={{ textAlign: h === "Name" ? "left" : "right" }}
+                        style={{
+                          textAlign: h === "Name" ? "left" : "right",
+                        }}
                       >
                         {h}
                       </th>
@@ -414,8 +409,15 @@ export default function HomePage() {
                         onMouseEnter={() => setHoveredTableRowKey(rowKey)}
                         onMouseLeave={() => setHoveredTableRowKey(null)}
                       >
-                        {/* Name */}
-                        <td style={{ padding: "8px 10px", textAlign: "left" }}>
+                        {/* Name — фиксированная ширина, несколько строк */}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            textAlign: "left",
+                            maxWidth: 240,
+                            width: 240,
+                          }}
+                        >
                           <a
                             href={token.source_url}
                             target="_blank"
@@ -431,8 +433,10 @@ export default function HomePage() {
                               style={{
                                 fontWeight: 500,
                                 overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
+                                wordBreak: "break-word",
+                                whiteSpace: "normal",
+                                lineHeight: 1.25,
+                                maxHeight: "3.6em", // ~3 строки
                               }}
                             >
                               {token.name || token.symbol || "—"}
@@ -443,6 +447,7 @@ export default function HomePage() {
                                   fontSize: 11,
                                   color: "#6b7280",
                                   textTransform: "uppercase",
+                                  marginTop: 2,
                                 }}
                               >
                                 {token.symbol}
@@ -719,7 +724,7 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* Правая колонка: live feed по реально торгуемым */}
+          {/* правая колонка — live traded feed */}
           <aside className="hatchr-feed">
             <div className="hatchr-feed-title">
               <span>Live traded feed</span>
@@ -737,29 +742,54 @@ export default function HomePage() {
                 </li>
               )}
 
-              {liveFeed.map((t) => (
-                <li
-                  key={t.token_address + (t.first_seen_at || "")}
-                  className="hatchr-feed-item"
-                >
-                  <div className="hatchr-feed-main">
-                    <span className="token">
-                      {t.symbol || t.name || "New token"}
-                    </span>
-                    <span className="meta">
-                      {formatTimeAgo(t.first_seen_at)}
-                    </span>
-                  </div>
-                  <div className="hatchr-feed-sub">
-                    🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
-                    {t.name || "Unnamed"}
-                  </div>
-                  <div className="hatchr-feed-sub">
-                    MC: {formatNumber(t.market_cap_usd)} · Vol 24h:{" "}
-                    {formatNumber(t.volume_24h_usd)}
-                  </div>
-                </li>
-              ))}
+              {liveFeed.map((t) => {
+                const username = extractFarcasterUsername(
+                  t.farcaster_url || undefined
+                );
+
+                return (
+                  <li
+                    key={t.token_address + (t.first_seen_at || "")}
+                    className="hatchr-feed-item"
+                  >
+                    <div className="hatchr-feed-main">
+                      <a
+                        href={t.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="token"
+                        style={{ textDecoration: "none", color: "#111827" }}
+                      >
+                        {t.symbol || t.name || "New token"}
+                      </a>
+                      <span className="meta">
+                        {formatTimeAgo(t.first_seen_at)}
+                      </span>
+                    </div>
+                    <div className="hatchr-feed-sub">
+                      🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
+                      {t.name || "Unnamed"}
+                    </div>
+                    <div className="hatchr-feed-sub">
+                      MC: {formatNumber(t.market_cap_usd)} · Vol 24h:{" "}
+                      {formatNumber(t.volume_24h_usd)}
+                    </div>
+                    {username && (
+                      <div className="hatchr-feed-sub">
+                        by{" "}
+                        <a
+                          href={`https://farcaster.xyz/${username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: "#4f46e5", textDecoration: "none" }}
+                        >
+                          @{username}
+                        </a>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </aside>
         </div>
