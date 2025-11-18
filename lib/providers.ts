@@ -49,11 +49,36 @@ const CLANKER_FRONT = "https://www.clanker.world";
 const GECKO_BASE_TOKENS =
   "https://api.geckoterminal.com/api/v2/networks/base/tokens";
 
+// Zora Coins SDK
+const ZORA_API = "https://api-sdk.zora.engineering/api";
+const ZORA_API_KEY = process.env.ZORA_API_KEY;
+
 // -------- Вспомогательные функции --------
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
+  return res.json();
+}
+
+// Zora с api-key
+async function fetchZoraJson(pathWithQuery: string) {
+  if (!ZORA_API_KEY) {
+    console.warn("[Hatchr] ZORA_API_KEY is not set, skipping Zora requests");
+    throw new Error("Zora API key missing");
+  }
+
+  const url = `${ZORA_API}${pathWithQuery}`;
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: {
+      "api-key": ZORA_API_KEY,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Zora ${pathWithQuery} ${res.status}`);
+  }
   return res.json();
 }
 
@@ -192,6 +217,103 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
+// ======================= ZORA (3 часа) =======================
+
+export async function fetchTokensFromZora(): Promise<Token[]> {
+  // если ключа нет – просто возвращаем пустой массив, чтобы ничего не ломать
+  if (!ZORA_API_KEY) {
+    console.warn("[Hatchr] ZORA_API_KEY is not set, skipping Zora tokens");
+    return [];
+  }
+
+  const now = Date.now();
+  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
+  const windowAgo = now - WINDOW_MS;
+
+  // простой вариант: берём последние N монет на Base
+  // (точные параметры смотри в swagger /coins; limit можно подрегулировать)
+  const query = `?/coins?chain=8453&limit=200`;
+  const raw: any = await fetchZoraJson(query);
+
+  const list: any[] =
+    Array.isArray(raw?.coins) ||
+    Array.isArray(raw?.items) ||
+    Array.isArray(raw?.data)
+      ? (raw.coins || raw.items || raw.data)
+      : [];
+
+  const tokens: Token[] = list
+    .map((c: any) => {
+      const addr =
+        (c.address ||
+          c.contractAddress ||
+          c.tokenAddress ||
+          "").toString().toLowerCase();
+      if (!addr) return null;
+
+      const name = (c.name || "").toString();
+      const symbol = (c.symbol || "").toString();
+
+      const meta = c.metadata || {};
+      const creator = c.creator || {};
+
+      const urlsMeta = collectUrls(meta);
+      const urlsCreator = collectUrls(creator);
+      const allUrls = [...urlsMeta, ...urlsCreator];
+
+      let farcasterUrl =
+        allUrls.find((u) =>
+          u.toLowerCase().includes("farcaster.xyz")
+        ) || undefined;
+
+      const rawHandle =
+        creator.handle ||
+        creator.username ||
+        creator.fname ||
+        creator.name ||
+        "";
+
+      const username =
+        typeof rawHandle === "string"
+          ? rawHandle.replace(/^@/, "").trim()
+          : "";
+
+      if (!farcasterUrl && username) {
+        farcasterUrl = `https://farcaster.xyz/${username}`;
+      }
+
+      const firstSeen =
+        c.createdAt ||
+        c.deployedAt ||
+        c.firstTradeAt ||
+        c.created_at ||
+        undefined;
+
+      const token: Token = {
+        token_address: addr,
+        name,
+        symbol,
+        source: "zora",
+        source_url: `https://zora.co/coins/${addr}?network=base`,
+        first_seen_at: firstSeen,
+        farcaster_url: farcasterUrl,
+      };
+
+      if (isBlockedCreator(token.farcaster_url)) return null;
+
+      return token;
+    })
+    .filter(Boolean) as Token[];
+
+  // фильтр по окну 3 часа (если есть таймстемп)
+  return tokens.filter((t) => {
+    if (!t.first_seen_at) return true;
+    const ts = new Date(t.first_seen_at).getTime();
+    if (!Number.isFinite(ts)) return true;
+    return now - ts <= WINDOW_MS;
+  });
+}
+
 // ======================= GeckoTerminal =======================
 
 function toNum(x: any): number | null {
@@ -254,7 +376,25 @@ export async function enrichWithGeckoTerminal(
 // ======================= Агрегатор =======================
 
 export async function getTokens(): Promise<TokenWithMarket[]> {
+  // 1) Clanker
   const clanker = await fetchTokensFromClanker();
-  const withMarket = await enrichWithGeckoTerminal(clanker);
+
+  // 2) Zora (если ключ есть; ошибки не ломают весь API)
+  let zora: Token[] = [];
+  try {
+    zora = await fetchTokensFromZora();
+  } catch (e) {
+    console.error("[Hatchr] Zora fetch error", e);
+  }
+
+  // 3) склеиваем и убираем дубли по адресу
+  const mergedMap = new Map<string, Token>();
+  for (const t of [...clanker, ...zora]) {
+    mergedMap.set(t.token_address.toLowerCase(), t);
+  }
+  const mergedTokens = Array.from(mergedMap.values());
+
+  // 4) подливаем маркет-данные из GeckoTerminal
+  const withMarket = await enrichWithGeckoTerminal(mergedTokens);
   return withMarket;
 }
