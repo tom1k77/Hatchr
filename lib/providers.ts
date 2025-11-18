@@ -18,7 +18,6 @@ export interface Token {
 }
 
 export interface TokenWithMarket extends Token {
-  // Market data from GeckoTerminal
   market_cap_usd?: number;
   price_usd?: number;
   liquidity_usd?: number;
@@ -208,15 +207,31 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
+// -------- КЭШ маркет-данных --------
+
+type MarketCacheEntry = {
+  market_cap_usd?: number;
+  price_usd?: number;
+  liquidity_usd?: number;
+  volume_24h_usd?: number;
+  updated_at: number;
+};
+
+// простейший in-memory кэш по адресу контракта
+const MARKET_CACHE: Record<string, MarketCacheEntry> = {};
+
 // -------- GeckoTerminal: market cap / ликвидность / объём --------
 
-// Оставляем старое имя функции, чтобы route.ts не ломать
+// Оставляем старое имя, чтобы route.ts не ломать
 export async function enrichWithDexScreener(
   tokens: Token[]
 ): Promise<TokenWithMarket[]> {
   const result: TokenWithMarket[] = [];
 
   for (const t of tokens) {
+    const key = t.token_address.toLowerCase();
+    const prev = MARKET_CACHE[key];
+
     try {
       const url = `${GECKO_BASE}/networks/${GECKO_NETWORK}/tokens/${t.token_address}?include=top_pools`;
       const res = await fetch(url, {
@@ -225,7 +240,15 @@ export async function enrichWithDexScreener(
       });
 
       if (!res.ok) {
-        result.push({ ...t });
+        // ❗ Gecko не ответил / 4xx / 5xx — ОСТАЁМСЯ НА СТАРЫХ ДАННЫХ
+        if (prev) {
+          result.push({
+            ...t,
+            ...prev,
+          });
+        } else {
+          result.push({ ...t });
+        }
         continue;
       }
 
@@ -297,16 +320,54 @@ export async function enrichWithDexScreener(
         }
       }
 
-      result.push({
+      // ---------- МЕРДЖ С ПРЕДЫДУЩИМИ ДАННЫМИ (НЕ ЗАТИРАЕМ НА null) ----------
+
+      const merged: TokenWithMarket = {
         ...t,
-        market_cap_usd: marketCapUsd,
-        price_usd: priceUsd,
-        liquidity_usd: liquidityUsd,
-        volume_24h_usd: volume24hUsd,
-      });
+        market_cap_usd:
+          typeof marketCapUsd === "number"
+            ? marketCapUsd
+            : prev?.market_cap_usd,
+        price_usd:
+          typeof priceUsd === "number" ? priceUsd : prev?.price_usd,
+        liquidity_usd:
+          typeof liquidityUsd === "number"
+            ? liquidityUsd
+            : prev?.liquidity_usd,
+        volume_24h_usd:
+          typeof volume24hUsd === "number"
+            ? volume24hUsd
+            : prev?.volume_24h_usd,
+      };
+
+      // если хоть что-то есть — кладём в кэш
+      if (
+        typeof merged.market_cap_usd === "number" ||
+        typeof merged.price_usd === "number" ||
+        typeof merged.liquidity_usd === "number" ||
+        typeof merged.volume_24h_usd === "number"
+      ) {
+        MARKET_CACHE[key] = {
+          market_cap_usd: merged.market_cap_usd,
+          price_usd: merged.price_usd,
+          liquidity_usd: merged.liquidity_usd,
+          volume_24h_usd: merged.volume_24h_usd,
+          updated_at: Date.now(),
+        };
+      }
+
+      result.push(merged);
     } catch (e) {
       console.error("GeckoTerminal error for", t.token_address, e);
-      result.push({ ...t });
+      // ❗ Любая ошибка — используем старые значения, если они были
+      if (prev) {
+        result.push({
+          ...t,
+          ...prev,
+        });
+      } else {
+        result.push({ ...t });
+      }
     }
   }
 
