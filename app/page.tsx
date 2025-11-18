@@ -8,12 +8,15 @@ type TokenItem = {
   symbol: string;
   source: string;
   source_url: string;
-  first_seen_at: string;
+  first_seen_at: string | null;
+
   // market data
+  price_usd: number | null;
   market_cap_usd: number | null;
-  price_usd?: number | null;
   liquidity_usd: number | null;
   volume_24h_usd: number | null;
+
+  // socials
   farcaster_url?: string | null;
 };
 
@@ -30,7 +33,8 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 30000; // 30 секунд
+const REFRESH_INTERVAL_MS = 30_000;
+const PAGE_SIZE = 20;
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
@@ -41,29 +45,24 @@ function formatNumber(value: number | null | undefined): string {
   return (value / 1_000_000).toFixed(1) + "M";
 }
 
-function formatDate(dateString: string) {
+function formatCreated(dateString: string | null): { time: string; date: string } {
+  if (!dateString) return { time: "—", date: "" };
   const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return dateString;
-  return d.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  if (Number.isNaN(d.getTime())) return { time: dateString, date: "" };
+
+  const time = d.toLocaleTimeString("ru-RU", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
-}
 
-function extractFarcasterUsername(url?: string | null): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split("/").filter(Boolean);
-    if (!parts.length) return null;
-    return parts[parts.length - 1];
-  } catch {
-    return null;
-  }
+  const date = d.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  return { time, date };
 }
 
 function formatTimeAgo(dateString: string | null | undefined): string {
@@ -85,7 +84,19 @@ function formatTimeAgo(dateString: string | null | undefined): string {
   return `${diffD}d ago`;
 }
 
-// fallback-иконка Farcaster (арка) вместо буквы F
+function extractFarcasterUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    return parts[parts.length - 1];
+  } catch {
+    return null;
+  }
+}
+
+// fallback-иконка Farcaster (арка)
 function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
   const inner = size - 6;
   return (
@@ -102,10 +113,10 @@ function FarcasterFallbackIcon({ size = 22 }: { size?: number }) {
     >
       <div
         style={{
-          width: inner * 0.66,
-          height: inner * 0.72,
+          width: inner * 0.7,
+          height: inner * 0.75,
           borderRadius: 4,
-          border: `${Math.max(2, inner * 0.18)}px solid #ffffff`,
+          border: `${Math.max(2, inner * 0.18)}px solid "#ffffff"`,
           borderTopWidth: 0,
           boxSizing: "border-box",
         }}
@@ -131,13 +142,14 @@ export default function HomePage() {
     Record<string, boolean>
   >({});
 
-  // hoveredRowKey — для тултипа профиля
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
-  // hoveredTableRowKey — для подсветки строки
   const [hoveredTableRowKey, setHoveredTableRowKey] = useState<string | null>(
     null
   );
 
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // ----- загрузка токенов + кэш чисел -----
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -145,8 +157,42 @@ export default function HomePage() {
 
       const res = await fetch("/api/tokens", { cache: "no-store" });
       if (!res.ok) throw new Error(`Tokens API error: ${res.status}`);
+
       const data: TokensResponse = await res.json();
-      setTokens(data.items || []);
+
+      setTokens((prev) => {
+        const prevMap = new Map(
+          prev.map((t) => [t.token_address.toLowerCase(), t])
+        );
+
+        const merged = data.items.map((t) => {
+          const key = t.token_address.toLowerCase();
+          const old = prevMap.get(key);
+
+          if (!old) return t;
+
+          const keepNumber = (
+            field: keyof TokenItem
+          ): number | null => {
+            const newVal = t[field] as unknown as number | null;
+            const oldVal = old[field] as unknown as number | null;
+            if (newVal == null || !Number.isFinite(newVal)) {
+              return oldVal ?? null;
+            }
+            return newVal;
+          };
+
+          return {
+            ...t,
+            market_cap_usd: keepNumber("market_cap_usd"),
+            liquidity_usd: keepNumber("liquidity_usd"),
+            volume_24h_usd: keepNumber("volume_24h_usd"),
+            price_usd: keepNumber("price_usd"),
+          };
+        });
+
+        return merged;
+      });
     } catch (e) {
       console.error(e);
       setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
@@ -160,6 +206,11 @@ export default function HomePage() {
     const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
+
+  // при смене фильтров — сбрасываем пагинацию
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [sourceFilter, minLiquidity, search]);
 
   const filteredTokens = useMemo(() => {
     return tokens.filter((t) => {
@@ -184,6 +235,25 @@ export default function HomePage() {
     });
   }, [tokens, sourceFilter, minLiquidity, search]);
 
+  const visibleTokens = useMemo(
+    () => filteredTokens.slice(0, visibleCount),
+    [filteredTokens, visibleCount]
+  );
+
+  // live feed: из уже отфильтрованного списка берём токены с ненулевым market_cap
+  const liveFeed = useMemo(() => {
+    const nonZero = filteredTokens.filter(
+      (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
+    );
+    const sorted = [...nonZero].sort((a, b) => {
+      return (
+        new Date(b.first_seen_at || "").getTime() -
+        new Date(a.first_seen_at || "").getTime()
+      );
+    });
+    return sorted.slice(0, 7);
+  }, [filteredTokens]);
+
   async function ensureProfile(username: string) {
     if (!username) return;
     if (profiles[username] || profileLoading[username]) return;
@@ -203,24 +273,16 @@ export default function HomePage() {
     }
   }
 
-  // --- Live feed: последние несколько токенов ---
-  const liveFeed = useMemo(() => {
-    const sorted = [...tokens].sort((a, b) => {
-      return (
-        new Date(b.first_seen_at).getTime() -
-        new Date(a.first_seen_at).getTime()
-      );
-    });
-    return sorted.slice(0, 7);
-  }, [tokens]);
-
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
         {/* Top bar */}
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
-            <div className="hatchr-brand-logo">H</div>
+            <div className="hatchr-brand-logo-circle">
+              {/* сюда можно подложить картинку /hatchr-logo.png через background-image в CSS */}
+              <span className="hatchr-brand-logo-letter">H</span>
+            </div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
               <span className="hatchr-brand-title-sub">
@@ -237,9 +299,8 @@ export default function HomePage() {
           </nav>
         </div>
 
-        {/* Основная сетка: таблица + правый сайдбар */}
         <div className="hatchr-main-grid">
-          {/* Левая часть: фильтры + таблица */}
+          {/* Левая колонка: фильтры + таблица */}
           <section>
             {/* Фильтры */}
             <section className="hatchr-filters">
@@ -287,17 +348,7 @@ export default function HomePage() {
             </section>
 
             {error && (
-              <div
-                style={{
-                  marginBottom: 10,
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  backgroundColor: "#fee2e2",
-                  color: "#b91c1c",
-                  fontSize: 12,
-                  border: "1px solid #fecaca",
-                }}
-              >
+              <div className="hatchr-error">
                 {error}
               </div>
             )}
@@ -311,16 +362,14 @@ export default function HomePage() {
                       "Name",
                       "Address",
                       "Source",
-                      "Market cap",
+                      "Market Cap",
                       "Vol 24h",
                       "Socials",
                       "Created",
                     ].map((h) => (
                       <th
                         key={h}
-                        style={{
-                          textAlign: h === "Name" ? "left" : "right",
-                        }}
+                        style={{ textAlign: h === "Name" ? "left" : "right" }}
                       >
                         {h}
                       </th>
@@ -328,17 +377,17 @@ export default function HomePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTokens.length === 0 && (
+                  {visibleTokens.length === 0 && (
                     <tr>
                       <td colSpan={7} className="hatchr-table-empty">
                         {isLoading
-                          ? "Загружаем данные…"
-                          : "Пока пусто. Обнови страницу позже."}
+                          ? "Loading Base mints…"
+                          : "Nothing here yet. Try again in a minute."}
                       </td>
                     </tr>
                   )}
 
-                  {filteredTokens.map((token) => {
+                  {visibleTokens.map((token) => {
                     const username = extractFarcasterUsername(
                       token.farcaster_url || undefined
                     );
@@ -347,6 +396,14 @@ export default function HomePage() {
                     const rowKey = `${token.source}-${token.token_address}`;
                     const isTooltipVisible = hoveredRowKey === rowKey;
                     const isRowHovered = hoveredTableRowKey === rowKey;
+
+                    const { time, date } = formatCreated(token.first_seen_at);
+
+                    const fullAddress = token.token_address || "";
+                    const shortAddress =
+                      fullAddress.length > 4
+                        ? `0x…${fullAddress.slice(-4)}`
+                        : fullAddress;
 
                     return (
                       <tr
@@ -358,13 +415,7 @@ export default function HomePage() {
                         onMouseLeave={() => setHoveredTableRowKey(null)}
                       >
                         {/* Name */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "left",
-                            maxWidth: 260,
-                          }}
-                        >
+                        <td style={{ padding: "8px 10px", textAlign: "left" }}>
                           <a
                             href={token.source_url}
                             target="_blank"
@@ -400,19 +451,43 @@ export default function HomePage() {
                           </a>
                         </td>
 
-                        {/* Address (короткий) */}
+                        {/* Address + copy */}
                         <td
                           style={{
                             padding: "8px 10px",
                             textAlign: "right",
-                            fontFamily: "monospace",
-                            fontSize: 12,
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {token.token_address
-                            ? "0x" + token.token_address.slice(-4)
-                            : "—"}
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: 12,
+                              marginRight: 6,
+                            }}
+                          >
+                            {shortAddress || "—"}
+                          </span>
+                          {fullAddress && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigator.clipboard
+                                  ?.writeText(fullAddress)
+                                  .catch(() => {})
+                              }
+                              style={{
+                                fontSize: 10,
+                                padding: "2px 6px",
+                                borderRadius: 999,
+                                border: "1px solid #d1d5db",
+                                background: "#f9fafb",
+                                cursor: "pointer",
+                              }}
+                            >
+                              copy
+                            </button>
+                          )}
                         </td>
 
                         {/* Source */}
@@ -434,9 +509,7 @@ export default function HomePage() {
                             textAlign: "right",
                           }}
                         >
-                          {formatNumber(
-                            token.market_cap_usd ?? token.price_usd ?? null
-                          )}
+                          {formatNumber(token.market_cap_usd)}
                         </td>
 
                         {/* Vol 24h */}
@@ -459,7 +532,6 @@ export default function HomePage() {
                         >
                           {username ? (
                             <div
-                              className="hatchr-social-pill"
                               onMouseEnter={() => {
                                 setHoveredRowKey(rowKey);
                                 ensureProfile(username);
@@ -609,11 +681,13 @@ export default function HomePage() {
                             padding: "8px 10px",
                             textAlign: "right",
                             whiteSpace: "nowrap",
+                            fontSize: 11,
                           }}
                         >
-                          {token.first_seen_at
-                            ? formatDate(token.first_seen_at)
-                            : "—"}
+                          <div>{time}</div>
+                          {date && (
+                            <div style={{ color: "#9ca3af" }}>{date}</div>
+                          )}
                         </td>
                       </tr>
                     );
@@ -621,9 +695,31 @@ export default function HomePage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Load more */}
+            {filteredTokens.length > visibleCount && (
+              <div style={{ marginTop: 10, textAlign: "center" }}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setVisibleCount((prev) => prev + PAGE_SIZE)
+                  }
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 12,
+                    borderRadius: 999,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    cursor: "pointer",
+                  }}
+                >
+                  Load more
+                </button>
+              </div>
+            )}
           </section>
 
-          {/* Правая часть: Live feed */}
+          {/* Правая колонка: live feed по реально торгуемым */}
           <aside className="hatchr-feed">
             <div className="hatchr-feed-title">
               <span>Live traded feed</span>
@@ -643,7 +739,7 @@ export default function HomePage() {
 
               {liveFeed.map((t) => (
                 <li
-                  key={t.token_address + t.first_seen_at}
+                  key={t.token_address + (t.first_seen_at || "")}
                   className="hatchr-feed-item"
                 >
                   <div className="hatchr-feed-main">
@@ -657,6 +753,10 @@ export default function HomePage() {
                   <div className="hatchr-feed-sub">
                     🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
                     {t.name || "Unnamed"}
+                  </div>
+                  <div className="hatchr-feed-sub">
+                    MC: {formatNumber(t.market_cap_usd)} · Vol 24h:{" "}
+                    {formatNumber(t.volume_24h_usd)}
                   </div>
                 </li>
               ))}
