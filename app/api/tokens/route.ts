@@ -1,62 +1,27 @@
 // app/api/tokens/route.ts
 import { NextResponse } from "next/server";
-import {
-  fetchTokensFromClanker,
-  enrichWithDexScreener,
-  TokenWithMarket,
-} from "@/lib/providers";
-
-export const revalidate = 0;
+import { getTokens } from "@/lib/providers";
 
 export async function GET() {
   try {
-    // 1. Берём свежие токены с Clanker (3 часа)
-    const baseTokens = await fetchTokensFromClanker();
-
-    // 2. Обогащаем маркет-данными (с кэшем внутри providers)
-    const withMarket: TokenWithMarket[] =
-      await enrichWithDexScreener(baseTokens);
-
-    // 3. Сортируем по времени (новые сверху)
-    withMarket.sort((a, b) => {
-      const ta = a.first_seen_at ? new Date(a.first_seen_at).getTime() : 0;
-      const tb = b.first_seen_at ? new Date(b.first_seen_at).getTime() : 0;
-      return tb - ta;
-    });
-
-    // 4. Формируем ответ под фронт
-    const items = withMarket.map((t) => ({
-      token_address: t.token_address,
-      name: t.name ?? "",
-      symbol: t.symbol ?? "",
-      source: t.source ?? "",
-      source_url: t.source_url ?? "",
-      first_seen_at: t.first_seen_at ?? "",
-      market_cap_usd:
-        typeof t.market_cap_usd === "number" ? t.market_cap_usd : null,
-      price_usd: typeof t.price_usd === "number" ? t.price_usd : null,
-      liquidity_usd:
-        typeof t.liquidity_usd === "number" ? t.liquidity_usd : null,
-      volume_24h_usd:
-        typeof t.volume_24h_usd === "number" ? t.volume_24h_usd : null,
-      farcaster_url: t.farcaster_url ?? null,
-    }));
+    const tokens = await getTokens();
 
     return NextResponse.json(
       {
-        count: items.length,
-        items,
+        count: tokens.length,
+        items: tokens,
       },
-      { status: 200 }
+      {
+        headers: {
+          // чтобы не кешировалось браузером
+          "Cache-Control": "no-store",
+        },
+      }
     );
   } catch (e) {
-    console.error("Tokens API error:", e);
+    console.error("Tokens API error", e);
     return NextResponse.json(
-      {
-        count: 0,
-        items: [],
-        error: "failed_to_fetch_tokens",
-      },
+      { error: "Failed to load tokens" },
       { status: 500 }
     );
   }
