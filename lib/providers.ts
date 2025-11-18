@@ -27,7 +27,6 @@ export interface TokenWithMarket extends Token {
 // --- Farcaster-боты, которых отрезаем ---
 const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "mybrandio"];
 
-// helper: вытащить ник из farcaster_url
 function isBlockedCreator(farcasterUrl?: string | null): boolean {
   if (!farcasterUrl) return false;
   try {
@@ -58,7 +57,7 @@ async function fetchJson(url: string) {
   return res.json();
 }
 
-// Рекурсивно собираем все URL в объекте (metadata, related.user и т.п.)
+// Рекурсивно собираем все URL
 function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
   if (!obj || depth > 6) return acc;
 
@@ -92,7 +91,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 15; // до ~300 токенов за 3 часа
+  const MAX_PAGES = 15; // до ~300 токенов
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
@@ -118,8 +117,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
   const tokens: Token[] = collected
     .map((t: any) => {
-      // только Base
-      if (t.chain_id && t.chain_id !== 8453) return null;
+      if (t.chain_id && t.chain_id !== 8453) return null; // только Base
 
       const addr = (t.contract_address || "").toString().toLowerCase();
       if (!addr) return null;
@@ -180,7 +178,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         farcaster_url: farcasterUrl,
       };
 
-      // вырезаем спамерских ботов по creator
       if (isBlockedCreator(token.farcaster_url)) return null;
 
       return token;
@@ -196,6 +193,11 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 }
 
 // ======================= GeckoTerminal =======================
+
+function toNum(x: any): number | null {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
 
 export async function enrichWithGeckoTerminal(
   tokens: Token[]
@@ -216,25 +218,32 @@ export async function enrichWithGeckoTerminal(
       const data: any = await res.json();
       const attr = data?.data?.attributes || {};
 
-      const price = attr.price_usd != null ? Number(attr.price_usd) : null;
-      const fdv =
-        attr.fully_diluted_valuation_usd != null
-          ? Number(attr.fully_diluted_valuation_usd)
-          : null;
-      const liq =
-        attr.liquidity_usd != null ? Number(attr.liquidity_usd) : null;
-      const vol24 =
-        attr.volume_usd?.h24 != null ? Number(attr.volume_usd.h24) : null;
+      const price = toNum(attr.price_usd);
+
+      const marketCap = toNum(
+        attr.market_cap_usd ??
+          attr.fully_diluted_valuation_usd ??
+          attr.fully_diluted_valuation ??
+          attr.fdv_usd
+      );
+
+      const liquidity = toNum(attr.liquidity_usd ?? attr.reserve_in_usd);
+
+      const volume24 = toNum(
+        attr.volume_usd?.h24 ??
+          attr.trade_volume_24h_usd ??
+          attr.trade_volume_24h ??
+          attr.volume_24h_usd
+      );
 
       result.push({
         ...t,
-        price_usd: Number.isFinite(price) ? price : null,
-        market_cap_usd: Number.isFinite(fdv) ? fdv : null,
-        liquidity_usd: Number.isFinite(liq) ? liq : null,
-        volume_24h_usd: Number.isFinite(vol24) ? vol24 : null,
+        price_usd: price,
+        market_cap_usd: marketCap,
+        liquidity_usd: liquidity,
+        volume_24h_usd: volume24,
       });
     } catch {
-      // если GeckoTerminal лежит — просто возвращаем токен как есть
       result.push({ ...t });
     }
   }
@@ -245,7 +254,6 @@ export async function enrichWithGeckoTerminal(
 // ======================= Агрегатор =======================
 
 export async function getTokens(): Promise<TokenWithMarket[]> {
-  // сейчас только Clanker; позже сюда добавим Zora / Ape Store и т.д.
   const clanker = await fetchTokensFromClanker();
   const withMarket = await enrichWithGeckoTerminal(clanker);
   return withMarket;
