@@ -13,18 +13,18 @@ export async function GET() {
     // 1. Берём свежие токены с Clanker (3 часа)
     const baseTokens = await fetchTokensFromClanker();
 
-    // 2. Обогащаем маркет-данными с GeckoTerminal
+    // 2. Обогащаем маркет-данными (с кэшем внутри providers)
     const withMarket: TokenWithMarket[] =
       await enrichWithDexScreener(baseTokens);
 
-    // 3. Сортируем по времени создания (новые сверху)
+    // 3. Сортируем по времени (новые сверху)
     withMarket.sort((a, b) => {
       const ta = a.first_seen_at ? new Date(a.first_seen_at).getTime() : 0;
       const tb = b.first_seen_at ? new Date(b.first_seen_at).getTime() : 0;
       return tb - ta;
     });
 
-    // 4. Приводим к формату API (под твой фронтенд)
+    // 4. Формируем ответ под фронт
     const items = withMarket.map((t) => ({
       token_address: t.token_address,
       name: t.name ?? "",
@@ -32,7 +32,6 @@ export async function GET() {
       source: t.source ?? "",
       source_url: t.source_url ?? "",
       first_seen_at: t.first_seen_at ?? "",
-      // market data:
       market_cap_usd:
         typeof t.market_cap_usd === "number" ? t.market_cap_usd : null,
       price_usd: typeof t.price_usd === "number" ? t.price_usd : null,
@@ -40,7 +39,6 @@ export async function GET() {
         typeof t.liquidity_usd === "number" ? t.liquidity_usd : null,
       volume_24h_usd:
         typeof t.volume_24h_usd === "number" ? t.volume_24h_usd : null,
-      // socials:
       farcaster_url: t.farcaster_url ?? null,
     }));
 
