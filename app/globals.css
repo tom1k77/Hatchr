@@ -1,29 +1,56 @@
-/* ---------- Hatchr layout ---------- */
+@import "tailwindcss";
 
-.hatchr-root {
-  min-height: 100vh;
-  background: #f5f5f5;
-  padding: 24px;
-  display: flex;
-  justify-content: center;
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
-.hatchr-shell {
-  width: 100%;
-  max-width: 1200px;
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 20px 24px 24px;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+/* ===========================
+   Hatchr layout & styles
+   =========================== */
+
+.hatchr-root {
+  min-height: 100vh;
+  background-color: #f3f4f6;
+  padding: 24px;
 }
 
-/* top bar */
+.hatchr-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 18px 20px 22px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+}
+
+/* Top bar */
 
 .hatchr-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -34,8 +61,8 @@
 }
 
 .hatchr-brand-logo-circle {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   background: #020617;
   display: flex;
@@ -44,68 +71,86 @@
   overflow: hidden;
 }
 
-.hatchr-brand-logo-img {
-  width: 28px;
-  height: 28px;
+.hatchr-brand-logo-circle img {
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
+.hatchr-brand-logo-letter {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f9fafb;
+}
+
+.hatchr-brand-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .hatchr-brand-title-main {
-  display: block;
   font-size: 18px;
   font-weight: 600;
-  color: #020617;
 }
 
 .hatchr-brand-title-sub {
-  display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: #6b7280;
 }
 
 .hatchr-nav {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .hatchr-nav-pill {
   font-size: 12px;
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid #e5e7eb;
-  color: #4b5563;
   background: #f9fafb;
+  color: #4b5563;
 }
 
 .hatchr-nav-pill.primary {
-  background: #eef2ff;
-  color: #4338ca;
-  border-color: #c7d2fe;
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: transparent;
 }
 
-/* main grid */
+/* Main grid */
 
 .hatchr-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 2.4fr) minmax(260px, 1fr);
-  gap: 16px;
+  gap: 18px;
+  align-items: flex-start;
 }
 
-/* filters */
+/* Filters */
 
 .hatchr-filters {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
   flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .hatchr-filters-left {
   display: flex;
-  gap: 10px;
   flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.hatchr-filters-search {
+  flex: 1;
+  max-width: 260px;
 }
 
 .hatchr-label {
@@ -116,25 +161,22 @@
 }
 
 .hatchr-select,
-.hatchr-input-number {
+.hatchr-input-number,
+.hatchr-search {
   font-size: 13px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 999px;
   border: 1px solid #d1d5db;
   background: #ffffff;
 }
 
 .hatchr-search {
   width: 100%;
-  font-size: 13px;
   padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
 }
 
 .hatchr-error {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   padding: 8px 10px;
   border-radius: 8px;
   background-color: #fee2e2;
@@ -143,28 +185,31 @@
   border: 1px solid #fecaca;
 }
 
-/* table */
+/* Table */
 
 .hatchr-table-wrapper {
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #eee;
   overflow: hidden;
-  background: #ffffff;
+  background-color: #ffffff;
 }
 
 .hatchr-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 13px;
-  table-layout: fixed; /* фиксируем сетку, чтобы не «ездило» */
+}
+
+.hatchr-table thead tr {
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .hatchr-table th {
   padding: 8px 10px;
-  background: #fafafa;
-  border-bottom: 1px solid #e5e7eb;
-  color: #4b5563;
   font-weight: 500;
+  color: #4b5563;
   white-space: nowrap;
 }
 
@@ -174,187 +219,58 @@
 }
 
 .hatchr-table-row.hovered {
-  background: #f9fafb;
+  background-color: #f9fafb;
 }
 
 .hatchr-table-empty {
   padding: 18px 10px;
   text-align: center;
   color: #6b7280;
-  font-size: 13px;
 }
 
-/* name cell */
-
-.hatchr-name-cell {
-  text-align: left;
-}
-
-.hatchr-name-link {
-  display: flex;
-  flex-direction: column;
-  text-decoration: none;
-  color: #111827;
-}
-
-.hatchr-name-main {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  line-height: 1.25;
-}
-
-.hatchr-name-symbol-pill {
-  margin-top: 3px;
-  font-size: 10px;
-  text-transform: uppercase;
-  color: #6b7280;
-  background: #f3f4ff;
-  border-radius: 999px;
-  padding: 2px 8px;
-  align-self: flex-start;
-}
-
-/* address */
-
-.hatchr-address-cell {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.hatchr-address-text {
-  font-family: monospace;
-  font-size: 12px;
-  margin-right: 4px;
-}
-
-.hatchr-copy-btn {
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-  border-radius: 999px;
-  padding: 2px 6px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* source pill */
+/* Source pill */
 
 .hatchr-source-pill {
   display: inline-flex;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
   font-size: 11px;
   text-transform: lowercase;
   color: #4b5563;
-}
-
-/* socials */
-
-.hatchr-social-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: #5b3ded;
-  color: #ffffff;
-  text-decoration: none;
-  font-size: 12px;
-}
-
-.hatchr-social-username {
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.hatchr-profile-tooltip {
-  position: absolute;
-  top: 112%;
-  right: 0;
-  margin-top: 6px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background-color: #111827;
-  color: #f9fafb;
-  min-width: 220px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
-  z-index: 20;
-}
-
-.hatchr-profile-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.hatchr-profile-name {
-  font-size: 13px;
-  font-weight: 600;
-  margin-bottom: 2px;
-}
-
-.hatchr-profile-handle {
-  font-size: 12px;
-  color: #9ca3af;
-}
-
-.hatchr-profile-stats {
-  display: flex;
-  gap: 12px;
-  font-size: 11px;
-  color: #e5e7eb;
-}
-
-/* load more */
-
-.hatchr-load-more {
-  padding: 6px 14px;
-  font-size: 12px;
-  border-radius: 999px;
-  border: 1px solid #d1d5db;
   background: #f9fafb;
-  cursor: pointer;
 }
 
-/* right column (feed) */
+/* Right sidebar */
 
 .hatchr-feed {
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
   padding: 10px 12px;
-  align-self: flex-start;
 }
 
 .hatchr-feed-title {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 8px;
   font-size: 13px;
+  font-weight: 500;
 }
 
 .hatchr-feed-badge {
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #ecfdf5;
-  color: #0f766e;
+  background: #dcfce7;
+  color: #166534;
 }
 
 .hatchr-feed-list {
   list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -363,16 +279,20 @@
 .hatchr-feed-item {
   border-radius: 10px;
   background: #ffffff;
-  padding: 8px 10px;
   border: 1px solid #e5e7eb;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .hatchr-feed-main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
-  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.hatchr-feed-main .token {
+  font-weight: 500;
 }
 
 .hatchr-feed-main .meta {
@@ -385,10 +305,18 @@
   color: #6b7280;
 }
 
-/* адаптив */
+/* Responsive */
 
 @media (max-width: 900px) {
+  .hatchr-shell {
+    padding: 14px 14px 18px;
+  }
+
   .hatchr-main-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hatchr-feed {
+    margin-top: 12px;
   }
 }
