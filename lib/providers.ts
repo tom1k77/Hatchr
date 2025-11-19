@@ -52,7 +52,7 @@ const GECKO_BASE_TOKENS =
 // Zora SDK REST
 // ВНИМАНИЕ: базовый URL строго как в доке:
 // BASE_URL = "https://api-sdk.zora.engineering/api"
-const ZORA_BASE_URL = "https://api-sdk.zora.engineering/api";
+const ZORA_SDK_BASE = "https://api-sdk.zora.engineering";
 const ZORA_API_KEY = process.env.ZORA_API_KEY;
 
 // -------- Вспомогательные функции --------
