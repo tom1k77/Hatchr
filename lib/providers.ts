@@ -49,45 +49,12 @@ const CLANKER_FRONT = "https://www.clanker.world";
 const GECKO_BASE_TOKENS =
   "https://api.geckoterminal.com/api/v2/networks/base/tokens";
 
-// Zora SDK REST API — пробуем и с /api и без
-const ZORA_BASES = [
-  "https://api-sdk.zora.engineering/api",
-  "https://api-sdk.zora.engineering",
-];
-const ZORA_FRONT = "https://zora.co";
-
 // -------- Вспомогательные функции --------
 
 async function fetchJson(url: string) {
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
-}
-
-async function fetchZoraJson(pathWithQuery: string) {
-  const apiKey = process.env.ZORA_API_KEY; // можно не ставить, но лучше завести
-  const headers: HeadersInit = {};
-  if (apiKey) headers["api-key"] = apiKey;
-
-  let lastError: any;
-
-  for (const base of ZORA_BASES) {
-    try {
-      const url =
-        base +
-        (pathWithQuery.startsWith("/") ? pathWithQuery : `/${pathWithQuery}`);
-      const res = await fetch(url, { cache: "no-store", headers });
-      if (!res.ok) {
-        lastError = new Error(`${url} ${res.status}`);
-        continue;
-      }
-      return await res.json();
-    } catch (e) {
-      lastError = e;
-    }
-  }
-
-  throw lastError ?? new Error("Zora fetch failed");
 }
 
 // Рекурсивно собираем все URL
@@ -112,38 +79,6 @@ function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
   }
 
   return acc;
-}
-
-// Ищем массив с коинами в произвольном JSON Zora
-function findCoinArray(input: any): any[] {
-  if (!input) return [];
-  if (Array.isArray(input)) return input;
-
-  if (typeof input === "object") {
-    // сначала ищем массив верхнего уровня
-    for (const key of Object.keys(input)) {
-      const v = (input as any)[key];
-      if (
-        Array.isArray(v) &&
-        v.length > 0 &&
-        typeof v[0] === "object" &&
-        v[0] &&
-        (("address" in v[0]) ||
-          "contract_address" in v[0] ||
-          "tokenAddress" in v[0] ||
-          "token_address" in v[0])
-      ) {
-        return v;
-      }
-    }
-    // если не нашли — рекурсивно
-    for (const key of Object.keys(input)) {
-      const found = findCoinArray((input as any)[key]);
-      if (found.length) return found;
-    }
-  }
-
-  return [];
 }
 
 // ======================= CLANKER (3 часа) =======================
@@ -249,100 +184,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     })
     .filter(Boolean) as Token[];
 
-  // фильтр 3 часа
-  return tokens.filter((t) => {
-    if (!t.first_seen_at) return true;
-    const ts = new Date(t.first_seen_at).getTime();
-    return now - ts <= WINDOW_MS;
-  });
-}
-
-// ======================= ZORA (12 часов) =======================
-
-export async function fetchTokensFromZora(): Promise<Token[]> {
-  const now = Date.now();
-  const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 часов, Zora медленнее растёт
-  const windowAgo = now - WINDOW_MS;
-
-  // Пытаемся вытащить последние монеты на Base
-  const raw: any = await fetchZoraJson("/coins?chain=8453&limit=200");
-
-  const list: any[] = findCoinArray(raw);
-
-  if (!list.length) {
-    console.warn("Zora: coin list is empty, raw keys:", Object.keys(raw || {}));
-  }
-
-  const tokens: Token[] = list
-    .map((c: any) => {
-      const addr =
-        (c.address ||
-          c.contract_address ||
-          c.tokenAddress ||
-          c.token_address ||
-          "").toString().toLowerCase();
-      if (!addr) return null;
-
-      const chain = c.chain || c.chain_id || c.network;
-      if (chain && Number(chain) !== 8453 && chain !== "base") return null;
-
-      const name = (c.name || "").toString();
-      const symbol = (c.symbol || "").toString();
-
-      const creator = c.creator || c.profile || c.owner || {};
-      const meta = c.metadata || {};
-
-      const urlsMeta = collectUrls(meta);
-      const urlsCreator = collectUrls(creator);
-      const allUrls = [...urlsMeta, ...urlsCreator];
-
-      let farcasterUrl =
-        allUrls.find((u) =>
-          u.toLowerCase().includes("farcaster.xyz")
-        ) || undefined;
-
-      const rawUsername =
-        creator.username ||
-        creator.handle ||
-        creator.fname ||
-        creator.name ||
-        "";
-
-      const username =
-        typeof rawUsername === "string"
-          ? rawUsername.replace(/^@/, "").trim()
-          : "";
-
-      if (!farcasterUrl && username) {
-        farcasterUrl = `https://farcaster.xyz/${username}`;
-      }
-
-      const created =
-        c.createdAt ||
-        c.created_at ||
-        c.deployedAt ||
-        c.deployed_at ||
-        c.firstSeenAt ||
-        c.first_seen_at ||
-        null;
-
-      const token: Token = {
-        token_address: addr,
-        name,
-        symbol,
-        source: "zora",
-        source_url: `${ZORA_FRONT}/coin/${addr}`,
-        first_seen_at: created ?? undefined,
-        farcaster_url: farcasterUrl,
-      };
-
-      if (isBlockedCreator(token.farcaster_url)) return null;
-
-      return token;
-    })
-    .filter(Boolean) as Token[];
-
-  // фильтр по времени
+  // фильтр 3 часа на всякий случай
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
@@ -412,23 +254,7 @@ export async function enrichWithGeckoTerminal(
 // ======================= Агрегатор =======================
 
 export async function getTokens(): Promise<TokenWithMarket[]> {
-  const [clanker, zora] = await Promise.all([
-    fetchTokensFromClanker(),
-    fetchTokensFromZora().catch((e) => {
-      console.error("Zora fetch error", e);
-      return [] as Token[];
-    }),
-  ]);
-
-  const all: Token[] = [...clanker, ...zora];
-
-  // сортируем по времени появления
-  all.sort((a, b) => {
-    const ta = a.first_seen_at ? new Date(a.first_seen_at).getTime() : 0;
-    const tb = b.first_seen_at ? new Date(b.first_seen_at).getTime() : 0;
-    return tb - ta;
-  });
-
-  const withMarket = await enrichWithGeckoTerminal(all);
+  const clanker = await fetchTokensFromClanker();
+  const withMarket = await enrichWithGeckoTerminal(clanker);
   return withMarket;
 }
