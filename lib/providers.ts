@@ -49,6 +49,9 @@ const CLANKER_FRONT = "https://www.clanker.world";
 const GECKO_BASE_TOKENS =
   "https://api.geckoterminal.com/api/v2/networks/base/tokens";
 
+// Zora SDK base URL (важно: без /api в пути)
+const ZORA_BASE_URL = "https://api-sdk.zora.engineering";
+
 // Zora SDK REST
 // ВНИМАНИЕ: базовый URL строго как в доке:
 // BASE_URL = "https://api-sdk.zora.engineering/api"
