@@ -32,11 +32,19 @@ const GECKO_BASE = "https://api.geckoterminal.com/api/v2/networks/base/tokens";
 const ZORA_API_KEY = process.env.ZORA_API_KEY;
 const ZORA_API = "https://api-sdk.zora.engineering/api";
 
-const BLOCKED_FID = ["primatirta", "pinmad", "senang", "mybrandio"];
+// если кого-то надо резать по фарку — сюда
+const BLOCKED_FARCASTER_USERS = [
+  "primatirta",
+  "pinmad",
+  "senang",
+  "mybrandio",
+];
 
 function ms(ts: any): number {
-  const n = Number(ts);
-  return Number.isFinite(n) ? n : 0;
+  if (!ts) return 0;
+  const d = new Date(ts);
+  const v = d.getTime();
+  return Number.isFinite(v) ? v : 0;
 }
 
 function toNum(x: any): number | null {
@@ -44,24 +52,31 @@ function toNum(x: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function safeFetch(url: string, opts: any = {}) {
+async function safeFetch(url: string, opts: RequestInit = {}) {
   try {
     const res = await fetch(url, {
       cache: "no-store",
       ...opts,
     });
     if (!res.ok) {
-      console.error("[fetch error]", url, res.status);
+      const txt = await res.text().catch(() => "");
+      console.error(
+        "[fetch error]",
+        url,
+        res.status,
+        res.statusText,
+        txt.slice(0, 200)
+      );
       return null;
     }
-    return res.json().catch(() => null);
+    return (await res.json().catch(() => null)) as any;
   } catch (err) {
     console.error("[network error]", url, err);
     return null;
   }
 }
 
-async function fetchZora(path: string, params = {}) {
+async function fetchZora(path: string, params: Record<string, string | number>) {
   if (!ZORA_API_KEY) {
     console.error("❌ Missing ZORA_API_KEY");
     return null;
@@ -83,69 +98,90 @@ async function fetchZora(path: string, params = {}) {
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW = 3 * 3600 * 1000;
-
+  const WINDOW = 3 * 60 * 60 * 1000; // 3 часа
   const startDateUnix = Math.floor((now - WINDOW) / 1000);
 
   let cursor: string | undefined;
-  const out: any[] = [];
+  const raw: any[] = [];
 
-  for (let i = 0; i < 15; i++) {
-    const p = new URLSearchParams({
+  const MAX_PAGES = 15;
+
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const params = new URLSearchParams({
       limit: "20",
       sort: "desc",
       startDate: String(startDateUnix),
       includeUser: "true",
       includeMarket: "false",
     });
-    if (cursor) p.set("cursor", cursor);
+    if (cursor) params.set("cursor", cursor);
 
-    const url = `${CLANKER_API}?${p.toString()}`;
+    const url = `${CLANKER_API}?${params.toString()}`;
     const json = await safeFetch(url);
-    if (!json?.data?.length) break;
+    const data: any[] = Array.isArray(json?.data) ? json.data : [];
+    if (!data.length) break;
 
-    out.push(...json.data);
-    cursor = json.cursor;
+    raw.push(...data);
+    cursor = json?.cursor;
     if (!cursor) break;
   }
 
-  const tokens: Token[] = out
-    .map((t) => {
-      if (t.chain_id !== 8453) return null;
+  const tokens: Token[] = [];
 
-      const addr = t.contract_address?.toLowerCase();
-      if (!addr) return null;
+  for (const t of raw) {
+    if (t.chain_id && t.chain_id !== 8453) continue;
 
-      const meta = t.metadata || {};
-      const creator = t.related?.user || {};
+    const addr = (t.contract_address || "").toString().toLowerCase();
+    if (!addr) continue;
 
-      let username =
-        creator.username ||
-        creator.handle ||
-        creator.fname ||
-        creator.name;
+    const creator = t.related?.user || {};
+    let username: string =
+      creator.username ||
+      creator.handle ||
+      creator.fname ||
+      creator.name ||
+      "";
 
-      if (typeof username === "string")
-        username = username.replace(/^@/, "");
+    if (typeof username === "string") {
+      username = username.replace(/^@/, "").trim();
+    }
 
-      let farcaster =
-        username ? `https://farcaster.xyz/${username}` : undefined;
+    let farcasterUrl: string | undefined;
+    if (username) {
+      farcasterUrl = `https://farcaster.xyz/${username}`;
+    } else if (t.fid) {
+      farcasterUrl = `https://farcaster.xyz/profiles/${t.fid}`;
+    }
 
-      const firstSeen =
-        t.created_at || t.deployed_at || t.last_indexed || undefined;
+    const firstSeen =
+      t.created_at || t.deployed_at || t.last_indexed || undefined;
 
-      return {
-        token_address: addr,
-        name: t.name || "",
-        symbol: t.symbol || "",
-        source: "clanker",
-        source_url: `${CLANKER_FRONT}/clanker/${addr}`,
-        first_seen_at: firstSeen,
-        farcaster_url: farcaster,
-      };
-    })
-    .filter(Boolean)
-    .filter((t) => now - ms(t.first_seen_at) <= WINDOW);
+    const token: Token = {
+      token_address: addr,
+      name: (t.name || "").toString(),
+      symbol: (t.symbol || "").toString(),
+      source: "clanker",
+      source_url: `${CLANKER_FRONT}/clanker/${addr}`,
+      first_seen_at: firstSeen,
+      farcaster_url: farcasterUrl,
+    };
+
+    // фильтр по ботам, если надо
+    if (token.farcaster_url) {
+      try {
+        const u = new URL(token.farcaster_url);
+        const handle = u.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+        if (handle && BLOCKED_FARCASTER_USERS.includes(handle)) continue;
+      } catch {
+        // ignore bad URL
+      }
+    }
+
+    // фильтр 3 часа
+    if (token.first_seen_at && now - ms(token.first_seen_at) > WINDOW) continue;
+
+    tokens.push(token);
+  }
 
   return tokens;
 }
@@ -156,39 +192,47 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW = 3 * 3600 * 1000;
+  const WINDOW = 3 * 60 * 60 * 1000;
 
   if (!ZORA_API_KEY) return [];
 
+  // Используем explore/new для Base
   const json = await fetchZora("/explore", {
     category: "new",
-    chain: "8453",
-    limit: "250",
+    chain: 8453,
+    limit: 250,
   });
 
   const arr: any[] = Array.isArray(json?.coins) ? json.coins : [];
+  const tokens: Token[] = [];
 
-  return arr
-    .map((c) => {
-      const addr = (c.address || "").toLowerCase();
-      if (!addr) return null;
+  for (const c of arr) {
+    const addr = (c.address || c.contractAddress || "").toString().toLowerCase();
+    if (!addr) continue;
 
-      const created =
-        typeof c.createdAt === "number"
-          ? new Date(c.createdAt).toISOString()
-          : c.createdAt;
+    const createdRaw = c.createdAt ?? c.launchedAt ?? null;
+    let created: string | undefined;
+    if (typeof createdRaw === "number") {
+      created = new Date(createdRaw).toISOString();
+    } else if (typeof createdRaw === "string") {
+      created = createdRaw;
+    }
 
-      return {
-        token_address: addr,
-        name: c.name || "",
-        symbol: c.symbol || "",
-        source: "zora",
-        source_url: `https://zora.co/collect/base:${addr}`,
-        first_seen_at: created,
-      } as Token;
-    })
-    .filter(Boolean)
-    .filter((t) => now - ms(t.first_seen_at) <= WINDOW);
+    const token: Token = {
+      token_address: addr,
+      name: (c.name || "").toString(),
+      symbol: (c.symbol || "").toString(),
+      source: "zora",
+      source_url: `https://zora.co/coins/base:${addr}`,
+      first_seen_at: created,
+    };
+
+    if (token.first_seen_at && now - ms(token.first_seen_at) > WINDOW) continue;
+
+    tokens.push(token);
+  }
+
+  return tokens;
 }
 
 // ===============================================
@@ -215,7 +259,11 @@ export async function enrichWithGeckoTerminal(
           a.fully_diluted_valuation_usd
       ),
       liquidity_usd: toNum(a.liquidity_usd),
-      volume_24h_usd: toNum(a.trade_volume_24h_usd),
+      volume_24h_usd: toNum(
+        a.trade_volume_24h_usd ??
+          a.volume_usd?.h24 ??
+          a.volume_24h_usd
+      ),
     });
   }
 
@@ -234,11 +282,12 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
 
   const map = new Map<string, Token>();
 
-  [...clanker, ...zora].forEach((t) =>
-    map.set(t.token_address.toLowerCase(), t)
-  );
+  for (const t of [...clanker, ...zora]) {
+    map.set(t.token_address.toLowerCase(), t);
+  }
 
   const merged = Array.from(map.values());
+  const withMarket = await enrichWithGeckoTerminal(merged);
 
-  return enrichWithGeckoTerminal(merged);
+  return withMarket;
 }
