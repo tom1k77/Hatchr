@@ -240,11 +240,11 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
-// ======================= ZORA (NEW_CREATORS, 3 часа) =======================
+// ======================= ZORA (3 часа, explore NEW_CREATORS) =======================
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
+  const WINDOW_MS = 3 * 60 * 60 * 1000; // те же 3 часа
 
   if (!ZORA_API_KEY) {
     console.error(
@@ -253,15 +253,13 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
     return [];
   }
 
+  // Берём новые креатор-койны через /explore
   const json = await fetchJsonZora("/explore", {
     listType: "NEW_CREATORS",
     count: "100",
   });
 
-  const edges: any[] = Array.isArray(json?.exploreList?.edges)
-    ? json!.exploreList.edges
-    : [];
-
+  const edges: any[] = json?.exploreList?.edges ?? [];
   if (!edges.length) return [];
 
   const tokens: Token[] = edges
@@ -269,51 +267,26 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const n = edge?.node;
       if (!n) return null;
 
-      // на всякий случай — только Base
-      if (n.chainId && n.chainId !== 8453) return null;
-
       const addr = (n.address || "").toString().toLowerCase();
       if (!addr) return null;
+
+      // Zora coins всегда в Base, но на всякий случай
+      if (n.chainId && Number(n.chainId) !== 8453) return null;
 
       const name = (n.name || "").toString();
       const symbol = (n.symbol || "").toString();
 
-      const createdAt = n.createdAt || null;
+      // createdAt приходит без часового пояса (UTC без "Z")
+      let created: string | undefined;
+      const raw = n.createdAt;
+      if (typeof raw === "string" && raw.length > 0) {
+        // трактуем как UTC: добавляем "Z", если её нет
+        const iso = /z$/i.test(raw) ? raw : raw + "Z";
+        created = iso;
+      } else if (typeof raw === "number") {
+        created = new Date(raw).toISOString();
+      }
 
-      // socials из creatorProfile.socialAccounts
-      const social = n.creatorProfile?.socialAccounts || {};
-      const farcasterUsername = social?.farcaster?.username || null;
-      const twitterUsername = social?.twitter?.username || null;
-
-      const farcasterUrl = farcasterUsername
-        ? `https://warpcast.com/${farcasterUsername}`
-        : undefined;
-
-      const xUrl = twitterUsername
-        ? `https://x.com/${twitterUsername}`
-        : undefined;
-
-      // базовые market-цифры из Zora
-      const priceUsdRaw = n.tokenPrice?.priceInUsdc;
-      const marketCapRaw = n.marketCap;
-      const volume24hRaw = n.volume24h;
-
-      const price_usd =
-        priceUsdRaw != null && priceUsdRaw !== ""
-          ? Number(priceUsdRaw)
-          : null;
-
-      const market_cap_usd =
-        marketCapRaw != null && marketCapRaw !== ""
-          ? Number(marketCapRaw)
-          : null;
-
-      const volume_24h_usd =
-        volume24hRaw != null && volume24hRaw !== ""
-          ? Number(volume24hRaw)
-          : null;
-
-      // правильный линк на страницу коина
       const sourceUrl = `https://zora.co/coin/base:${addr}`;
 
       const token: Token = {
@@ -322,25 +295,18 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         symbol,
         source: "zora",
         source_url: sourceUrl,
-        first_seen_at: createdAt || undefined,
-
-        farcaster_url: farcasterUrl,
-        x_url: xUrl,
-
-        price_usd,
-        market_cap_usd,
-        volume_24h_usd,
+        first_seen_at: created,
       };
 
       return token;
     })
     .filter(Boolean) as Token[];
 
-  // фильтр по 3 часам
+  // фильтр по 3 часам (используем уже нормализованный UTC)
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
-    return now - ts <= WINDOW_MS;
+    return Number.isFinite(ts) ? now - ts <= WINDOW_MS : true;
   });
 }
 
