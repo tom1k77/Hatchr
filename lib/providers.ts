@@ -49,9 +49,9 @@ const CLANKER_FRONT = "https://www.clanker.world";
 const GECKO_BASE_TOKENS =
   "https://api.geckoterminal.com/api/v2/networks/base/tokens";
 
-// Zora Coins API
-const ZORA_BASE_URL = "https://api-sdk.zora.engineering";
-const ZORA_API_KEY = ZORA_API_KEY;
+// Zora Coins API — ОБЯЗАТЕЛЬНО с /api
+const ZORA_BASE_URL = "https://api-sdk.zora.engineering/api";
+const ZORA_API_KEY = process.env.ZORA_API_KEY;
 
 // -------- Вспомогательные функции --------
 
@@ -207,21 +207,19 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 // ======================= ZORA (3 часа, best-effort) =======================
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
-  // Если нет API-ключа — просто не трогаем Zora, чтобы не спамить ошибками
+  // Если нет API-ключа — просто не трогаем Zora
   if (!ZORA_API_KEY) {
+    console.warn("Zora: ZORA_API_KEY is not set, skipping Zora source");
     return [];
   }
 
   const now = Date.now();
   const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
-  const windowAgoISO = new Date(now - WINDOW_MS).toISOString();
+  const windowAgo = now - WINDOW_MS;
 
-  // Параметры максимально консервативные — последние монеты на Base
   const params = new URLSearchParams({
-    chain: "8453",
+    chain: "8453", // Base
     limit: "100",
-    // многие REST-обёртки позволяют sort / direction, но если нет —
-    // просто будут игнорироваться
     sort: "createdAt",
     direction: "desc",
   });
@@ -229,11 +227,26 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
   const url = `${ZORA_BASE_URL}/coins?${params.toString()}`;
 
   try {
-    const json: any = await fetchJson(url, {
+    const res = await fetch(url, {
+      cache: "no-store",
       headers: {
         "api-key": ZORA_API_KEY,
+        Accept: "application/json",
       },
     });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(
+        "Zora fetch error",
+        res.status,
+        res.statusText,
+        text.slice(0, 200)
+      );
+      return [];
+    }
+
+    const json: any = await res.json();
 
     const rawCoins: any[] = Array.isArray(json?.coins)
       ? json.coins
@@ -245,7 +258,6 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
     const tokens: Token[] = rawCoins
       .map((c: any) => {
-        // максимально аккуратно достаём контракт
         const addrRaw =
           c.address ||
           c.contractAddress ||
@@ -266,7 +278,6 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
           (c.ticker as string) ||
           "";
 
-        // createdAt / created_at / timestamp
         const createdRaw =
           c.createdAt || c.created_at || c.timestamp || c.blockTimestamp;
         const created =
@@ -278,15 +289,12 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
             u.toLowerCase().includes("farcaster.xyz")
           ) || undefined;
 
-        // базовый фронт для зора-коинов
-        const sourceUrl = `https://zora.co/coins/base:${addr}`;
-
         const token: Token = {
           token_address: addr,
           name,
           symbol,
           source: "zora",
-          source_url: sourceUrl,
+          source_url: `https://zora.co/coins/base:${addr}`,
           first_seen_at: created,
           farcaster_url: farcasterUrl,
         };
@@ -297,16 +305,15 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       })
       .filter(Boolean) as Token[];
 
-    // ограничиваем 3 часами, если есть createdAt
+    // фильтр 3 часа по createdAt
     return tokens.filter((t) => {
       if (!t.first_seen_at) return true;
       const ts = new Date(t.first_seen_at).getTime();
       if (Number.isNaN(ts)) return true;
-      return ts >= new Date(windowAgoISO).getTime();
+      return ts >= windowAgo;
     });
   } catch (e) {
-    console.error("Zora fetch error", e);
-    // В случае любого фейла просто возвращаем пустой массив, чтобы не ломать Clanker
+    console.error("Zora fetch error (network)", e);
     return [];
   }
 }
