@@ -146,7 +146,7 @@ export default function HomePage() {
   // какой адрес только что скопировали (для галочки)
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // ---------- загрузка токенов + кэш цифр ----------
+    // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -155,14 +155,15 @@ export default function HomePage() {
       const res = await fetch("/api/tokens", { cache: "no-store" });
       if (!res.ok) throw new Error(`Tokens API error: ${res.status}`);
 
-      const data: TokensResponse = await res.json();
+      const raw = await res.json();
+      const items: TokenItem[] = Array.isArray(raw?.items) ? raw.items : [];
 
       setTokens((prev) => {
         const prevMap = new Map(
           prev.map((t) => [t.token_address.toLowerCase(), t])
         );
 
-        const merged = data.items.map((t) => {
+        const merged = items.map((t) => {
           const key = t.token_address.toLowerCase();
           const old = prevMap.get(key);
 
@@ -172,7 +173,6 @@ export default function HomePage() {
             const newVal = t[field] as unknown as number | null;
             const oldVal = old[field] as unknown as number | null;
 
-            // если из Gecko пришёл null/NaN/0 — оставляем старое значение
             if (newVal == null || !Number.isFinite(newVal) || newVal === 0) {
               return oldVal ?? null;
             }
@@ -193,11 +193,11 @@ export default function HomePage() {
     } catch (e) {
       console.error(e);
       setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
+      setTokens([]); // безопасный сброс
     } finally {
       setIsLoading(false);
     }
   }
-
   useEffect(() => {
     loadTokens();
     const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
