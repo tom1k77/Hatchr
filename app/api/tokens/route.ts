@@ -1,8 +1,7 @@
-// app/api/tokens/route.ts
 import { NextResponse } from "next/server";
 import { getTokens } from "@/lib/providers";
 
-export const runtime = "nodejs"; // важно: НЕ edge
+export const revalidate = 15;
 
 export async function GET() {
   try {
@@ -12,20 +11,20 @@ export async function GET() {
       {
         ok: true,
         count: tokens.length,
-        items: tokens,
+        tokens,
       },
-      {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      }
+      { status: 200 }
     );
+
   } catch (e: any) {
-    console.error("[API /tokens] Fatal error:", e?.message || e);
+    console.error("FATAL /api/tokens error:", e);
+
     return NextResponse.json(
       {
         ok: false,
-        error: "Internal server error loading tokens",
+        error: "internal_error",
+        message: e?.message || "failed to fetch tokens",
+        tokens: [],
       },
       { status: 500 }
     );
