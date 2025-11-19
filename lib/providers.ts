@@ -51,7 +51,7 @@ const GECKO_BASE_TOKENS =
 
 // Zora Coins API
 const ZORA_BASE_URL = "https://api-sdk.zora.engineering";
-const ZORA_API_KEY = process.env.ZORA_API_KEY;
+const ZORA_API_KEY = ZORA_API_KEY;
 
 // -------- Вспомогательные функции --------
 
