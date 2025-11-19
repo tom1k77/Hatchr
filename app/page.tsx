@@ -240,17 +240,25 @@ export default function HomePage() {
 
   // все торгуемые токены для live feed
   const tradedTokensAll = useMemo(() => {
-    const nonZero = filteredTokens.filter(
-      (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
-    );
-    const sorted = [...nonZero].sort((a, b) => {
-      return (
-        new Date(b.first_seen_at || "").getTime() -
-        new Date(a.first_seen_at || "").getTime()
-      );
-    });
-    return sorted;
-  }, [filteredTokens]);
+  const nonZero = filteredTokens.filter(
+    (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
+  );
+
+  const sorted = [...nonZero].sort((a, b) => {
+    const volA = a.volume_24h_usd ?? 0;
+    const volB = b.volume_24h_usd ?? 0;
+
+    // сначала по объёму (по убыванию),
+    // если объём одинаковый — по времени создания (новее выше)
+    if (volB !== volA) return volB - volA;
+
+    const timeA = new Date(a.first_seen_at || "").getTime();
+    const timeB = new Date(b.first_seen_at || "").getTime();
+    return timeB - timeA;
+  });
+
+  return sorted;
+}, [filteredTokens]);
 
   const tradedTokensVisible = useMemo(
     () => tradedTokensAll.slice(0, visibleFeed),
