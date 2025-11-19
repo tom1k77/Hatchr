@@ -24,6 +24,29 @@ export interface TokenWithMarket extends Token {
   volume_24h_usd?: number | null;
 }
 
+// Нормализуем любую дату к ISO в UTC (2025-11-19T12:32:45.000Z)
+function normalizeToIsoUTC(input: any): string | undefined {
+  if (!input) return undefined;
+
+  // число -> считаем, что это миллисекунды
+  if (typeof input === "number") {
+    const d = new Date(input);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
+  if (typeof input === "string") {
+    const s = input.trim();
+    if (!s) return undefined;
+
+    // если строка уже с таймзоной (Z или +03:00) — просто парсим
+    const hasTz = /Z$|[+-]\d\d:\d\d$/.test(s);
+    const d = new Date(hasTz ? s : s + "Z"); // Zora без таймзоны → считаем UTC
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
+  return undefined;
+}
+
 // --- Farcaster-боты, которых отрезаем ---
 const BLOCKED_FARCASTER_USERS = ["primatirta", "pinmad", "senang", "mybrandio"];
 
@@ -175,18 +198,18 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         }
       }
 
-      const firstSeen =
-        t.created_at || t.deployed_at || t.last_indexed || undefined;
+      const firstSeenRaw =
+  t.created_at || t.deployed_at || t.last_indexed || undefined;
 
-      const token: Token = {
-        token_address: addr,
-        name,
-        symbol,
-        source: "clanker",
-        source_url: `${CLANKER_FRONT}/clanker/${addr}`,
-        first_seen_at: firstSeen,
-        farcaster_url: farcasterUrl,
-      };
+const token: Token = {
+  token_address: addr,
+  name,
+  symbol,
+  source: "clanker",
+  source_url: `${CLANKER_FRONT}/clanker/${addr}`,
+  first_seen_at: normalizeToIsoUTC(firstSeenRaw),
+  farcaster_url: farcasterUrl,
+};
 
       if (isBlockedCreator(token.farcaster_url)) return null;
 
@@ -357,21 +380,27 @@ export async function enrichWithGeckoTerminal(
 
 export async function getTokens(): Promise<TokenWithMarket[]> {
   const [clanker, zora] = await Promise.all([
-    fetchTokensFromClanker().catch(() => []),
-    fetchTokensFromZora().catch(() => []),
+    fetchTokensFromClanker(),
+    fetchTokensFromZora(), // твоя Zora-функция
   ]);
 
-  // склеиваем и убираем дубликаты по адресу (Clanker имеет приоритет)
-  const all: Token[] = [...zora, ...clanker];
+  const all: Token[] = [...clanker, ...zora];
+
+  // убираем дубли по адресу
   const byAddress = new Map<string, Token>();
   for (const t of all) {
-    const key = t.token_address.toLowerCase();
-    if (!byAddress.has(key)) {
-      byAddress.set(key, t);
-    }
+    byAddress.set(t.token_address.toLowerCase(), t);
   }
 
   const merged = Array.from(byAddress.values());
+
+  // --- НОВОЕ: сортировка по дате (новые сверху), независимо от источника ---
+  merged.sort((a, b) => {
+    const ta = a.first_seen_at ? Date.parse(a.first_seen_at) : 0;
+    const tb = b.first_seen_at ? Date.parse(b.first_seen_at) : 0;
+    return tb - ta; // по убыванию времени
+  });
+
   const withMarket = await enrichWithGeckoTerminal(merged);
   return withMarket;
 }
