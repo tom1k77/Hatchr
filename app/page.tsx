@@ -211,7 +211,7 @@ export default function HomePage() {
   }, [sourceFilter, minVolume, search]);
 
   const filteredTokens = useMemo(() => {
-    return tokens.filter((t) => {
+    const list = tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
 
       if (minVolume > 0) {
@@ -230,6 +230,17 @@ export default function HomePage() {
       }
 
       return true;
+    });
+
+    // общий список всегда сортируем по времени (новые сверху)
+    return list.sort((a, b) => {
+      const ta = a.first_seen_at
+        ? new Date(a.first_seen_at).getTime()
+        : 0;
+      const tb = b.first_seen_at
+        ? new Date(b.first_seen_at).getTime()
+        : 0;
+      return tb - ta;
     });
   }, [tokens, sourceFilter, minVolume, search]);
 
