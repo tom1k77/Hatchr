@@ -2,26 +2,31 @@
 import { NextResponse } from "next/server";
 import { getTokens } from "@/lib/providers";
 
+export const runtime = "nodejs"; // важно: НЕ edge
+
 export async function GET() {
   try {
     const tokens = await getTokens();
 
     return NextResponse.json(
       {
+        ok: true,
         count: tokens.length,
         items: tokens,
       },
       {
         headers: {
-          // чтобы не кешировалось браузером
           "Cache-Control": "no-store",
         },
       }
     );
-  } catch (e) {
-    console.error("Tokens API error", e);
+  } catch (e: any) {
+    console.error("[API /tokens] Fatal error:", e?.message || e);
     return NextResponse.json(
-      { error: "Failed to load tokens" },
+      {
+        ok: false,
+        error: "Internal server error loading tokens",
+      },
       { status: 500 }
     );
   }
