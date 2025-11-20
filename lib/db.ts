@@ -1,25 +1,18 @@
 // lib/db.ts
 import { Pool } from "pg";
 
+// Берём строку подключения из разных вариантов, которые создаёт Vercel+Neon.
+// ВАЖНО: никаких throw new Error тут не делаем, чтобы билд не падал.
 const connectionString =
   process.env.DATABASE_URL ||
   process.env.POSTGRES_URL_NON_POOLING ||
   process.env.POSTGRES_URL ||
   "";
 
-if (!connectionString) {
-  // Не валим билд, просто предупреждаем.
-  console.warn(
-    "[db] DATABASE_URL / POSTGRES_URL_NON_POOLING не заданы. " +
-      "Рут /api/refresh-markets не сможет обновлять цифры."
-  );
-}
-
-// Если connectionString пустой — пул всё равно создадим, но
-// любые реальные запросы просто упадут в рантайме (что ок).
+// Один общий пул для всех запросов
 export const pool = new Pool({
-  connectionString: connectionString || undefined,
-  ssl: {
-    rejectUnauthorized: false,
-  },
+  connectionString,
+  max: 3,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
 });
