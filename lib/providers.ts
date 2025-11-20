@@ -163,7 +163,15 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     if (cursor) params.set("cursor", cursor);
 
     const url = `${CLANKER_API}?${params.toString()}`;
-    const raw: any = await fetchJson(url);
+
+    let raw: any;
+    try {
+      raw = await fetchJson(url);
+    } catch (e) {
+      console.error("[Clanker] fetch error, skip page:", url, e);
+      // если Clanker лежит — выходим из цикла и работаем с тем, что уже есть
+      break;
+    }
 
     const data: any[] = Array.isArray(raw?.data) ? raw.data : [];
     if (!data.length) break;
@@ -490,19 +498,32 @@ const TOKENS_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
 const TOKENS_MAX_COUNT = 200; // чтобы не было бесконечной простыни
 
 export async function getTokens(): Promise<TokenWithMarket[]> {
-  const now = Date.now();
+  let clanker: Token[] = [];
+  let zora: Token[] = [];
 
-  const [clanker, zora] = await Promise.all([
-    fetchTokensFromClanker(),
-    fetchTokensFromZora(),
-  ]);
+  try {
+    clanker = await fetchTokensFromClanker();
+  } catch (e) {
+    console.error("[Clanker] fatal error in getTokens()", e);
+  }
 
-  // склеиваем и убираем дубликаты по адресу
+  try {
+    zora = await fetchTokensFromZora();
+  } catch (e) {
+    console.error("[Zora] fatal error in getTokens()", e);
+  }
+
   const all: Token[] = [...clanker, ...zora];
+
   const byAddress = new Map<string, Token>();
   for (const t of all) {
     byAddress.set(t.token_address.toLowerCase(), t);
   }
+
+  const merged = Array.from(byAddress.values());
+  const withMarket = await enrichWithGeckoTerminal(merged);
+  return withMarket;
+}
 
   let merged = Array.from(byAddress.values());
 
