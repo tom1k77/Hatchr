@@ -166,6 +166,7 @@ export default function HomePage() {
   );
   const [minVolume, setMinVolume] = useState<number>(0);
   const [hideEmpty, setHideEmpty] = useState<boolean>(false);
+  const [hideZeroMarket, setHideZeroMarket] = useState<boolean>(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -257,6 +258,12 @@ export default function HomePage() {
         const vol = t.volume_24h_usd ?? 0;
         if (vol < minVolume) return false;
       }
+
+      if (hideZeroMarket) {
+  const hasCap = (t.market_cap_usd ?? 0) > 0;
+  const hasVol = (t.volume_24h_usd ?? 0) > 0;
+  if (!hasCap && !hasVol) return false;
+}
 
       if (search.trim()) {
         const s = search.trim().toLowerCase();
@@ -459,6 +466,23 @@ export default function HomePage() {
                   />
                   Hide empty
                 </label>
+                <label
+  className="hatchr-label"
+  style={{
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontSize: 12,
+  }}
+>
+  <input
+    type="checkbox"
+    checked={hideZeroMarket}
+    onChange={(e) => setHideZeroMarket(e.target.checked)}
+    style={{ margin: 0 }}
+  />
+  Hide 0 mcap/vol
+</label>
               </div>
 
               <div className="hatchr-filters-search">
