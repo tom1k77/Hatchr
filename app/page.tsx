@@ -16,6 +16,11 @@ type TokenItem = {
   volume_24h_usd: number | null;
 
   farcaster_url?: string | null;
+  x_url?: string | null;
+  telegram_url?: string | null;
+  website_url?: string | null;
+  instagram_url?: string | null;
+  tiktok_url?: string | null;
 };
 
 type TokensResponse = {
@@ -36,7 +41,6 @@ const LEFT_PAGE_SIZE = 10;
 const RIGHT_PAGE_SIZE = 7;
 
 // ---- форматирование чисел ----
-// важный момент: value === 0 -> "—", чтобы не показывать фейковые нули
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   if (value === 0) return "—";
@@ -100,6 +104,43 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+function extractXUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    return parts[0];
+  } catch {
+    return null;
+  }
+}
+
+function extractInstagramUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    return parts[0];
+  } catch {
+    return null;
+  }
+}
+
+function extractTiktokUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    const last = parts[parts.length - 1];
+    return last.startsWith("@") ? last.slice(1) : last;
+  } catch {
+    return null;
+  }
+}
+
 // fallback-аватар Farcaster: используем /public/farcaster-logo.png
 function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
   return (
@@ -123,7 +164,8 @@ export default function HomePage() {
   const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
     "all"
   );
-  const [minVolume, setMinVolume] = useState<number>(0); // фильтр по объёму
+  const [minVolume, setMinVolume] = useState<number>(0);
+  const [hideEmpty, setHideEmpty] = useState<boolean>(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -139,14 +181,12 @@ export default function HomePage() {
     null
   );
 
-  // сколько строк и карточек справа показываем
   const [visibleRows, setVisibleRows] = useState(LEFT_PAGE_SIZE);
   const [visibleFeed, setVisibleFeed] = useState(RIGHT_PAGE_SIZE);
 
-  // какой адрес только что скопировали (для галочки)
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-    // ---------- загрузка токенов + кэш цифр ----------
+  // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
     try {
       setIsLoading(true);
@@ -155,15 +195,14 @@ export default function HomePage() {
       const res = await fetch("/api/tokens", { cache: "no-store" });
       if (!res.ok) throw new Error(`Tokens API error: ${res.status}`);
 
-      const raw = await res.json();
-      const items: TokenItem[] = Array.isArray(raw?.items) ? raw.items : [];
+      const data: TokensResponse = await res.json();
 
       setTokens((prev) => {
         const prevMap = new Map(
           prev.map((t) => [t.token_address.toLowerCase(), t])
         );
 
-        const merged = items.map((t) => {
+        const merged = data.items.map((t) => {
           const key = t.token_address.toLowerCase();
           const old = prevMap.get(key);
 
@@ -193,11 +232,11 @@ export default function HomePage() {
     } catch (e) {
       console.error(e);
       setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
-      setTokens([]); // безопасный сброс
     } finally {
       setIsLoading(false);
     }
   }
+
   useEffect(() => {
     loadTokens();
     const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
@@ -208,10 +247,10 @@ export default function HomePage() {
   useEffect(() => {
     setVisibleRows(LEFT_PAGE_SIZE);
     setVisibleFeed(RIGHT_PAGE_SIZE);
-  }, [sourceFilter, minVolume, search]);
+  }, [sourceFilter, minVolume, hideEmpty, search]);
 
   const filteredTokens = useMemo(() => {
-    const list = tokens.filter((t) => {
+    return tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
 
       if (minVolume > 0) {
@@ -229,20 +268,23 @@ export default function HomePage() {
         }
       }
 
+      if (hideEmpty) {
+        const hasCap = (t.market_cap_usd ?? 0) > 0;
+        const hasVol = (t.volume_24h_usd ?? 0) > 0;
+        const hasSocial =
+          !!t.farcaster_url ||
+          !!t.x_url ||
+          !!t.instagram_url ||
+          !!t.tiktok_url ||
+          !!t.telegram_url ||
+          !!t.website_url;
+
+        if (!hasCap && !hasVol && !hasSocial) return false;
+      }
+
       return true;
     });
-
-    // общий список всегда сортируем по времени (новые сверху)
-    return list.sort((a, b) => {
-      const ta = a.first_seen_at
-        ? new Date(a.first_seen_at).getTime()
-        : 0;
-      const tb = b.first_seen_at
-        ? new Date(b.first_seen_at).getTime()
-        : 0;
-      return tb - ta;
-    });
-  }, [tokens, sourceFilter, minVolume, search]);
+  }, [tokens, sourceFilter, minVolume, hideEmpty, search]);
 
   const visibleTokens = useMemo(
     () => filteredTokens.slice(0, visibleRows),
@@ -251,25 +293,23 @@ export default function HomePage() {
 
   // все торгуемые токены для live feed
   const tradedTokensAll = useMemo(() => {
-  const nonZero = filteredTokens.filter(
-    (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
-  );
+    const nonZero = filteredTokens.filter(
+      (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
+    );
 
-  const sorted = [...nonZero].sort((a, b) => {
-    const volA = a.volume_24h_usd ?? 0;
-    const volB = b.volume_24h_usd ?? 0;
+    const sorted = [...nonZero].sort((a, b) => {
+      const volA = a.volume_24h_usd ?? 0;
+      const volB = b.volume_24h_usd ?? 0;
 
-    // сначала по объёму (по убыванию),
-    // если объём одинаковый — по времени создания (новее выше)
-    if (volB !== volA) return volB - volA;
+      if (volB !== volA) return volB - volA;
 
-    const timeA = new Date(a.first_seen_at || "").getTime();
-    const timeB = new Date(b.first_seen_at || "").getTime();
-    return timeB - timeA;
-  });
+      const timeA = new Date(a.first_seen_at || "").getTime();
+      const timeB = new Date(b.first_seen_at || "").getTime();
+      return timeB - timeA;
+    });
 
-  return sorted;
-}, [filteredTokens]);
+    return sorted;
+  }, [filteredTokens]);
 
   const tradedTokensVisible = useMemo(
     () => tradedTokensAll.slice(0, visibleFeed),
@@ -322,12 +362,10 @@ export default function HomePage() {
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
             <div className="hatchr-brand-logo-circle">
-              {/* логотип Hatchr в /public/hatchr-logo.png */}
               <img
                 src="/hatchr-logo.png"
                 alt="Hatchr"
                 onError={(e) => {
-                  // fallback — просто буква H, если логотип не найден
                   e.currentTarget.style.display = "none";
                   const parent = e.currentTarget.parentElement;
                   if (
@@ -392,6 +430,24 @@ export default function HomePage() {
                     className="hatchr-input-number"
                     style={{ width: 110 }}
                   />
+                </label>
+
+                <label
+                  className="hatchr-label"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={hideEmpty}
+                    onChange={(e) => setHideEmpty(e.target.checked)}
+                    style={{ margin: 0 }}
+                  />
+                  Hide empty
                 </label>
               </div>
 
@@ -490,6 +546,37 @@ export default function HomePage() {
                     );
                     const profile = username ? profiles[username] : undefined;
 
+                    const xUsername = extractXUsername(token.x_url || undefined);
+                    const igUsername = extractInstagramUsername(
+                      token.instagram_url || undefined
+                    );
+                    const ttUsername = extractTiktokUsername(
+                      token.tiktok_url || undefined
+                    );
+
+                    let secondarySocial:
+                      | { url: string; label: string }
+                      | null = null;
+
+                    if (!username) {
+                      if (token.x_url) {
+                        secondarySocial = {
+                          url: token.x_url,
+                          label: xUsername ? `@${xUsername}` : "X",
+                        };
+                      } else if (token.instagram_url) {
+                        secondarySocial = {
+                          url: token.instagram_url,
+                          label: igUsername ? `@${igUsername}` : "Instagram",
+                        };
+                      } else if (token.tiktok_url) {
+                        secondarySocial = {
+                          url: token.tiktok_url,
+                          label: ttUsername ? `@${ttUsername}` : "TikTok",
+                        };
+                      }
+                    }
+
                     const rowKey = `${token.source}-${token.token_address}`;
                     const isTooltipVisible = hoveredRowKey === rowKey;
                     const isRowHovered = hoveredTableRowKey === rowKey;
@@ -514,7 +601,7 @@ export default function HomePage() {
                         onMouseEnter={() => setHoveredTableRowKey(rowKey)}
                         onMouseLeave={() => setHoveredTableRowKey(null)}
                       >
-                        {/* Name — фиксированная ширина, несколько строк */}
+                        {/* Name */}
                         <td
                           style={{
                             padding: "8px 10px",
@@ -541,7 +628,7 @@ export default function HomePage() {
                                 wordBreak: "break-word",
                                 whiteSpace: "normal",
                                 lineHeight: 1.25,
-                                maxHeight: "3.6em", // ~3 строки
+                                maxHeight: "3.6em",
                               }}
                             >
                               {token.name || token.symbol || "—"}
@@ -557,7 +644,7 @@ export default function HomePage() {
                                   justifyContent: "center",
                                   padding: "2px 8px",
                                   borderRadius: 999,
-                                  backgroundColor: "#0052ff", // Base blue
+                                  backgroundColor: "#0052ff",
                                   color: "#ffffff",
                                   letterSpacing: 0.5,
                                   maxWidth: 90,
@@ -806,6 +893,35 @@ export default function HomePage() {
                                 </div>
                               )}
                             </div>
+                          ) : secondarySocial ? (
+                            <a
+                              href={secondarySocial.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                padding: "4px 11px",
+                                borderRadius: 999,
+                                backgroundColor: "#f3f4f6",
+                                color: "#111827",
+                                textDecoration: "none",
+                                fontSize: 12,
+                                maxWidth: 150,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  maxWidth: 110,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {secondarySocial.label}
+                              </span>
+                            </a>
                           ) : (
                             "—"
                           )}
