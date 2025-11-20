@@ -1,8 +1,10 @@
 // lib/markets.ts
+
 import { pool } from "./db";
 import type { Token } from "./providers";
 
-// небольший тип для цифр
+// -------- Тип данных --------
+
 export interface MarketRow {
   token_address: string;
   price_usd: number | null;
@@ -12,7 +14,15 @@ export interface MarketRow {
   updated_at: string;
 }
 
-// 1) достаём цифры для списка адресов
+// -------- Утилита --------
+
+function toNum(x: any): number | null {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
+
+// -------- Получение цифр из таблицы --------
+
 export async function getMarketsForAddresses(
   addresses: string[]
 ): Promise<Map<string, MarketRow>> {
@@ -28,14 +38,16 @@ export async function getMarketsForAddresses(
   );
 
   const map = new Map<string, MarketRow>();
+
   for (const r of rows) {
     map.set(r.token_address.toLowerCase(), {
       token_address: r.token_address.toLowerCase(),
       price_usd: r.price_usd !== null ? Number(r.price_usd) : null,
       market_cap_usd: r.market_cap_usd !== null ? Number(r.market_cap_usd) : null,
       liquidity_usd: r.liquidity_usd !== null ? Number(r.liquidity_usd) : null,
-      volume_24h_usd: r.volume_24h_usd !== null ? Number(r.volume_24h_usd) : null,
-      updated_at: r.updated_at.toISOString
+      volume_24h_usd:
+        r.volume_24h_usd !== null ? Number(r.volume_24h_usd) : null,
+      updated_at: r.updated_at?.toISOString
         ? r.updated_at.toISOString()
         : String(r.updated_at),
     });
@@ -44,14 +56,12 @@ export async function getMarketsForAddresses(
   return map;
 }
 
-// lib/markets.ts (продолжение)
+// =========================================================
+// ===============  GeckoTerminal fetch  ===================
+// =========================================================
+
 const GECKO_BASE_TOKENS =
   "https://api.geckoterminal.com/api/v2/networks/base/tokens";
-
-function toNum(x: any): number | null {
-  const n = Number(x);
-  return Number.isFinite(n) ? n : null;
-}
 
 async function fetchMarketForToken(token: Token) {
   let price: number | null = null;
@@ -87,7 +97,9 @@ async function fetchMarketForToken(token: Token) {
       );
     }
 
-    // fallback для Zora — берём их цифры, если Gecko ничего не знает
+    // -----------------------
+    // Fallback для Zora
+    // -----------------------
     if (token.source === "zora") {
       if (price == null || price === 0) {
         price = toNum((token as any).zora_price_usd);
@@ -106,14 +118,18 @@ async function fetchMarketForToken(token: Token) {
   return { price, marketCap, liquidity, volume24 };
 }
 
-// батч-апдейт
+// =========================================================
+// ===============  Массовое обновление БД  ================
+// =========================================================
+
 export async function updateMarketsForTokens(tokens: Token[]) {
   if (!tokens.length) return;
 
-  // можно ограничить, чтобы не упираться в лимиты Gecko
-  const CHUNK = 20;
+  // Чтобы не убивать Gecko — обновляем батчами
+  const CHUNK = 18;
+
   for (let i = 0; i < tokens.length; i += CHUNK) {
-    const slice = tokens.slice(i, i + CHUNK);
+    const batch = tokens.slice(i, i + CHUNK);
 
     const rows: {
       token_address: string;
@@ -123,7 +139,7 @@ export async function updateMarketsForTokens(tokens: Token[]) {
       volume_24h_usd: number | null;
     }[] = [];
 
-    for (const t of slice) {
+    for (const t of batch) {
       const m = await fetchMarketForToken(t);
       rows.push({
         token_address: t.token_address.toLowerCase(),
@@ -136,6 +152,7 @@ export async function updateMarketsForTokens(tokens: Token[]) {
 
     const client = await pool.connect();
     try {
+      // ---- SQL вставка батчем ----
       const valuesSql = rows
         .map(
           (_, idx) =>
@@ -165,7 +182,7 @@ export async function updateMarketsForTokens(tokens: Token[]) {
           liquidity_usd = EXCLUDED.liquidity_usd,
           volume_24h_usd = EXCLUDED.volume_24h_usd,
           updated_at = now()
-        `,
+      `,
         values
       );
     } finally {
