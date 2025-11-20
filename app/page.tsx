@@ -249,8 +249,8 @@ export default function HomePage() {
     setVisibleFeed(RIGHT_PAGE_SIZE);
   }, [sourceFilter, minVolume, hideEmpty, search]);
 
-  const filteredTokens = useMemo(() => {
-    return tokens.filter((t) => {
+    const filteredTokens = useMemo(() => {
+    const base = tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
 
       if (minVolume > 0) {
@@ -284,6 +284,16 @@ export default function HomePage() {
 
       return true;
     });
+
+    // 🔥 ВАЖНО: сортируем по времени (новые сверху),
+    // чтобы Zora и Clanker были в одном хронологическом списке
+    const sorted = [...base].sort((a, b) => {
+      const ta = new Date(a.first_seen_at || 0).getTime();
+      const tb = new Date(b.first_seen_at || 0).getTime();
+      return tb - ta; // новее выше
+    });
+
+    return sorted;
   }, [tokens, sourceFilter, minVolume, hideEmpty, search]);
 
   const visibleTokens = useMemo(
