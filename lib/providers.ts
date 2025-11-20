@@ -10,8 +10,8 @@ export interface Token {
   source_url?: string;
   first_seen_at?: string;
 
-  // socials
-  farcaster_url?: string;
+  // socials (ТОКЕНА)
+  farcaster_url?: string; // ТОЛЬКО создатель, а не то, что вписали в метадату
   website_url?: string;
   x_url?: string;
   telegram_url?: string;
@@ -109,7 +109,7 @@ async function fetchJsonZora(path: string, params: Record<string, string>) {
   }
 }
 
-// Рекурсивно собираем все URL из объекта (метадата, creator и т.д.)
+// Рекурсивно собираем все URL из объекта (метадата и т.д.)
 function collectUrls(obj: any, depth = 0, acc: string[] = []): string[] {
   if (!obj || depth > 6) return acc;
 
@@ -186,6 +186,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
+      // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
       let fid: number | string | undefined;
       if (Array.isArray(t.fids) && t.fids.length > 0) {
         fid = t.fids[0];
@@ -193,19 +194,10 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         fid = t.fid;
       }
 
-      const urlsMeta = collectUrls(meta);
-      const urlsCreator = collectUrls(creator);
-      const allUrls = [...urlsMeta, ...urlsCreator];
-
-      let farcasterUrl =
-        allUrls.find((u) =>
-          u.toLowerCase().includes("farcaster.xyz")
-        ) || undefined;
-
       const rawUsername =
+        creator.fname ||
         creator.username ||
         creator.handle ||
-        creator.fname ||
         creator.name ||
         "";
 
@@ -214,11 +206,70 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
           ? rawUsername.replace(/^@/, "").trim()
           : "";
 
-      if (!farcasterUrl) {
-        if (username) {
-          farcasterUrl = `https://farcaster.xyz/${username}`;
-        } else if (typeof fid !== "undefined") {
-          farcasterUrl = `https://farcaster.xyz/profiles/${fid}`;
+      let farcasterUrl: string | undefined;
+
+      if (username) {
+        // создатель по хендлу
+        farcasterUrl = `https://farcaster.xyz/${username}`;
+      } else if (typeof fid !== "undefined") {
+        // создатель по fid
+        farcasterUrl = `https://farcaster.xyz/profiles/${fid}`;
+      }
+
+      // --- 2. Соцсети токена ТОЛЬКО из metadata (то, что создатель вписал вручную) ---
+      const urlsMeta = collectUrls(meta);
+
+      let website_url: string | undefined;
+      let x_url: string | undefined;
+      let telegram_url: string | undefined;
+      let instagram_url: string | undefined;
+      let tiktok_url: string | undefined;
+
+      for (const u of urlsMeta) {
+        try {
+          const parsed = new URL(u);
+          const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+
+          // Farcaster-ссылки в метадате игнорируем (чтобы не подменяли создателя)
+          if (
+            host === "warpcast.com" ||
+            host.endsWith("farcaster.xyz") ||
+            host === "farcaster.xyz"
+          ) {
+            continue;
+          }
+
+          if (!x_url && (host === "x.com" || host === "twitter.com")) {
+            x_url = u;
+            continue;
+          }
+
+          if (
+            !telegram_url &&
+            (host === "t.me" ||
+              host === "telegram.me" ||
+              host === "telegram.org")
+          ) {
+            telegram_url = u;
+            continue;
+          }
+
+          if (!instagram_url && host === "instagram.com") {
+            instagram_url = u;
+            continue;
+          }
+
+          if (!tiktok_url && host === "tiktok.com") {
+            tiktok_url = u;
+            continue;
+          }
+
+          // всё остальное — в website, если его ещё нет
+          if (!website_url) {
+            website_url = u;
+          }
+        } catch {
+          // если URL кривой — просто скипаем
         }
       }
 
@@ -232,7 +283,12 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         source: "clanker",
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
         first_seen_at: firstSeen,
-        farcaster_url: farcasterUrl,
+        farcaster_url: farcasterUrl, // ТОЛЬКО creator
+        website_url,
+        x_url,
+        telegram_url,
+        instagram_url,
+        tiktok_url,
       };
 
       if (isBlockedCreator(token.farcaster_url)) return null;
