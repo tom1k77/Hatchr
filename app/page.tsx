@@ -246,9 +246,9 @@ export default function HomePage() {
 
   // при смене фильтров — сбрасываем пагинацию
   useEffect(() => {
-    setVisibleRows(LEFT_PAGE_SIZE);
-    setVisibleFeed(RIGHT_PAGE_SIZE);
-  }, [sourceFilter, minVolume, hideEmpty, search]);
+  setVisibleRows(LEFT_PAGE_SIZE);
+  setVisibleFeed(RIGHT_PAGE_SIZE);
+}, [sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
     const filteredTokens = useMemo(() => {
     const base = tokens.filter((t) => {
