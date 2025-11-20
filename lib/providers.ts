@@ -470,9 +470,12 @@ export async function enrichWithGeckoTerminal(
 
   for (const t of tokens) {
     try {
-      const res = await fetch(`${GECKO_BASE_TOKENS}/${t.token_address}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `https://api.geckoterminal.com/api/v2/networks/base/tokens/${t.token_address}`,
+        {
+          cache: "no-store",
+        }
+      );
 
       let price: number | null = null;
       let marketCap: number | null = null;
@@ -533,29 +536,14 @@ export async function enrichWithGeckoTerminal(
 
 // ======================= Агрегатор =======================
 
-import { getMarketsForAddresses } from "./markets";
-
-const TOKENS_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
-const TOKENS_MAX_COUNT = 200; // чтобы не было бесконечной простыни
-
 export async function getTokens(): Promise<TokenWithMarket[]> {
-  let clanker: Token[] = [];
-  let zora: Token[] = [];
+  const [clanker, zora] = await Promise.all([
+    fetchTokensFromClanker(),
+    fetchTokensFromZora(),
+  ]);
 
-  try {
-    clanker = await fetchTokensFromClanker();
-  } catch (e) {
-    console.error("[Clanker] fatal error in getTokens()", e);
-  }
-
-  try {
-    zora = await fetchTokensFromZora();
-  } catch (e) {
-    console.error("[Zora] fatal error in getTokens()", e);
-  }
-
+  // склеиваем и убираем дубликаты по адресу
   const all: Token[] = [...clanker, ...zora];
-
   const byAddress = new Map<string, Token>();
   for (const t of all) {
     byAddress.set(t.token_address.toLowerCase(), t);
@@ -563,45 +551,5 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
 
   const merged = Array.from(byAddress.values());
   const withMarket = await enrichWithGeckoTerminal(merged);
-  return withMarket;
-}
-
-  let merged = Array.from(byAddress.values());
-
-  // фильтр по окну времени (ещё раз, на всякий случай)
-  merged = merged.filter((t) => {
-    if (!t.first_seen_at) return true;
-    const ts = new Date(t.first_seen_at).getTime();
-    if (!ts || Number.isNaN(ts)) return false;
-    return now - ts <= TOKENS_WINDOW_MS;
-  });
-
-  // сортируем по времени (новые сверху)
-  merged.sort((a, b) => {
-    const ta = new Date(a.first_seen_at || 0).getTime();
-    const tb = new Date(b.first_seen_at || 0).getTime();
-    return tb - ta;
-  });
-
-  // режем по количеству, чтобы на Hatchr не было километрового списка
-  merged = merged.slice(0, TOKENS_MAX_COUNT);
-
-  // подмешиваем market-цифры из БД
-  const addresses = merged.map((t) => t.token_address.toLowerCase());
-  const markets = await getMarketsForAddresses(addresses);
-
-  const withMarket: TokenWithMarket[] = merged.map((t) => {
-    const m = markets.get(t.token_address.toLowerCase());
-    if (!m) return { ...t };
-
-    return {
-      ...t,
-      price_usd: m.price_usd,
-      market_cap_usd: m.market_cap_usd,
-      liquidity_usd: m.liquidity_usd,
-      volume_24h_usd: m.volume_24h_usd,
-    };
-  });
-
   return withMarket;
 }
