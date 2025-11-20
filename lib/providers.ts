@@ -313,7 +313,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
-// ======================= ZORA (3 часа, NEW_CREATORS) =======================
+// ======================= ZORA (3 часа, NEW_CREATORS, с пагинацией) =======================
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
@@ -326,19 +326,62 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
     return [];
   }
 
-  // Берём список НОВЫХ creator coins
-  const json = await fetchJsonZora("/explore", {
-    listType: "NEW_CREATORS",
-    count: "100",
-  });
+  const PAGE_SIZE = 50;  // пытаемся брать по 50 за страницу
+  const MAX_PAGES = 5;   // максимум 5 страниц за один запрос
 
-  const edges: any[] = Array.isArray(json?.exploreList?.edges)
-    ? json.exploreList.edges
-    : [];
+  let cursor: string | undefined = undefined;
+  const allEdges: any[] = [];
 
-  if (!edges.length) return [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params: Record<string, string> = {
+      listType: "NEW_CREATORS",
+      count: String(PAGE_SIZE),
+    };
+    if (cursor) {
+      params.cursor = cursor;
+    }
 
-  const tokens: Token[] = edges
+    const json = await fetchJsonZora("/explore", params);
+    if (!json) break;
+
+    const edges: any[] = Array.isArray(json?.exploreList?.edges)
+      ? json.exploreList.edges
+      : [];
+
+    if (!edges.length) break;
+
+    allEdges.push(...edges);
+
+    // смотрим самый старый токен на странице —
+    // если он уже старше 3х часов, дальше нет смысла листать
+    const lastNode = edges[edges.length - 1]?.node;
+    const createdRaw = lastNode?.createdAt;
+    if (typeof createdRaw === "string" && createdRaw) {
+      const normalized =
+        createdRaw.endsWith("Z") || createdRaw.endsWith("z")
+          ? createdRaw
+          : createdRaw + "Z";
+      const ts = new Date(normalized).getTime();
+      if (!Number.isNaN(ts) && now - ts > WINDOW_MS) {
+        break;
+      }
+    }
+
+    // пробуем вытащить курсор следующей страницы
+    const pageInfo = json?.exploreList?.pageInfo || {};
+    const nextCursor =
+      pageInfo.nextCursor ||
+      pageInfo.endCursor ||
+      pageInfo.cursor ||
+      json?.nextCursor ||
+      json?.cursor;
+
+    if (!nextCursor) break;
+    cursor = String(nextCursor);
+  }
+
+  // маппинг edges -> Token (то же, что у тебя было, только по allEdges)
+  const tokens: Token[] = (allEdges
     .map((edge: any) => {
       const n = edge?.node;
       if (!n) return null;
@@ -351,7 +394,6 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const name = (n.name || "").toString();
       const symbol = (n.symbol || "").toString();
 
-      // createdAt приходит без "Z", это UTC — нормализуем
       const createdRaw = n.createdAt ?? null;
       let createdIso: string | undefined;
       if (typeof createdRaw === "string" && createdRaw) {
@@ -365,12 +407,10 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         }
       }
 
-      // цифры с Zora (строки -> числа)
       const marketCapNum = toNum(n.marketCap);
       const volume24Num = toNum(n.volume24h);
       const priceUsdcNum = toNum(n.tokenPrice?.priceInUsdc);
 
-      // Соцсети из creatorProfile.socialAccounts
       const social = n.creatorProfile?.socialAccounts ?? {};
       let farcaster_url: string | undefined;
       let x_url: string | undefined;
@@ -410,14 +450,15 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       return token;
     })
-    .filter(Boolean) as Token[];
+    .filter(Boolean) as Token[])
+    // финальный фильтр по окну в 3 часа
+    .filter((t) => {
+      if (!t.first_seen_at) return true;
+      const ts = new Date(t.first_seen_at).getTime();
+      return now - ts <= WINDOW_MS;
+    });
 
-  // фильтр по 3 часам
-  return tokens.filter((t) => {
-    if (!t.first_seen_at) return true;
-    const ts = new Date(t.first_seen_at).getTime();
-    return now - ts <= WINDOW_MS;
-  });
+  return tokens;
 }
 
 // ======================= GeckoTerminal =======================
