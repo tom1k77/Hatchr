@@ -1,9 +1,5 @@
 // lib/markets.ts
-
 import { pool } from "./db";
-import type { Token } from "./providers";
-
-// -------- Тип данных --------
 
 export interface MarketRow {
   token_address: string;
@@ -13,15 +9,6 @@ export interface MarketRow {
   volume_24h_usd: number | null;
   updated_at: string;
 }
-
-// -------- Утилита --------
-
-function toNum(x: any): number | null {
-  const n = Number(x);
-  return Number.isFinite(n) ? n : null;
-}
-
-// -------- Получение цифр из таблицы --------
 
 export async function getMarketsForAddresses(
   addresses: string[]
@@ -38,155 +25,36 @@ export async function getMarketsForAddresses(
   );
 
   const map = new Map<string, MarketRow>();
-
   for (const r of rows) {
     map.set(r.token_address.toLowerCase(), {
       token_address: r.token_address.toLowerCase(),
       price_usd: r.price_usd !== null ? Number(r.price_usd) : null,
       market_cap_usd: r.market_cap_usd !== null ? Number(r.market_cap_usd) : null,
       liquidity_usd: r.liquidity_usd !== null ? Number(r.liquidity_usd) : null,
-      volume_24h_usd:
-        r.volume_24h_usd !== null ? Number(r.volume_24h_usd) : null,
-      updated_at: r.updated_at?.toISOString
-        ? r.updated_at.toISOString()
-        : String(r.updated_at),
+      volume_24h_usd: r.volume_24h_usd !== null ? Number(r.volume_24h_usd) : null,
+      updated_at: r.updated_at,
     });
   }
-
   return map;
 }
 
-// =========================================================
-// ===============  GeckoTerminal fetch  ===================
-// =========================================================
-
-const GECKO_BASE_TOKENS =
-  "https://api.geckoterminal.com/api/v2/networks/base/tokens";
-
-async function fetchMarketForToken(token: Token) {
-  let price: number | null = null;
-  let marketCap: number | null = null;
-  let liquidity: number | null = null;
-  let volume24: number | null = null;
-
-  try {
-    const res = await fetch(`${GECKO_BASE_TOKENS}/${token.token_address}`, {
-      cache: "no-store",
-    });
-
-    if (res.ok) {
-      const data: any = await res.json();
-      const attr = data?.data?.attributes || {};
-
-      price = toNum(attr.price_usd);
-
-      marketCap = toNum(
-        attr.market_cap_usd ??
-          attr.fully_diluted_valuation_usd ??
-          attr.fully_diluted_valuation ??
-          attr.fdv_usd
-      );
-
-      liquidity = toNum(attr.liquidity_usd ?? attr.reserve_in_usd);
-
-      volume24 = toNum(
-        attr.volume_usd?.h24 ??
-          attr.trade_volume_24h_usd ??
-          attr.trade_volume_24h ??
-          attr.volume_24h_usd
-      );
-    }
-
-    // -----------------------
-    // Fallback для Zora
-    // -----------------------
-    if (token.source === "zora") {
-      if (price == null || price === 0) {
-        price = toNum((token as any).zora_price_usd);
-      }
-      if (marketCap == null || marketCap === 0) {
-        marketCap = toNum((token as any).zora_market_cap_usd);
-      }
-      if (volume24 == null || volume24 === 0) {
-        volume24 = toNum((token as any).zora_volume_24h_usd);
-      }
-    }
-  } catch (e) {
-    console.error("[markets] fetchMarketForToken error", token.token_address, e);
-  }
-
-  return { price, marketCap, liquidity, volume24 };
-}
-
-// =========================================================
-// ===============  Массовое обновление БД  ================
-// =========================================================
-
-export async function updateMarketsForTokens(tokens: Token[]) {
-  if (!tokens.length) return;
-
-  // Чтобы не убивать Gecko — обновляем батчами
-  const CHUNK = 18;
-
-  for (let i = 0; i < tokens.length; i += CHUNK) {
-    const batch = tokens.slice(i, i + CHUNK);
-
-    const rows: {
-      token_address: string;
-      price_usd: number | null;
-      market_cap_usd: number | null;
-      liquidity_usd: number | null;
-      volume_24h_usd: number | null;
-    }[] = [];
-
-    for (const t of batch) {
-      const m = await fetchMarketForToken(t);
-      rows.push({
-        token_address: t.token_address.toLowerCase(),
-        price_usd: m.price,
-        market_cap_usd: m.marketCap,
-        liquidity_usd: m.liquidity,
-        volume_24h_usd: m.volume24,
-      });
-    }
-
-    const client = await pool.connect();
-    try {
-      // ---- SQL вставка батчем ----
-      const valuesSql = rows
-        .map(
-          (_, idx) =>
-            `($${idx * 5 + 1}, $${idx * 5 + 2}, $${idx * 5 + 3}, $${idx * 5 + 4}, $${idx * 5 + 5})`
-        )
-        .join(",");
-
-      const values: any[] = [];
-      for (const r of rows) {
-        values.push(
-          r.token_address,
-          r.price_usd,
-          r.market_cap_usd,
-          r.liquidity_usd,
-          r.volume_24h_usd
-        );
-      }
-
-      await client.query(
-        `
-        INSERT INTO markets (token_address, price_usd, market_cap_usd, liquidity_usd, volume_24h_usd, updated_at)
-        VALUES ${valuesSql}
-        ON CONFLICT (token_address)
-        DO UPDATE SET
-          price_usd = EXCLUDED.price_usd,
-          market_cap_usd = EXCLUDED.market_cap_usd,
-          liquidity_usd = EXCLUDED.liquidity_usd,
-          volume_24h_usd = EXCLUDED.volume_24h_usd,
-          updated_at = now()
-      `,
-        values
-      );
-    } finally {
-      client.release();
-    }
-  }
+export async function upsertMarketRow(row: MarketRow) {
+  await pool.query(
+    `INSERT INTO markets (token_address, price_usd, market_cap_usd, liquidity_usd, volume_24h_usd)
+     VALUES ($1,$2,$3,$4,$5)
+     ON CONFLICT (token_address)
+     DO UPDATE SET
+       price_usd = EXCLUDED.price_usd,
+       market_cap_usd = EXCLUDED.market_cap_usd,
+       liquidity_usd = EXCLUDED.liquidity_usd,
+       volume_24h_usd = EXCLUDED.volume_24h_usd,
+       updated_at = NOW()`,
+    [
+      row.token_address.toLowerCase(),
+      row.price_usd,
+      row.market_cap_usd,
+      row.liquidity_usd,
+      row.volume_24h_usd,
+    ]
+  );
 }
