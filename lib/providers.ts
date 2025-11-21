@@ -313,39 +313,34 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
-// ======================= ZORA (3 часа, NEW_CREATORS, с пагинацией) =======================
+// ======================= ZORA (3 часа, NEW_CREATORS) =======================
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
-  const PAGES = 8; // грузим 8*40 = 320 токенов
-  const all: Token[] = [];
+  const now = Date.now();
+  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
 
-  for (let i = 0; i < PAGES; i++) {
-    const url = `https://api.zora.co/v3/...&limit=40&offset=${i * 40}`;
-    const res = await fetch(url);
-    const json = await res.json();
-    all.push(...json.items);
+  if (!ZORA_API_KEY) {
+    console.error(
+      "[Zora] ZORA_API_KEY is not set, skipping Zora tokens entirely."
+    );
+    return [];
   }
 
-  return all;
-}
-
-  const PAGE_SIZE = 50;  // пытаемся брать по 50 за страницу
-  const MAX_PAGES = 5;   // максимум 5 страниц за один запрос
-
+  const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
-  const allEdges: any[] = [];
+  const PAGE_SIZE = 50; // сколько токенов просим за один запрос
+  const MAX_PAGES = 10; // защита от бесконечного цикла
 
-  for (let page = 0; page < MAX_PAGES; page++) {
+  for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
       listType: "NEW_CREATORS",
       count: String(PAGE_SIZE),
     };
     if (cursor) {
-      params.cursor = cursor;
+      params.after = cursor;
     }
 
     const json = await fetchJsonZora("/explore", params);
-    if (!json) break;
 
     const edges: any[] = Array.isArray(json?.exploreList?.edges)
       ? json.exploreList.edges
@@ -353,50 +348,19 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
     if (!edges.length) break;
 
-    allEdges.push(...edges);
-
-    // смотрим самый старый токен на странице —
-    // если он уже старше 3х часов, дальше нет смысла листать
-    const lastNode = edges[edges.length - 1]?.node;
-    const createdRaw = lastNode?.createdAt;
-    if (typeof createdRaw === "string" && createdRaw) {
-      const normalized =
-        createdRaw.endsWith("Z") || createdRaw.endsWith("z")
-          ? createdRaw
-          : createdRaw + "Z";
-      const ts = new Date(normalized).getTime();
-      if (!Number.isNaN(ts) && now - ts > WINDOW_MS) {
-        break;
-      }
-    }
-
-    // пробуем вытащить курсор следующей страницы
-    const pageInfo = json?.exploreList?.pageInfo || {};
-    const nextCursor =
-      pageInfo.nextCursor ||
-      pageInfo.endCursor ||
-      pageInfo.cursor ||
-      json?.nextCursor ||
-      json?.cursor;
-
-    if (!nextCursor) break;
-    cursor = String(nextCursor);
-  }
-
-  // маппинг edges -> Token (то же, что у тебя было, только по allEdges)
-  const tokens: Token[] = (allEdges
-    .map((edge: any) => {
+    for (const edge of edges) {
       const n = edge?.node;
-      if (!n) return null;
+      if (!n) continue;
 
-      if (n.chainId && n.chainId !== 8453) return null;
+      if (n.chainId && n.chainId !== 8453) continue;
 
       const addr = (n.address || "").toString().toLowerCase();
-      if (!addr) return null;
+      if (!addr) continue;
 
       const name = (n.name || "").toString();
       const symbol = (n.symbol || "").toString();
 
+      // createdAt приходит без "Z", это UTC — нормализуем
       const createdRaw = n.createdAt ?? null;
       let createdIso: string | undefined;
       if (typeof createdRaw === "string" && createdRaw) {
@@ -410,10 +374,12 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         }
       }
 
+      // цифры с Zora
       const marketCapNum = toNum(n.marketCap);
       const volume24Num = toNum(n.volume24h);
       const priceUsdcNum = toNum(n.tokenPrice?.priceInUsdc);
 
+      // Соцсети из creatorProfile.socialAccounts
       const social = n.creatorProfile?.socialAccounts ?? {};
       let farcaster_url: string | undefined;
       let x_url: string | undefined;
@@ -435,7 +401,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
 
-      const token: Token = {
+      tokens.push({
         token_address: addr,
         name,
         symbol,
@@ -449,19 +415,28 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         zora_price_usd: priceUsdcNum,
         zora_market_cap_usd: marketCapNum,
         zora_volume_24h_usd: volume24Num,
-      };
+      });
+    }
 
-      return token;
-    })
-    .filter(Boolean) as Token[])
-    // финальный фильтр по окну в 3 часа
-    .filter((t) => {
-      if (!t.first_seen_at) return true;
-      const ts = new Date(t.first_seen_at).getTime();
-      return now - ts <= WINDOW_MS;
-    });
+    // берём курсор для следующей страницы
+    cursor = json?.exploreList?.pageInfo?.endCursor;
+    const hasNextPage = Boolean(json?.exploreList?.pageInfo?.hasNextPage);
+    if (!hasNextPage) break;
 
-  return tokens;
+    // если последние токены уже старше нашего окна 3 часа — выходим
+    const last = tokens[tokens.length - 1];
+    if (last?.first_seen_at) {
+      const ts = new Date(last.first_seen_at).getTime();
+      if (now - ts > WINDOW_MS) break;
+    }
+  }
+
+  // фильтр по 3 часам
+  return tokens.filter((t) => {
+    if (!t.first_seen_at) return true;
+    const ts = new Date(t.first_seen_at).getTime();
+    return now - ts <= WINDOW_MS;
+  });
 }
 
 // ======================= GeckoTerminal =======================
