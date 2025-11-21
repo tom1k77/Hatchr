@@ -68,7 +68,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
 .hatchr-brand-logo-circle img {
@@ -318,5 +317,52 @@ body {
 
   .hatchr-feed {
     margin-top: 12px;
+  }
+}
+
+/* =============== Mobile layout =============== */
+
+/* Таблица должна уметь скроллиться по горизонтали */
+.hatchr-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Минимальная ширина таблицы, чтобы колонки не схлопывались */
+.hatchr-table {
+  min-width: 720px;  /* можно 680–760 по вкусу */
+}
+
+/* На маленьких экранах делаем layout в одну колонку: таблица сверху, feed снизу */
+@media (max-width: 900px) {
+  .hatchr-shell {
+    padding: 12px;
+  }
+
+  .hatchr-main-grid {
+    display: block;
+  }
+
+  .hatchr-feed {
+    margin-top: 16px;
+  }
+
+  /* Фильтры в две строки */
+  .hatchr-filters {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hatchr-filters-left {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .hatchr-filters-search {
+    width: 100%;
+  }
+
+  .hatchr-search {
+    width: 100%;
   }
 }
