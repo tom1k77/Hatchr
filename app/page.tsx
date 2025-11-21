@@ -246,11 +246,11 @@ export default function HomePage() {
 
   // при смене фильтров — сбрасываем пагинацию
   useEffect(() => {
-  setVisibleRows(LEFT_PAGE_SIZE);
-  setVisibleFeed(RIGHT_PAGE_SIZE);
-}, [sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
+    setVisibleRows(LEFT_PAGE_SIZE);
+    setVisibleFeed(RIGHT_PAGE_SIZE);
+  }, [sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
-    const filteredTokens = useMemo(() => {
+  const filteredTokens = useMemo(() => {
     const base = tokens.filter((t) => {
       if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
 
@@ -260,10 +260,11 @@ export default function HomePage() {
       }
 
       if (hideZeroMarket) {
-  const hasCap = (t.market_cap_usd ?? 0) > 0;
-  const hasVol = (t.volume_24h_usd ?? 0) > 0;
-  if (!hasCap && !hasVol) return false;
-}
+        const hasCap = (t.market_cap_usd ?? 0) > 0;
+        const hasVol = (t.volume_24h_usd ?? 0) > 0;
+        // скрываем, если И капа, и объем = 0 / null
+        if (!hasCap && !hasVol) return false;
+      }
 
       if (search.trim()) {
         const s = search.trim().toLowerCase();
@@ -292,8 +293,7 @@ export default function HomePage() {
       return true;
     });
 
-    // 🔥 ВАЖНО: сортируем по времени (новые сверху),
-    // чтобы Zora и Clanker были в одном хронологическом списке
+    // сортируем по времени (новые сверху),
     const sorted = [...base].sort((a, b) => {
       const ta = new Date(a.first_seen_at || 0).getTime();
       const tb = new Date(b.first_seen_at || 0).getTime();
@@ -301,7 +301,7 @@ export default function HomePage() {
     });
 
     return sorted;
-  }, [tokens, sourceFilter, minVolume, hideEmpty, search]);
+  }, [tokens, sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
   const visibleTokens = useMemo(
     () => filteredTokens.slice(0, visibleRows),
@@ -466,23 +466,24 @@ export default function HomePage() {
                   />
                   Hide empty
                 </label>
+
                 <label
-  className="hatchr-label"
-  style={{
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
-  }}
->
-  <input
-    type="checkbox"
-    checked={hideZeroMarket}
-    onChange={(e) => setHideZeroMarket(e.target.checked)}
-    style={{ margin: 0 }}
-  />
-  Hide 0 mcap/vol
-</label>
+                  className="hatchr-label"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={hideZeroMarket}
+                    onChange={(e) => setHideZeroMarket(e.target.checked)}
+                    style={{ margin: 0 }}
+                  />
+                  Hide 0 mcap/vol
+                </label>
               </div>
 
               <div className="hatchr-filters-search">
