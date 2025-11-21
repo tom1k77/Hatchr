@@ -316,15 +316,18 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 // ======================= ZORA (3 часа, NEW_CREATORS, с пагинацией) =======================
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
-  const now = Date.now();
-  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
+  const PAGES = 8; // грузим 8*40 = 320 токенов
+  const all: Token[] = [];
 
-  if (!ZORA_API_KEY) {
-    console.error(
-      "[Zora] ZORA_API_KEY is not set, skipping Zora tokens entirely."
-    );
-    return [];
+  for (let i = 0; i < PAGES; i++) {
+    const url = `https://api.zora.co/v3/...&limit=40&offset=${i * 40}`;
+    const res = await fetch(url);
+    const json = await res.json();
+    all.push(...json.items);
   }
+
+  return all;
+}
 
   const PAGE_SIZE = 50;  // пытаемся брать по 50 за страницу
   const MAX_PAGES = 5;   // максимум 5 страниц за один запрос
