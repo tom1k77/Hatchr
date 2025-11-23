@@ -505,6 +505,80 @@ export default function HomePage() {
 
             {error && <div className="hatchr-error">{error}</div>}
 
+            {/* Mobile cards (shown only <768px via CSS) */}
+<div className="token-card-list">
+  {visibleTokens.length === 0 ? (
+    <div className="hatchr-table-empty">
+      {isLoading
+        ? "Loading Base mints…"
+        : "Nothing here yet. Try again in a minute."}
+    </div>
+  ) : (
+    visibleTokens.map((token) => {
+      const { time, date } = formatCreated(token.first_seen_at);
+      const symbol = token.symbol || "";
+      const name = token.name || symbol || "New token";
+      const username = extractFarcasterUsername(
+        token.farcaster_url || undefined
+      );
+      const mcap = formatNumber(token.market_cap_usd);
+      const vol = formatNumber(token.volume_24h_usd);
+
+      const firstLetter =
+        (symbol || name).trim().charAt(0).toUpperCase() || "₿";
+
+      const sourceLabel =
+        token.source === "clanker" ? "Clanker" : "Zora";
+
+      return (
+        <div key={token.token_address} className="token-card">
+          <div className="token-card-top">
+            <div className="token-card-avatar">{firstLetter}</div>
+            <div style={{ flex: 1 }}>
+              <div className="token-card-title-row">
+                <div>
+                  <div className="token-card-title-main">{name}</div>
+                  {symbol && (
+                    <span className="token-card-symbol">{symbol}</span>
+                  )}
+                </div>
+                <span className="token-card-time">
+                  {time} {date && `· ${date}`}
+                </span>
+              </div>
+
+              <div className="token-card-stats">
+                <span>MC: {mcap}</span>
+                <span>Vol 24h: {vol}</span>
+              </div>
+
+              <div className="token-card-source">
+                <span className="token-card-source-pill">
+                  {sourceLabel}
+                </span>
+                {username && (
+                  <span style={{ marginLeft: 8, fontSize: 11 }}>
+                    · @{username}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <a
+            href={token.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="token-card-button"
+          >
+            View on {sourceLabel}
+          </a>
+        </div>
+      );
+    })
+  )}
+</div>
+
             {/* таблица */}
             <div className="hatchr-table-wrapper">
               <table className="hatchr-table">
