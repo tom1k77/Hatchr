@@ -366,3 +366,125 @@ body {
     width: 100%;
   }
 }
+
+@media (max-width: 768px) {
+  .hatchr-shell {
+    padding: 12px;
+  }
+
+  .hatchr-main-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* левая/правая колонки друг под другом */
+  .hatchr-main-grid > section,
+  .hatchr-main-grid > aside {
+    width: 100%;
+  }
+
+  /* убираем таблицу на мобиле, если нужно полностью переключаться на карточки */
+  .hatchr-table-wrapper {
+    display: none;
+  }
+
+  .token-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .token-card {
+    border-radius: 18px;
+    background: #ffffff;
+    padding: 10px 12px 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  }
+
+  .token-card-top {
+    display: flex;
+    gap: 10px;
+  }
+
+  .token-card-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: #e5edff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 20px;
+    color: #111827;
+    flex-shrink: 0;
+  }
+
+  .token-card-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .token-card-title span:first-child {
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  .token-card-symbol {
+    margin-left: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: #6b7280;
+  }
+
+  .token-card-time {
+    font-size: 11px;
+    color: #9ca3af;
+    white-space: nowrap;
+  }
+
+  .token-card-stats {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #111827;
+    display: flex;
+    gap: 6px;
+  }
+
+  .token-card-source {
+    margin-top: 4px;
+  }
+
+  .token-card-source-pill {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  .token-card-button {
+    margin-top: 8px;
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 8px 0;
+    border-radius: 999px;
+    background: #0052ff;
+    color: #ffffff;
+    font-size: 14px;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .token-card-loadmore {
+    padding: 6px 14px;
+    font-size: 12px;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+  }
+}
