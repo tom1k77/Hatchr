@@ -140,6 +140,21 @@ function toNum(x: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Нормализуем ссылку на картинку (IPFS -> https, трим и т.п.)
+function normalizeImageUrl(raw?: string | null): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+
+  // ipfs://... -> https://ipfs.io/ipfs/...
+  if (s.startsWith("ipfs://")) {
+    const cidPath = s.slice("ipfs://".length).replace(/^\/+/, "");
+    return `https://ipfs.io/ipfs/${cidPath}`;
+  }
+
+  return s;
+}
+
 // ======================= CLANKER (3 часа) =======================
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
@@ -193,7 +208,21 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const symbol = (t.symbol || "").toString();
 
       const meta = t.metadata || {};
-const creator = t.related?.user || {};
+      const creator = t.related?.user || {};
+
+      // возможные поля с картинкой в ответе Clanker
+      const rawImage: string | null =
+        (t.image_url as string | undefined) ||
+        (t.imageUrl as string | undefined) ||
+        (t.image as string | undefined) ||
+        (t.thumbnailUrl as string | undefined) ||
+        (meta.image_url as string | undefined) ||
+        (meta.imageUrl as string | undefined) ||
+        (meta.image as string | undefined) ||
+        (meta.thumbnailUrl as string | undefined) ||
+        null;
+
+      const image_url = normalizeImageUrl(rawImage);
 
 // возможные поля с картинкой в ответе Clanker
 const image_url =
@@ -414,14 +443,16 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       }
 
       const source_url = `https://zora.co/coin/base:${addr}`;
-      const image_url =
-  n.imageUrl ||
-  n.image_url ||
-  n.image?.url ||
-  (Array.isArray(n.media) ? n.media[0]?.url : null) ||
-  n.content?.media?.[0]?.url ||
-  n.content?.image ||
-  null;
+      const rawImage: string | null =
+        (n.imageUrl as string | undefined) ||
+        (n.image_url as string | undefined) ||
+        (n.image?.url as string | undefined) ||
+        (Array.isArray(n.media) && n.media[0]?.url
+          ? (n.media[0].url as string)
+          : undefined) ||
+        null;
+
+      const image_url = normalizeImageUrl(rawImage);
       
       tokens.push({
         token_address: addr,
