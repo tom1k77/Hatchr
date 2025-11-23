@@ -16,14 +16,13 @@ type TokenItem = {
   liquidity_usd: number | null;
   volume_24h_usd: number | null;
 
-  image_url?: string | null;        // ← добавили
-
   farcaster_url?: string | null;
   x_url?: string | null;
   telegram_url?: string | null;
   website_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
+  image_url?: string | null;
 };
 
 type TokensResponse = {
@@ -536,21 +535,31 @@ export default function HomePage() {
         <div key={token.token_address} className="token-card">
           <div className="token-card-top">
             <div className="token-card-avatar">
-              {token.image_url ? (
-                <img
-                  src={token.image_url}
-                  alt={token.name || token.symbol || "Token"}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    borderRadius: "16px",
-                    objectFit: "cover",
-                  }}
-                />
-              ) : (
-                <span>{firstLetter}</span>
-              )}
-            </div>
+  {token.image_url ? (
+    <img
+      src={token.image_url}
+      alt={token.name || token.symbol || "Token"}
+      style={{
+        width: "100%",
+        height: "100%",
+        borderRadius: "16px",
+        objectFit: "cover",
+      }}
+      onError={(e) => {
+        // если картинка битая — показываем букву
+        e.currentTarget.style.display = "none";
+        const parent = e.currentTarget.parentElement;
+        if (parent && !parent.querySelector("span")) {
+          const span = document.createElement("span");
+          span.textContent = (token.symbol || token.name || "?")[0] ?? "?";
+          parent.appendChild(span);
+        }
+      }}
+    />
+  ) : (
+    <span>{(token.symbol || token.name || "?")[0]}</span>
+  )}
+</div>
 
             <div style={{ fontSize: 10, color: "#999" }}>
   IMG: {token.image_url || "no image"}
