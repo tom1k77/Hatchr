@@ -291,6 +291,12 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         symbol,
         source: "clanker",
         source_url: `${CLANKER_FRONT}/clanker/${addr}`,
+        image_url:
+        anyItem.image_url ||
+        anyItem.imageUrl ||
+        anyItem.image ||
+        anyItem.thumbnailUrl ||
+        null,
         first_seen_at: firstSeen,
         farcaster_url: farcasterUrl, // ТОЛЬКО creator
         website_url,
