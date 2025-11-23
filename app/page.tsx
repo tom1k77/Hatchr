@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useIsMobile } from "./hooks/useIsMobile";
 
 type TokenItem = {
   token_address: string;
@@ -159,6 +160,7 @@ function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
 }
 
 export default function HomePage() {
+  const isMobile = useIsMobile();
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
