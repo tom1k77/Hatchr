@@ -416,6 +416,10 @@ export default function HomePage() {
         </div>
 
         <div className="hatchr-main-grid">
+          {/* MOBILE TOKEN CARD VIEW */}
+<div className="hatchr-mobile-card-view">
+   {/* Здесь будут карточки токенов для мобильной версии */}
+</div>
           {/* левая колонка */}
           <section>
             {/* фильтры */}
