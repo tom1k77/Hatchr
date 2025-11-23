@@ -197,12 +197,10 @@ const creator = t.related?.user || {};
 
 // возможные поля с картинкой в ответе Clanker
 const image_url =
-  (t.image_url as string | undefined) ||
-  (t.imageUrl as string | undefined) ||
-  (t.image as string | undefined) ||
-  (t.thumbnailUrl as string | undefined) ||
-  (meta.image as string | undefined) ||
-  (meta.image_url as string | undefined) ||
+  (t.metadata?.image_url as string) ||
+  (t.metadata?.imageUrl as string) ||
+  (t.metadata?.image as string) ||
+  (t.metadata?.thumbnailUrl as string) ||
   null;
 
       // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
@@ -301,7 +299,7 @@ const image_url =
   symbol,
   source: "clanker",
   source_url: `${CLANKER_FRONT}/clanker/${addr}`,
-  image_url,
+  image_url,          // ← ДОБАВЛЕНО ПРАВИЛЬНО
   first_seen_at: firstSeen,
   farcaster_url: farcasterUrl,
   website_url,
