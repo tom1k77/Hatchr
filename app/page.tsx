@@ -552,6 +552,10 @@ export default function HomePage() {
               )}
             </div>
 
+            <div style={{ fontSize: 10, color: "#999" }}>
+  IMG: {token.image_url || "no image"}
+</div>
+
             <div className="token-card-main">
               <div className="token-card-title-row">
                 <div className="token-card-title">
