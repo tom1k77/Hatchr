@@ -534,21 +534,35 @@ export default function HomePage() {
         <div key={token.token_address} className="token-card">
           <div className="token-card-top">
             <div className="token-card-avatar">
-  {token.image_url ? (
-    <img
-      src={token.image_url}
-      alt={token.name || token.symbol || "Token"}
-      style={{
-        width: "100%",
-        height: "100%",
-        borderRadius: "16px",
-        objectFit: "cover",
-      }}
-    />
-  ) : (
-    <span>{(token.symbol || token.name || "?")[0]}</span>
-  )}
-</div>
+              {token.image_url ? (
+                <img
+                  src={token.image_url}
+                  alt={token.name || token.symbol || "Token"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "16px",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <span>{firstLetter}</span>
+              )}
+            </div>
+
+            <div className="token-card-main">
+              <div className="token-card-title-row">
+                <div className="token-card-title">
+                  <span>{name}</span>
+                  {symbol && (
+                    <span className="token-card-symbol">{symbol}</span>
+                  )}
+                </div>
+                <div className="token-card-time">
+                  {time}
+                  {date && ` · ${date}`}
+                </div>
+              </div>
 
               <div className="token-card-stats">
                 <span>MC: {mcap}</span>
@@ -568,16 +582,20 @@ export default function HomePage() {
             </div>
           </div>
 
-         {token.source_url && (
-  <a
-    href={token.source_url}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="token-card-button"
-  >
-    View on {token.source === "zora" ? "Zora" : "Clanker"}
-  </a>
-)}
+          {token.source_url && (
+            <a
+              href={token.source_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="token-card-button"
+            >
+              View on {token.source === "zora" ? "Zora" : "Clanker"}
+            </a>
+          )}
+        </div>
+      );
+    })
+  )}
 </div>
 
             {/* таблица */}
