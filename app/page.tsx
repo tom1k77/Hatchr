@@ -533,19 +533,22 @@ export default function HomePage() {
       return (
         <div key={token.token_address} className="token-card">
           <div className="token-card-top">
-            <div className="token-card-avatar">{firstLetter}</div>
-            <div style={{ flex: 1 }}>
-              <div className="token-card-title-row">
-                <div>
-                  <div className="token-card-title-main">{name}</div>
-                  {symbol && (
-                    <span className="token-card-symbol">{symbol}</span>
-                  )}
-                </div>
-                <span className="token-card-time">
-                  {time} {date && `· ${date}`}
-                </span>
-              </div>
+            <div className="token-card-avatar">
+  {token.image_url ? (
+    <img
+      src={token.image_url}
+      alt={token.name || token.symbol || "Token"}
+      style={{
+        width: "100%",
+        height: "100%",
+        borderRadius: "16px",
+        objectFit: "cover",
+      }}
+    />
+  ) : (
+    <span>{(token.symbol || token.name || "?")[0]}</span>
+  )}
+</div>
 
               <div className="token-card-stats">
                 <span>MC: {mcap}</span>
