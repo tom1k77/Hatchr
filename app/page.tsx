@@ -569,10 +569,10 @@ export default function HomePage() {
           </div>
 
           <a
-            href={token.source_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="token-card-button"
+  href={token.source_url || "#"}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="token-card-button"
           >
             View on {sourceLabel}
           </a>
