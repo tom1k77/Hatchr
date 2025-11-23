@@ -9,6 +9,7 @@ export interface Token {
   source?: string;
   source_url?: string;
   first_seen_at?: string;
+  image_url?: string | null;
 
   // socials (ТОКЕНА)
   farcaster_url?: string; // ТОЛЬКО создатель, а не то, что вписали в метадату
