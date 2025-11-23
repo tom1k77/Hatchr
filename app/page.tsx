@@ -16,6 +16,8 @@ type TokenItem = {
   liquidity_usd: number | null;
   volume_24h_usd: number | null;
 
+  image_url?: string | null;        // ← добавили
+
   farcaster_url?: string | null;
   x_url?: string | null;
   telegram_url?: string | null;
