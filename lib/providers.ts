@@ -197,10 +197,26 @@ const creator = t.related?.user || {};
 
 // возможные поля с картинкой в ответе Clanker
 const image_url =
+  t.image ||
+  t.img ||
+  t.logo ||
+  t.logo_url ||
+  t.img_url ||
+  t.thumbnail ||
+  (t.media && (t.media.image || t.media.url)) ||
+  (t.metadata?.image as string) ||
   (t.metadata?.image_url as string) ||
   (t.metadata?.imageUrl as string) ||
-  (t.metadata?.image as string) ||
+  (t.metadata?.thumbnail as string) ||
   (t.metadata?.thumbnailUrl as string) ||
+  (t.metadata?.media && (t.metadata.media.image || t.metadata.media.url)) ||
+  (t.metadata?.content &&
+    (t.metadata.content.image ||
+      t.metadata.content.img ||
+      t.metadata.content.url ||
+      (t.metadata.content.media &&
+        (t.metadata.content.media.image ||
+          t.metadata.content.media.url)))) ||
   null;
 
       // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
@@ -411,12 +427,11 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
       const image_url =
-  (n.imageUrl as string | undefined) ||
-  (n.image_url as string | undefined) ||
-  (n.image?.url as string | undefined) ||
-  (Array.isArray(n.media) && n.media[0]?.url
-    ? (n.media[0].url as string)
-    : undefined) ||
+  n.imageUrl ||
+  n.image_url ||
+  (n.image && (n.image.url || n.image.original)) ||
+  (Array.isArray(n.media) && (n.media[0]?.url || n.media[0]?.thumbnail)) ||
+  (n.content && (n.content.image || n.content.img || n.content.url)) ||
   null;
 
       tokens.push({
