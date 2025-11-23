@@ -568,18 +568,16 @@ export default function HomePage() {
             </div>
           </div>
 
-          <a
-  href={token.source_url || "#"}
-  target="_blank"
-  rel="noopener noreferrer"
-  className="token-card-button"
-          >
-            View on {sourceLabel}
-          </a>
-        </div>
-      );
-    })
-  )}
+         {token.source_url && (
+  <a
+    href={token.source_url}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="token-card-button"
+  >
+    View on {token.source === "zora" ? "Zora" : "Clanker"}
+  </a>
+)}
 </div>
 
             {/* таблица */}
