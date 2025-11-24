@@ -226,14 +226,13 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
 // возможные поля с картинкой в ответе Clanker
 const image_url =
-  t.image_url ||
-  t.imageUrl ||
-  t.image ||
-  t.thumbnailUrl ||
-  t.metadata?.image_url ||
-  t.metadata?.imageUrl ||
-  t.metadata?.image ||
-  t.metadata?.thumbnailUrl ||
+  (t.img_url as string) ||                       // ← главное поле
+  (t.image_url as string) ||                    // иногда бывает так
+  (t.imageUrl as string) ||
+  (t.metadata?.image_url as string) ||
+  (t.metadata?.imageUrl as string) ||
+  (t.metadata?.image as string) ||
+  (t.metadata?.thumbnailUrl as string) ||
   null;
       
       // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
