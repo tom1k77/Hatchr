@@ -723,7 +723,8 @@ export default function HomePage() {
     );
   })}
 
-            {/* Load more (только для десктопа) */}
+              <>
+              {/* Load more (только для десктопа) */}
           {!isMobile && filteredTokens.length > visibleRows && (
             <div style={{ marginTop: 10, textAlign: "center" }}>
               <button
@@ -742,6 +743,7 @@ export default function HomePage() {
               </button>
             </div>
           )}
+              </>
           </section>
 
           {/* правая колонка — live traded feed */}
