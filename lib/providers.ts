@@ -140,21 +140,6 @@ function toNum(x: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Нормализуем ссылку на картинку (IPFS -> https, трим и т.п.)
-function normalizeImageUrl(raw?: string | null): string | null {
-  if (!raw) return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-
-  // ipfs://... -> https://ipfs.io/ipfs/...
-  if (s.startsWith("ipfs://")) {
-    const cidPath = s.slice("ipfs://".length).replace(/^\/+/, "");
-    return `https://ipfs.io/ipfs/${cidPath}`;
-  }
-
-  return s;
-}
-
 // ======================= CLANKER (3 часа) =======================
 
 // Вспомогательная функция — нормализация ссылок (ipfs и т.п.)
