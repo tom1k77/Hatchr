@@ -211,15 +211,21 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const creator = t.related?.user || {};
 
       // --- картинка токена из Clanker ---
-      const image_url: string | null =
-        (t.img_url as string | undefined) ||              // главное поле
-        (t.image_url as string | undefined) ||
-        (t.imageUrl as string | undefined) ||
-        (meta.image_url as string | undefined) ||
-        (meta.imageUrl as string | undefined) ||
-        (meta.image as string | undefined) ||
-        (meta.thumbnailUrl as string | undefined) ||
-        null;
+      // 1) главное поле — img_url (Clanker V3/V4)
+let image_url: string | null =
+  (t.img_url as string) ||
+  (t.image_url as string) ||
+  (t.imageUrl as string) ||
+  (t.image as string) ||
+  (t.thumbnailUrl as string) ||
+  (meta.image_url as string) ||
+  (meta.imageUrl as string) ||
+  (meta.image as string) ||
+  (meta.thumbnailUrl as string) ||
+  null;
+
+// 2) Нормализация, чтобы IPFS → https
+image_url = normalizeImageUrl(image_url);
       
       // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
       let fid: number | string | undefined;
