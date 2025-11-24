@@ -620,489 +620,109 @@ export default function HomePage() {
 
             {/* таблица */}
             {!isMobile && (
-            <div className="hatchr-table-wrapper">
-              <table className="hatchr-table">
-                <thead>
-                  <tr>
-                    <th
-                      style={{
-                        textAlign: "left",
-                        width: 220,
-                        maxWidth: 220,
-                      }}
-                    >
-                      Name
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        width: 120,
-                        maxWidth: 120,
-                      }}
-                    >
-                      Address
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        width: 70,
-                      }}
-                    >
-                      Source
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        width: 80,
-                      }}
-                    >
-                      Market Cap
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        width: 80,
-                      }}
-                    >
-                      Vol 24h
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        width: 150,
-                      }}
-                    >
-                      Socials
-                    </th>
-                    <th
-                      style={{
-                        textAlign: "right",
-                        width: 90,
-                      }}
-                    >
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTokens.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="hatchr-table-empty">
-                        {isLoading
-                          ? "Loading Base mints…"
-                          : "Nothing here yet. Try again in a minute."}
-                      </td>
-                    </tr>
-                  )}
+            <div className="desktop-card-list">
+  {visibleTokens.map((token) => {
+    const { time, date } = formatCreated(token.first_seen_at);
 
-                  {visibleTokens.map((token) => {
-                    const username = extractFarcasterUsername(
-                      token.farcaster_url || undefined
-                    );
-                    const profile = username ? profiles[username] : undefined;
+    const username = extractFarcasterUsername(token.farcaster_url || undefined);
+    const mcap = formatNumber(token.market_cap_usd);
+    const vol = formatNumber(token.volume_24h_usd);
 
-                    const xUsername = extractXUsername(token.x_url || undefined);
-                    const igUsername = extractInstagramUsername(
-                      token.instagram_url || undefined
-                    );
-                    const ttUsername = extractTiktokUsername(
-                      token.tiktok_url || undefined
-                    );
+    const symbol = token.symbol || "";
+    const name = token.name || symbol || "New token";
 
-                    let secondarySocial:
-                      | { url: string; label: string }
-                      | null = null;
+    const sourceLabel = token.source === "clanker" ? "Clanker" : "Zora";
 
-                    if (!username) {
-                      if (token.x_url) {
-                        secondarySocial = {
-                          url: token.x_url,
-                          label: xUsername ? `@${xUsername}` : "X",
-                        };
-                      } else if (token.instagram_url) {
-                        secondarySocial = {
-                          url: token.instagram_url,
-                          label: igUsername ? `@${igUsername}` : "Instagram",
-                        };
-                      } else if (token.tiktok_url) {
-                        secondarySocial = {
-                          url: token.tiktok_url,
-                          label: ttUsername ? `@${ttUsername}` : "TikTok",
-                        };
-                      }
-                    }
+    const shortAddress =
+      token.token_address.length > 4
+        ? `0x…${token.token_address.slice(-4)}`
+        : token.token_address;
 
-                    const rowKey = `${token.source}-${token.token_address}`;
-                    const isTooltipVisible = hoveredRowKey === rowKey;
-                    const isRowHovered = hoveredTableRowKey === rowKey;
+    return (
+      <div key={token.token_address} className="desktop-token-card">
+        {/* Аватар */}
+        <div className="desktop-card-avatar">
+          {token.image_url ? (
+            <img
+              src={token.image_url}
+              alt={name}
+              style={{
+                width: "100%",
+                height: "100%",
+                borderRadius: 16,
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <span>{(symbol || name).charAt(0).toUpperCase()}</span>
+          )}
+        </div>
 
-                    const { time, date } = formatCreated(token.first_seen_at);
+        {/* Основные данные */}
+        <div className="desktop-card-body">
+          <div className="desktop-card-header">
+            <span className="desktop-card-name">{name}</span>
+            {symbol && (
+              <span className="desktop-card-symbol">{symbol}</span>
+            )}
+          </div>
 
-                    const fullAddress = token.token_address || "";
-                    const shortAddress =
-                      fullAddress.length > 4
-                        ? `0x…${fullAddress.slice(-4)}`
-                        : fullAddress;
+          <div className="desktop-card-row">
+            <span className="label">Address:</span>
+            <span className="value address" onClick={() => handleCopyAddress(token.token_address)}>
+              {shortAddress}
+            </span>
+          </div>
 
-                    const copyKey = fullAddress.toLowerCase();
-                    const isCopied = copiedKey === copyKey;
+          <div className="desktop-card-row">
+            <span className="label">Source:</span>
+            <span className="value">{sourceLabel}</span>
+          </div>
 
-                    return (
-                      <tr
-                        key={rowKey}
-                        className={
-                          "hatchr-table-row" + (isRowHovered ? " hovered" : "")
-                        }
-                        onMouseEnter={() => setHoveredTableRowKey(rowKey)}
-                        onMouseLeave={() => setHoveredTableRowKey(null)}
-                      >
-                        {/* Name */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "left",
-                            maxWidth: 220,
-                            width: 220,
-                          }}
-                        >
-                          <a
-                            href={token.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              textDecoration: "none",
-                              color: "#111827",
-                            }}
-                          >
-                            <span
-                              style={{
-                                fontWeight: 500,
-                                overflow: "hidden",
-                                wordBreak: "break-word",
-                                whiteSpace: "normal",
-                                lineHeight: 1.25,
-                                maxHeight: "3.6em",
-                              }}
-                            >
-                              {token.name || token.symbol || "—"}
-                            </span>
-                            {token.symbol && (
-                              <span
-                                style={{
-                                  fontSize: 11,
-                                  marginTop: 4,
-                                  textTransform: "uppercase",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  padding: "2px 8px",
-                                  borderRadius: 999,
-                                  backgroundColor: "#0052ff",
-                                  color: "#ffffff",
-                                  letterSpacing: 0.5,
-                                  maxWidth: 90,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                  alignSelf: "flex-start",
-                                }}
-                              >
-                                {token.symbol}
-                              </span>
-                            )}
-                          </a>
-                        </td>
+          <div className="desktop-card-row">
+            <span className="label">Market Cap:</span>
+            <span className="value">{mcap}</span>
+          </div>
 
-                        {/* Address + copy */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontFamily: "monospace",
-                              fontSize: 12,
-                              marginRight: 4,
-                            }}
-                          >
-                            {shortAddress || "—"}
-                          </span>
-                          {fullAddress && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopyAddress(fullAddress)}
-                              style={{
-                                width: 18,
-                                height: 18,
-                                borderRadius: 999,
-                                border: `1px solid ${
-                                  isCopied ? "#0052ff" : "#d1d5db"
-                                }`,
-                                background: isCopied ? "#eff6ff" : "#f9fafb",
-                                cursor: "pointer",
-                                fontSize: 11,
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                color: isCopied ? "#0052ff" : "#4b5563",
-                              }}
-                              title="Copy address"
-                            >
-                              {isCopied ? "✓" : "⧉"}
-                            </button>
-                          )}
-                        </td>
+          <div className="desktop-card-row">
+            <span className="label">Vol 24h:</span>
+            <span className="value">{vol}</span>
+          </div>
 
-                        {/* Source */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
-                          <span className="hatchr-source-pill">
-                            {token.source}
-                          </span>
-                        </td>
+          <div className="desktop-card-row">
+            <span className="label">Created:</span>
+            <span className="value">{time} · {date}</span>
+          </div>
 
-                        {/* Market cap */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
-                          {formatNumber(token.market_cap_usd)}
-                        </td>
+          <div className="desktop-card-row">
+            <span className="label">Socials:</span>
+            {username ? (
+              <a
+                href={`https://warpcast.com/${username}`}
+                target="_blank"
+                className="value socials"
+              >
+                @{username}
+              </a>
+            ) : (
+              <span className="value">—</span>
+            )}
+          </div>
 
-                        {/* Vol 24h */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                          }}
-                        >
-                          {formatNumber(token.volume_24h_usd)}
-                        </td>
-
-                        {/* Socials */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                            position: "relative",
-                          }}
-                        >
-                          {username ? (
-                            <div
-                              onMouseEnter={() => {
-                                setHoveredRowKey(rowKey);
-                                ensureProfile(username);
-                              }}
-                              onMouseLeave={() => setHoveredRowKey(null)}
-                            >
-                              <a
-                                href={`https://farcaster.xyz/${username}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 7,
-                                  padding: "4px 11px",
-                                  borderRadius: 999,
-                                  backgroundColor: "#5b3ded",
-                                  color: "#fff",
-                                  textDecoration: "none",
-                                  fontSize: 12,
-                                  maxWidth: 150,
-                                }}
-                              >
-                                {profile?.pfp_url ? (
-                                  <img
-                                    src={profile.pfp_url}
-                                    alt={profile.display_name || username}
-                                    onError={(e) => {
-                                      e.currentTarget.src =
-                                        "/farcaster-logo.png";
-                                    }}
-                                    style={{
-                                      width: 24,
-                                      height: 24,
-                                      borderRadius: 999,
-                                      objectFit: "cover",
-                                      backgroundColor: "#1f2933",
-                                      flexShrink: 0,
-                                    }}
-                                  />
-                                ) : (
-                                  <FarcasterFallbackIcon size={24} />
-                                )}
-
-                                <span
-                                  style={{
-                                    maxWidth: 90,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  @{username}
-                                </span>
-                              </a>
-
-                              {isTooltipVisible && profile && (
-                                <div
-                                  style={{
-                                    position: "absolute",
-                                    top: "112%",
-                                    right: 0,
-                                    marginTop: 6,
-                                    padding: "10px 12px",
-                                    borderRadius: 10,
-                                    backgroundColor: "#111827",
-                                    color: "#f9fafb",
-                                    minWidth: 220,
-                                    boxShadow:
-                                      "0 14px 36px rgba(0,0,0,0.45)",
-                                    zIndex: 20,
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: 10,
-                                      marginBottom: 8,
-                                    }}
-                                  >
-                                    {profile.pfp_url ? (
-                                      <img
-                                        src={profile.pfp_url}
-                                        alt={
-                                          profile.display_name || username
-                                        }
-                                        onError={(e) => {
-                                          e.currentTarget.src =
-                                            "/farcaster-logo.png";
-                                        }}
-                                        style={{
-                                          width: 40,
-                                          height: 40,
-                                          borderRadius: 999,
-                                          objectFit: "cover",
-                                          backgroundColor: "#1f2933",
-                                        }}
-                                      />
-                                    ) : (
-                                      <FarcasterFallbackIcon size={26} />
-                                    )}
-
-                                    <div>
-                                      <div
-                                        style={{
-                                          fontSize: 13,
-                                          fontWeight: 600,
-                                          marginBottom: 2,
-                                        }}
-                                      >
-                                        {profile.display_name ||
-                                          profile.username}
-                                      </div>
-                                      <div
-                                        style={{
-                                          fontSize: 12,
-                                          color: "#9ca3af",
-                                        }}
-                                      >
-                                        @{profile.username}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      gap: 12,
-                                      fontSize: 11,
-                                      color: "#e5e7eb",
-                                    }}
-                                  >
-                                    <span>
-                                      <strong>
-                                        {profile.follower_count}
-                                      </strong>{" "}
-                                      followers
-                                    </span>
-                                    <span>
-                                      <strong>
-                                        {profile.following_count}
-                                      </strong>{" "}
-                                      following
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ) : secondarySocial ? (
-                            <a
-                              href={secondarySocial.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                justifyContent: "flex-end",
-                                padding: "4px 11px",
-                                borderRadius: 999,
-                                backgroundColor: "#f3f4f6",
-                                color: "#111827",
-                                textDecoration: "none",
-                                fontSize: 12,
-                                maxWidth: 150,
-                              }}
-                            >
-                              <span
-                                style={{
-                                  maxWidth: 110,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {secondarySocial.label}
-                              </span>
-                            </a>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-
-                        {/* Created */}
-                        <td
-                          style={{
-                            padding: "8px 10px",
-                            textAlign: "right",
-                            whiteSpace: "nowrap",
-                            fontSize: 11,
-                          }}
-                        >
-                          <div>{time}</div>
-                          {date && (
-                            <div style={{ color: "#9ca3af" }}>{date}</div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-      )}
+          {token.source_url && (
+            <a
+              href={token.source_url}
+              target="_blank"
+              className="desktop-card-button"
+            >
+              View on {sourceLabel}
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  })}
+</div>
 
             {/* Load more */}
             {filteredTokens.length > visibleRows && (
