@@ -477,3 +477,72 @@ body {
     background: #f9fafb;
   }
 }
+
+.token-card-top {
+  display: flex;
+  gap: 12px;
+}
+
+.token-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  background: #f3f3f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.token-card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.token-card-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.token-card-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.token-card-symbol {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.token-card-time {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.token-card-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.token-card-source {
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.token-card-creator {
+  margin-left: 8px;
+  font-size: 11px;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.token-card-creator:hover {
+  text-decoration: underline;
+  opacity: 1;
+}
