@@ -540,3 +540,26 @@ body {
   text-decoration: underline;
   opacity: 1;
 }
+
+/* Карточки — показываем ВЕЗДЕ (мобилка + десктоп) */
+.token-card-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* На широких экранах чуть ужимаем ширину блока с карточками,
+   чтобы он не растягивался на весь экран */
+@media (min-width: 1024px) {
+  .token-card-list {
+    max-width: 560px;
+  }
+}
+
+/* На мобильных прячем таблицу, оставляем только карточки */
+@media (max-width: 767px) {
+  .hatchr-table-wrapper {
+    display: none;
+  }
+}
