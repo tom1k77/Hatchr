@@ -441,31 +441,26 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
 
-      // ---------- КАРТИНКА ДЛЯ ZORA ----------
+      // --- картинка токена / аватар создателя (Zora) ---
+      let rawImage: string | null = null;
 
-      // 1) сначала пытаемся взять "картинку токена", если она когда-нибудь появится
-      let rawImage: string | null =
-        (n.imageUrl as string | undefined) ||
-        (n.image_url as string | undefined) ||
-        (n.image?.url as string | undefined) ||
+      // 1) сначала пробуем любые "прямые" поля у токена
+      const directImage: string | undefined =
+        (n.imageUrl as string | undefined) ??
+        (n.image_url as string | undefined) ??
+        (n.image?.url as string | undefined) ??
         (Array.isArray(n.media) && n.media[0]?.url
           ? (n.media[0].url as string)
-          : undefined) ||
-        null;
+          : undefined);
 
-      // 2) если её нет, берём аватар создателя (creatorProfile.avatar.*)
-      if (!rawImage) {
-        rawImage =
-          (n.creatorProfile?.avatar?.previewImage?.url as
-            | string
-            | undefined) ||
-          (n.creatorProfile?.avatar?.image?.url as string | undefined) ||
-          (n.creatorProfile?.avatar?.url as string | undefined) ||
-          (n.creatorProfile?.avatarImage?.url as string | undefined) ||
-          (n.creatorProfile?.avatarImageUrl as string | undefined) ||
-          (n.creatorProfile?.profileImage?.url as string | undefined) ||
-          (n.creatorProfile?.profileImageUrl as string | undefined) ||
-          null;
+      if (directImage) {
+        rawImage = directImage;
+      } else {
+        // 2) если ничего нет — берём первый URL из avatar создателя
+        const avatarUrls = collectUrls(n.creatorProfile?.avatar ?? null);
+        if (avatarUrls.length > 0) {
+          rawImage = avatarUrls[0];
+        }
       }
 
       const image_url = normalizeImageUrl(rawImage);
