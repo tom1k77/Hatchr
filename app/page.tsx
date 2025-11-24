@@ -722,7 +722,6 @@ export default function HomePage() {
       </div>
     );
   })}
-</div>
 
             {/* Load more (только для десктопа) */}
           {!isMobile && filteredTokens.length > visibleRows && (
