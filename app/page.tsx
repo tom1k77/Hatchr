@@ -532,76 +532,87 @@ export default function HomePage() {
         token.source === "clanker" ? "Clanker" : "Zora";
 
       return (
-  <div key={token.token_address} className="token-card">
-    <div className="token-card-top">
-      {/* Левая часть — аватар */}
-      <div className="token-card-avatar">
-        {token.image_url ? (
-          <img
-            src={token.image_url}
-            alt={token.name || token.symbol || "Token"}
-            style={{
-              width: "100%",
-              height: "100%",
-              borderRadius: "16px",
-              objectFit: "cover",
-            }}
-          />
-        ) : (
-          <span>{(token.symbol || token.name || "?")[0]}</span>
-        )}
-      </div>
+        <div key={token.token_address} className="token-card">
+          <div className="token-card-top">
+            {/* Аватар */}
+            <div className="token-card-avatar">
+              {token.image_url ? (
+                <img
+                  src={token.image_url}
+                  alt={name}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "16px",
+                    objectFit: "cover",
+                  }}
+                />
+              ) : (
+                <span>{firstLetter}</span>
+              )}
+            </div>
 
-      {/* Правая часть — инфо по токену */}
-      <div className="token-card-main">
-        <div className="token-card-header">
-          <span className="token-card-name">{name}</span>
-          {symbol && symbol !== name && (
-            <span className="token-card-symbol">{symbol}</span>
-          )}
-        </div>
+            {/* Основная часть карточки */}
+            <div className="token-card-main">
+              {/* Заголовок + дата/время */}
+              <div className="token-card-header">
+                <div className="token-card-title">
+                  <span className="token-card-name">{name}</span>
+                  {symbol && symbol !== name && (
+                    <span className="token-card-symbol">
+                      &nbsp;{symbol}
+                    </span>
+                  )}
+                </div>
+                <div className="token-card-time">
+                  {time} · {date}
+                </div>
+              </div>
 
-        {/* Время + дата создания */}
-        <div className="token-card-time">
-          {time} · {date}
-        </div>
+              {/* Статы */}
+              <div className="token-card-stats">
+                <span>MC: {mcap}</span>
+                <span>Vol 24h: {vol}</span>
+              </div>
 
-        {/* MC / Volume */}
-        <div className="token-card-stats">
-          <span>MC: {mcap}</span>
-          <span>Vol 24h: {vol}</span>
-        </div>
+              {/* Source + создатель токена (кликабельно) */}
+              <div className="token-card-source">
+                <span className="token-card-source-pill">
+                  {sourceLabel}
+                </span>
+                {username && (
+                  <>
+                    <span style={{ margin: "0 4px" }}>·</span>
+                    <a
+                      href={`https://warpcast.com/${username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="token-card-creator"
+                    >
+                      @{username}
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
-        {/* Source + создатель */}
-        <div className="token-card-source">
-          <span className="token-card-source-pill">{sourceLabel}</span>
-
-          {username && token.farcaster_url && (
+          {/* Кнопка снизу */}
+          {token.source_url && (
             <a
-              href={token.farcaster_url}
+              href={token.source_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="token-card-creator"
+              className="token-card-button"
             >
-              · @{username}
+              View on {token.source === "zora" ? "Zora" : "Clanker"}
             </a>
           )}
         </div>
-      </div>
-    </div>
-
-    {token.source_url && (
-      <a
-        href={token.source_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="token-card-button"
-      >
-        View on {token.source === "zora" ? "Zora" : "Clanker"}
-      </a>
-    )}
-  </div>
-);
+      );
+    })
+  )}
+</div>
 
             {/* таблица */}
             <div className="hatchr-table-wrapper">
