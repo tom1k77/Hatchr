@@ -367,8 +367,8 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
-  const PAGE_SIZE = 50; // сколько токенов просим за один запрос
-  const MAX_PAGES = 10; // защита от бесконечного цикла
+  const PAGE_SIZE = 50;
+  const MAX_PAGES = 10;
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
@@ -380,6 +380,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
     }
 
     const json = await fetchJsonZora("/explore", params);
+    if (!json) break;
 
     const edges: any[] = Array.isArray(json?.exploreList?.edges)
       ? json.exploreList.edges
@@ -391,6 +392,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const n = edge?.node;
       if (!n) continue;
 
+      // только Base
       if (n.chainId && n.chainId !== 8453) continue;
 
       const addr = (n.address || "").toString().toLowerCase();
@@ -399,7 +401,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const name = (n.name || "").toString();
       const symbol = (n.symbol || "").toString();
 
-      // createdAt приходит без "Z", это UTC — нормализуем
+      // createdAt без "Z" — нормализуем в ISO
       const createdRaw = n.createdAt ?? null;
       let createdIso: string | undefined;
       if (typeof createdRaw === "string" && createdRaw) {
@@ -418,10 +420,8 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const volume24Num = toNum(n.volume24h);
       const priceUsdcNum = toNum(n.tokenPrice?.priceInUsdc);
 
-      // Профиль создателя (creatorProfile)
-      const creatorProfile = n.creatorProfile ?? {};
-      const social = creatorProfile.socialAccounts ?? {};
-
+      // соцсети создателя
+      const social = n.creatorProfile?.socialAccounts ?? {};
       let farcaster_url: string | undefined;
       let x_url: string | undefined;
       let instagram_url: string | undefined;
@@ -442,17 +442,17 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
 
-      / 1) пробуем картинку токена
-      // 2) если нет — берем аватар создателя (creatorProfile)
+      // 1) пробуем картинку токена
+      // 2) если её нет — берём аватар создателя
       const rawImage: string | null =
-        (n.imageUrl as string | undefined) ??
-        (n.image_url as string | undefined) ??
-        (n.image?.url as string | undefined) ??
+        (n.imageUrl as string | undefined) ||
+        (n.image_url as string | undefined) ||
+        (n.image?.url as string | undefined) ||
         (Array.isArray(n.media) && n.media[0]?.url
           ? (n.media[0].url as string)
-          : undefined) ??
-        (n.creatorProfile?.avatarUrl as string | undefined) ??
-        (n.creatorProfile?.profileImage?.url as string | undefined) ??
+          : undefined) ||
+        (n.creatorProfile?.avatarUrl as string | undefined) ||
+        (n.creatorProfile?.avatar_url as string | undefined) ||
         null;
 
       const image_url = normalizeImageUrl(rawImage);
@@ -464,7 +464,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         source: "zora",
         source_url,
         first_seen_at: createdIso,
-        image_url, // <– тут уже нормализованный урл
+        image_url,
         farcaster_url,
         x_url,
         instagram_url,
@@ -475,12 +475,12 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       });
     }
 
-    // берём курсор для следующей страницы
+    // следующая страница
     cursor = json?.exploreList?.pageInfo?.endCursor;
     const hasNextPage = Boolean(json?.exploreList?.pageInfo?.hasNextPage);
     if (!hasNextPage) break;
 
-    // если последние токены уже старше нашего окна 3 часа — выходим
+    // если самые старые токены уже старше 3 часов — выходим
     const last = tokens[tokens.length - 1];
     if (last?.first_seen_at) {
       const ts = new Date(last.first_seen_at).getTime();
@@ -488,7 +488,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
     }
   }
 
-  // фильтр по 3 часам
+  // финальный фильтр по окну 3 часа
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
