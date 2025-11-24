@@ -2,9 +2,9 @@ export interface Token {
   token_address: string;
   name?: string;
   symbol?: string;
-  image_url?: string | null;
   source?: string;
   source_url?: string;
+  image_url?: string | null;
   first_seen_at?: string | null;
 
   farcaster_url?: string | null;
