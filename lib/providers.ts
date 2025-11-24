@@ -367,8 +367,8 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
-  const PAGE_SIZE = 50;
-  const MAX_PAGES = 10;
+  const PAGE_SIZE = 50; // сколько токенов просим за один запрос
+  const MAX_PAGES = 10; // защита от бесконечного цикла
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
@@ -441,34 +441,34 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
 
-      // 1) пробуем картинку токена (если вдруг появится в API)
-      const tokenImageRaw: string | null =
-        (n.imageUrl as string | undefined) ??
-        (n.image_url as string | undefined) ??
-        (n.image?.url as string | undefined) ??
+      // ---------- КАРТИНКА ДЛЯ ZORA ----------
+
+      // 1) сначала пытаемся взять "картинку токена", если она когда-нибудь появится
+      let rawImage: string | null =
+        (n.imageUrl as string | undefined) ||
+        (n.image_url as string | undefined) ||
+        (n.image?.url as string | undefined) ||
         (Array.isArray(n.media) && n.media[0]?.url
           ? (n.media[0].url as string)
-          : undefined) ??
+          : undefined) ||
         null;
 
-      // 2) если нет — берём аватар создателя
-      const creatorAvatarRaw: string | null =
-        (n.creatorProfile?.avatar?.previewImage?.url as string | undefined) ??
-        (n.creatorProfile?.avatar?.image?.url as string | undefined) ??
-        null;
+      // 2) если её нет, берём аватар создателя (creatorProfile.avatar.*)
+      if (!rawImage) {
+        rawImage =
+          (n.creatorProfile?.avatar?.previewImage?.url as
+            | string
+            | undefined) ||
+          (n.creatorProfile?.avatar?.image?.url as string | undefined) ||
+          (n.creatorProfile?.avatar?.url as string | undefined) ||
+          (n.creatorProfile?.avatarImage?.url as string | undefined) ||
+          (n.creatorProfile?.avatarImageUrl as string | undefined) ||
+          (n.creatorProfile?.profileImage?.url as string | undefined) ||
+          (n.creatorProfile?.profileImageUrl as string | undefined) ||
+          null;
+      }
 
-      const rawImage: string | null =
-  (n.imageUrl as string | undefined) ||
-  (n.image_url as string | undefined) ||
-  (n.image?.url as string | undefined) ||
-  (Array.isArray(n.media) && n.media[0]?.url
-    ? (n.media[0].url as string)
-    : undefined) ||
-  (n.creatorProfile?.avatar?.previewImage?.url as string | undefined) ||
-  (n.creatorProfile?.avatar?.url as string | undefined) ||
-  null;
-
-const image_url = normalizeImageUrl(rawImage);
+      const image_url = normalizeImageUrl(rawImage);
 
       tokens.push({
         token_address: addr,
