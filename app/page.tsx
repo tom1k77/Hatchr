@@ -502,276 +502,150 @@ export default function HomePage() {
 
             {error && <div className="hatchr-error">{error}</div>}
 
-             {/* Mobile cards: только на телефонах */}
-            {isMobile && (
-              <div className="token-card-list">
-                {visibleTokens.length === 0 ? (
-                  <div className="hatchr-table-empty">
-                    {isLoading
-                      ? "Loading Base mints…"
-                      : "Nothing here yet. Try again in a minute."}
-                  </div>
-                ) : (
-                  visibleTokens.map((token) => {
-                    const { time, date } = formatCreated(token.first_seen_at);
-                    const symbol = token.symbol || "";
-                    const name = token.name || symbol || "New token";
-                    const username = extractFarcasterUsername(
-                      token.farcaster_url || undefined
-                    );
-                    const mcap = formatNumber(token.market_cap_usd);
-                    const vol = formatNumber(token.volume_24h_usd);
+                         {/* Cards view (mobile + desktop) */}
+            <div className="token-card-list">
+              {visibleTokens.length === 0 ? (
+                <div className="hatchr-table-empty">
+                  {isLoading
+                    ? "Loading Base mints…"
+                    : "Nothing here yet. Try again in a minute."}
+                </div>
+              ) : (
+                visibleTokens.map((token) => {
+                  const { time, date } = formatCreated(token.first_seen_at);
+                  const symbol = token.symbol || "";
+                  const name = token.name || symbol || "New token";
+                  const username = extractFarcasterUsername(
+                    token.farcaster_url || undefined
+                  );
+                  const mcap = formatNumber(token.market_cap_usd);
+                  const vol = formatNumber(token.volume_24h_usd);
 
-                    const firstLetter =
-                      (symbol || name).trim().charAt(0).toUpperCase() || "₿";
+                  const firstLetter =
+                    (symbol || name).trim().charAt(0).toUpperCase() || "₿";
 
-                    const sourceLabel =
-                      token.source === "clanker" ? "Clanker" : "Zora";
+                  const sourceLabel =
+                    token.source === "clanker" ? "Clanker" : "Zora";
 
-                    return (
-                      <div
-                        key={token.token_address}
-                        className="token-card"
-                      >
-                        <div className="token-card-top">
-                          {/* Аватар */}
-                          <div className="token-card-avatar">
-                            {token.image_url ? (
-                              <img
-                                src={token.image_url}
-                                alt={name}
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  borderRadius: "16px",
-                                  objectFit: "cover",
-                                }}
-                              />
-                            ) : (
-                              <span>{firstLetter}</span>
-                            )}
-                          </div>
+                  const fullAddress = token.token_address || "";
+                  const shortAddress =
+                    fullAddress.length > 4
+                      ? `0x…${fullAddress.slice(-4)}`
+                      : fullAddress;
 
-                          {/* Основная часть карточки */}
-                          <div className="token-card-main">
-                            {/* Заголовок + дата/время */}
-                            <div className="token-card-header">
-                              <div className="token-card-title">
-                                <span className="token-card-name">
-                                  {name}
-                                </span>
-                                {symbol && symbol !== name && (
-                                  <span className="token-card-symbol">
-                                    &nbsp;{symbol}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="token-card-time">
-                                {time} · {date}
-                              </div>
-                            </div>
-
-                            {/* Статы */}
-                            <div className="token-card-stats">
-                              <span>MC: {mcap}</span>
-                              <span>Vol 24h: {vol}</span>
-                            </div>
-
-                            {/* Source + создатель токена */}
-                            <div className="token-card-source">
-                              <span className="token-card-source-pill">
-                                {sourceLabel}
-                              </span>
-                              {username && (
-                                <>
-                                  <span style={{ margin: "0 4px" }}>·</span>
-                                  <a
-                                    href={`https://warpcast.com/${username}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="token-card-creator"
-                                  >
-                                    @{username}
-                                  </a>
-                                </>
-                              )}
-                            </div>
-                          </div>
+                  return (
+                    <div key={token.token_address} className="token-card">
+                      <div className="token-card-top">
+                        {/* Аватар */}
+                        <div className="token-card-avatar">
+                          {token.image_url ? (
+                            <img
+                              src={token.image_url}
+                              alt={name}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "16px",
+                                objectFit: "cover",
+                              }}
+                            />
+                          ) : (
+                            <span>{firstLetter}</span>
+                          )}
                         </div>
 
-                        {/* Кнопка снизу */}
-                        {token.source_url && (
-                          <a
-                            href={token.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="token-card-button"
-                          >
-                            View on{" "}
-                            {token.source === "zora" ? "Zora" : "Clanker"}
-                          </a>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-
-            {/* таблица / desktop cards */}
-            {!isMobile && (
-              <>
-                <div className="desktop-card-list">
-                  {visibleTokens.length === 0 ? (
-                    <div className="hatchr-table-empty">
-                      {isLoading
-                        ? "Loading Base mints…"
-                        : "Nothing here yet. Try again in a minute."}
-                    </div>
-                  ) : (
-                    visibleTokens.map((token) => {
-                      const { time, date } = formatCreated(token.first_seen_at);
-
-                      const username = extractFarcasterUsername(
-                        token.farcaster_url || undefined
-                      );
-                      const mcap = formatNumber(token.market_cap_usd);
-                      const vol = formatNumber(token.volume_24h_usd);
-
-                      const symbol = token.symbol || "";
-                      const name = token.name || symbol || "New token";
-
-                      const sourceLabel =
-                        token.source === "clanker" ? "Clanker" : "Zora";
-
-                      const shortAddress =
-                        token.token_address.length > 4
-                          ? `0x…${token.token_address.slice(-4)}`
-                          : token.token_address;
-
-                      return (
-                        <div
-                          key={token.token_address}
-                          className="desktop-token-card"
-                        >
-                          {/* Аватар */}
-                          <div className="desktop-card-avatar">
-                            {token.image_url ? (
-                              <img
-                                src={token.image_url}
-                                alt={name}
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  borderRadius: 16,
-                                  objectFit: "cover",
-                                }}
-                              />
-                            ) : (
-                              <span>
-                                {(symbol || name).charAt(0).toUpperCase()}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Основные данные */}
-                          <div className="desktop-card-body">
-                            <div className="desktop-card-header">
-                              <span className="desktop-card-name">{name}</span>
-                              {symbol && (
-                                <span className="desktop-card-symbol">
-                                  {symbol}
+                        {/* Основная часть карточки */}
+                        <div className="token-card-main">
+                          {/* Заголовок + дата/время */}
+                          <div className="token-card-header">
+                            <div className="token-card-title">
+                              <span className="token-card-name">{name}</span>
+                              {symbol && symbol !== name && (
+                                <span className="token-card-symbol">
+                                  &nbsp;{symbol}
                                 </span>
                               )}
                             </div>
-
-                            <div className="desktop-card-row">
-                              <span className="label">Address:</span>
-                              <span
-                                className="value address"
-                                onClick={() =>
-                                  handleCopyAddress(token.token_address)
-                                }
-                              >
-                                {shortAddress}
-                              </span>
+                            <div className="token-card-time">
+                              {time} · {date}
                             </div>
+                          </div>
 
-                            <div className="desktop-card-row">
-                              <span className="label">Source:</span>
-                              <span className="value">{sourceLabel}</span>
-                            </div>
+                          {/* Адрес */}
+                          <div className="token-card-address">
+                            <span>Address:&nbsp;</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyAddress(fullAddress)}
+                              className="token-card-address-btn"
+                            >
+                              {shortAddress}
+                            </button>
+                          </div>
 
-                            <div className="desktop-card-row">
-                              <span className="label">Market Cap:</span>
-                              <span className="value">{mcap}</span>
-                            </div>
+                          {/* Статы */}
+                          <div className="token-card-stats">
+                            <span>MC: {mcap}</span>
+                            <span>Vol 24h: {vol}</span>
+                          </div>
 
-                            <div className="desktop-card-row">
-                              <span className="label">Vol 24h:</span>
-                              <span className="value">{vol}</span>
-                            </div>
-
-                            <div className="desktop-card-row">
-                              <span className="label">Created:</span>
-                              <span className="value">
-                                {time} · {date}
-                              </span>
-                            </div>
-
-                            <div className="desktop-card-row">
-                              <span className="label">Socials:</span>
-                              {username ? (
+                          {/* Source + создатель токена (кликабельно) */}
+                          <div className="token-card-source">
+                            <span className="token-card-source-pill">
+                              {sourceLabel}
+                            </span>
+                            {username && (
+                              <>
+                                <span style={{ margin: "0 4px" }}>·</span>
                                 <a
                                   href={`https://warpcast.com/${username}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="value socials"
+                                  className="token-card-creator"
                                 >
                                   @{username}
                                 </a>
-                              ) : (
-                                <span className="value">—</span>
-                              )}
-                            </div>
-
-                            {token.source_url && (
-                              <a
-                                href={token.source_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="desktop-card-button"
-                              >
-                                View on {sourceLabel}
-                              </a>
+                              </>
                             )}
                           </div>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
+                      </div>
 
-                {/* Load more (только для десктопа) */}
-                {filteredTokens.length > visibleRows && (
-                  <div style={{ marginTop: 10, textAlign: "center" }}>
-                    <button
-                      type="button"
-                      onClick={handleLoadMore}
-                      style={{
-                        padding: "6px 14px",
-                        fontSize: 12,
-                        borderRadius: 999,
-                        border: "1px solid #d1d5db",
-                        background: "#f9fafb",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Load more
-                    </button>
-                  </div>
-                )}
-              </>
+                      {/* Кнопка снизу */}
+                      {token.source_url && (
+                        <a
+                          href={token.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="token-card-button"
+                        >
+                          View on {sourceLabel}
+                        </a>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Load more (только для десктопа) */}
+            {!isMobile && filteredTokens.length > visibleRows && (
+              <div style={{ marginTop: 10, textAlign: "center" }}>
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 12,
+                    borderRadius: 999,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    cursor: "pointer",
+                  }}
+                >
+                  Load more
+                </button>
+              </div>
             )}
           </section>
 
