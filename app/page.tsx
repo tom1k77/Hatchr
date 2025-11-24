@@ -618,132 +618,161 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* таблица */}
+            {/* таблица / desktop cards */}
             {!isMobile && (
-            <div className="desktop-card-list">
-  {visibleTokens.map((token) => {
-    const { time, date } = formatCreated(token.first_seen_at);
-
-    const username = extractFarcasterUsername(token.farcaster_url || undefined);
-    const mcap = formatNumber(token.market_cap_usd);
-    const vol = formatNumber(token.volume_24h_usd);
-
-    const symbol = token.symbol || "";
-    const name = token.name || symbol || "New token";
-
-    const sourceLabel = token.source === "clanker" ? "Clanker" : "Zora";
-
-    const shortAddress =
-      token.token_address.length > 4
-        ? `0x…${token.token_address.slice(-4)}`
-        : token.token_address;
-
-    return (
-      <div key={token.token_address} className="desktop-token-card">
-        {/* Аватар */}
-        <div className="desktop-card-avatar">
-          {token.image_url ? (
-            <img
-              src={token.image_url}
-              alt={name}
-              style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: 16,
-                objectFit: "cover",
-              }}
-            />
-          ) : (
-            <span>{(symbol || name).charAt(0).toUpperCase()}</span>
-          )}
-        </div>
-
-        {/* Основные данные */}
-        <div className="desktop-card-body">
-          <div className="desktop-card-header">
-            <span className="desktop-card-name">{name}</span>
-            {symbol && (
-              <span className="desktop-card-symbol">{symbol}</span>
-            )}
-          </div>
-
-          <div className="desktop-card-row">
-            <span className="label">Address:</span>
-            <span className="value address" onClick={() => handleCopyAddress(token.token_address)}>
-              {shortAddress}
-            </span>
-          </div>
-
-          <div className="desktop-card-row">
-            <span className="label">Source:</span>
-            <span className="value">{sourceLabel}</span>
-          </div>
-
-          <div className="desktop-card-row">
-            <span className="label">Market Cap:</span>
-            <span className="value">{mcap}</span>
-          </div>
-
-          <div className="desktop-card-row">
-            <span className="label">Vol 24h:</span>
-            <span className="value">{vol}</span>
-          </div>
-
-          <div className="desktop-card-row">
-            <span className="label">Created:</span>
-            <span className="value">{time} · {date}</span>
-          </div>
-
-          <div className="desktop-card-row">
-            <span className="label">Socials:</span>
-            {username ? (
-              <a
-                href={`https://warpcast.com/${username}`}
-                target="_blank"
-                className="value socials"
-              >
-                @{username}
-              </a>
-            ) : (
-              <span className="value">—</span>
-            )}
-          </div>
-
-          {token.source_url && (
-            <a
-              href={token.source_url}
-              target="_blank"
-              className="desktop-card-button"
-            >
-              View on {sourceLabel}
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  })}
-
               <>
-              {/* Load more (только для десктопа) */}
-          {!isMobile && filteredTokens.length > visibleRows && (
-            <div style={{ marginTop: 10, textAlign: "center" }}>
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                style={{
-                  padding: "6px 14px",
-                  fontSize: 12,
-                  borderRadius: 999,
-                  border: "1px solid #d1d5db",
-                  background: "#f9fafb",
-                  cursor: "pointer",
-                }}
-              >
-                Load more
-              </button>
-            </div>
-          )}
+                <div className="desktop-card-list">
+                  {visibleTokens.length === 0 ? (
+                    <div className="hatchr-table-empty">
+                      {isLoading
+                        ? "Loading Base mints…"
+                        : "Nothing here yet. Try again in a minute."}
+                    </div>
+                  ) : (
+                    visibleTokens.map((token) => {
+                      const { time, date } = formatCreated(token.first_seen_at);
+
+                      const username = extractFarcasterUsername(
+                        token.farcaster_url || undefined
+                      );
+                      const mcap = formatNumber(token.market_cap_usd);
+                      const vol = formatNumber(token.volume_24h_usd);
+
+                      const symbol = token.symbol || "";
+                      const name = token.name || symbol || "New token";
+
+                      const sourceLabel =
+                        token.source === "clanker" ? "Clanker" : "Zora";
+
+                      const shortAddress =
+                        token.token_address.length > 4
+                          ? `0x…${token.token_address.slice(-4)}`
+                          : token.token_address;
+
+                      return (
+                        <div
+                          key={token.token_address}
+                          className="desktop-token-card"
+                        >
+                          {/* Аватар */}
+                          <div className="desktop-card-avatar">
+                            {token.image_url ? (
+                              <img
+                                src={token.image_url}
+                                alt={name}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  borderRadius: 16,
+                                  objectFit: "cover",
+                                }}
+                              />
+                            ) : (
+                              <span>
+                                {(symbol || name).charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Основные данные */}
+                          <div className="desktop-card-body">
+                            <div className="desktop-card-header">
+                              <span className="desktop-card-name">{name}</span>
+                              {symbol && (
+                                <span className="desktop-card-symbol">
+                                  {symbol}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="desktop-card-row">
+                              <span className="label">Address:</span>
+                              <span
+                                className="value address"
+                                onClick={() =>
+                                  handleCopyAddress(token.token_address)
+                                }
+                              >
+                                {shortAddress}
+                              </span>
+                            </div>
+
+                            <div className="desktop-card-row">
+                              <span className="label">Source:</span>
+                              <span className="value">{sourceLabel}</span>
+                            </div>
+
+                            <div className="desktop-card-row">
+                              <span className="label">Market Cap:</span>
+                              <span className="value">{mcap}</span>
+                            </div>
+
+                            <div className="desktop-card-row">
+                              <span className="label">Vol 24h:</span>
+                              <span className="value">{vol}</span>
+                            </div>
+
+                            <div className="desktop-card-row">
+                              <span className="label">Created:</span>
+                              <span className="value">
+                                {time} · {date}
+                              </span>
+                            </div>
+
+                            <div className="desktop-card-row">
+                              <span className="label">Socials:</span>
+                              {username ? (
+                                <a
+                                  href={`https://warpcast.com/${username}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="value socials"
+                                >
+                                  @{username}
+                                </a>
+                              ) : (
+                                <span className="value">—</span>
+                              )}
+                            </div>
+
+                            {token.source_url && (
+                              <a
+                                href={token.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="desktop-card-button"
+                              >
+                                View on {sourceLabel}
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Load more (только для десктопа) */}
+                {filteredTokens.length > visibleRows && (
+                  <div style={{ marginTop: 10, textAlign: "center" }}>
+                    <button
+                      type="button"
+                      onClick={handleLoadMore}
+                      style={{
+                        padding: "6px 14px",
+                        fontSize: 12,
+                        borderRadius: 999,
+                        border: "1px solid #d1d5db",
+                        background: "#f9fafb",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Load more
+                    </button>
+                  </div>
+                )}
               </>
+            )}
           </section>
 
           {/* правая колонка — live traded feed */}
