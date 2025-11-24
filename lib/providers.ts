@@ -157,6 +157,28 @@ function normalizeImageUrl(raw?: string | null): string | null {
 
 // ======================= CLANKER (3 часа) =======================
 
+// Вспомогательная функция — нормализация ссылок (ipfs и т.п.)
+function normalizeImageUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  // ipfs://Qm... -> https://ipfs.io/ipfs/Qm...
+  if (trimmed.startsWith("ipfs://")) {
+    const hash = trimmed.replace("ipfs://", "");
+    return `https://ipfs.io/ipfs/${hash}`;
+  }
+
+  // https://.../ipfs/Qm... -> https://ipfs.io/ipfs/Qm...
+  const ipfsMatch = trimmed.match(/ipfs\/([^/?#]+)/);
+  if (ipfsMatch?.[1]) {
+    return `https://ipfs.io/ipfs/${ipfsMatch[1]}`;
+  }
+
+  // уже обычный https/ http — оставляем как есть
+  return trimmed;
+}
+
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
   const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
@@ -185,7 +207,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       raw = await fetchJson(url);
     } catch (e) {
       console.error("[Clanker] fetch error, skip page:", url, e);
-      // если Clanker лежит — выходим из цикла и работаем с тем, что уже есть
       break;
     }
 
@@ -210,22 +231,21 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
-      // --- картинка токена из Clanker ---
-      // 1) главное поле — img_url (Clanker V3/V4)
-let image_url: string | null =
-  (t.img_url as string) ||
-  (t.image_url as string) ||
-  (t.imageUrl as string) ||
-  (t.image as string) ||
-  (t.thumbnailUrl as string) ||
-  (meta.image_url as string) ||
-  (meta.imageUrl as string) ||
-  (meta.image as string) ||
-  (meta.thumbnailUrl as string) ||
-  null;
+      // ------ картинка из Clanker ------
+      const rawImage: string | null =
+        (t.img_url as string | undefined) ||                 // главное поле
+        (t.image_url as string | undefined) ||
+        (t.imageUrl as string | undefined) ||
+        (t.image as string | undefined) ||
+        (t.thumbnailUrl as string | undefined) ||
+        (meta.img_url as string | undefined) ||
+        (meta.image_url as string | undefined) ||
+        (meta.imageUrl as string | undefined) ||
+        (meta.image as string | undefined) ||
+        (meta.thumbnailUrl as string | undefined) ||
+        null;
 
-// 2) Нормализация, чтобы IPFS → https
-image_url = normalizeImageUrl(image_url);
+      const image_url = normalizeImageUrl(rawImage);
       
       // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
       let fid: number | string | undefined;
