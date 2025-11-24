@@ -457,8 +457,18 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         (n.creatorProfile?.avatar?.image?.url as string | undefined) ??
         null;
 
-      const rawImage = tokenImageRaw ?? creatorAvatarRaw;
-      const image_url = normalizeImageUrl(rawImage);
+      const rawImage: string | null =
+  (n.imageUrl as string | undefined) ||
+  (n.image_url as string | undefined) ||
+  (n.image?.url as string | undefined) ||
+  (Array.isArray(n.media) && n.media[0]?.url
+    ? (n.media[0].url as string)
+    : undefined) ||
+  (n.creatorProfile?.avatar?.previewImage?.url as string | undefined) ||
+  (n.creatorProfile?.avatar?.url as string | undefined) ||
+  null;
+
+const image_url = normalizeImageUrl(rawImage);
 
       tokens.push({
         token_address: addr,
