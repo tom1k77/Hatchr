@@ -15,6 +15,7 @@ export async function GET() {
       symbol: t.symbol ?? "",
       source: t.source ?? "",
       source_url: t.source_url ?? "",
+      image_url: t.image_url ?? "",
       first_seen_at: t.first_seen_at ?? null,
 
       price_usd: t.price_usd ?? null,
