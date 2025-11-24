@@ -442,26 +442,20 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
 
-      // 1) Берём аватарку создателя
-      const creatorImageRaw =
-        (creatorProfile.avatarUrl as string | undefined) ||
-        (creatorProfile.imageUrl as string | undefined) ||
-        (creatorProfile.profileImageUrl as string | undefined) ||
-        (creatorProfile.profileImage?.url as string | undefined) ||
-        null;
-
-      // 2) Фолбэк — старые поля токена (если вдруг аватарки нет)
-      const tokenImageRaw =
-        (n.imageUrl as string | undefined) ||
-        (n.image_url as string | undefined) ||
-        (n.image?.url as string | undefined) ||
+      / 1) пробуем картинку токена
+      // 2) если нет — берем аватар создателя (creatorProfile)
+      const rawImage: string | null =
+        (n.imageUrl as string | undefined) ??
+        (n.image_url as string | undefined) ??
+        (n.image?.url as string | undefined) ??
         (Array.isArray(n.media) && n.media[0]?.url
           ? (n.media[0].url as string)
-          : undefined) ||
+          : undefined) ??
+        (n.creatorProfile?.avatarUrl as string | undefined) ??
+        (n.creatorProfile?.profileImage?.url as string | undefined) ??
         null;
 
-      // 3) Нормализуем (ipfs и прочее) — функция уже есть и используется для Clanker
-      const image_url = normalizeImageUrl(creatorImageRaw || tokenImageRaw);
+      const image_url = normalizeImageUrl(rawImage);
 
       tokens.push({
         token_address: addr,
@@ -470,7 +464,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         source: "zora",
         source_url,
         first_seen_at: createdIso,
-        image_url,
+        image_url, // <– тут уже нормализованный урл
         farcaster_url,
         x_url,
         instagram_url,
