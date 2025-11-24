@@ -25,10 +25,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
-/* ===========================
-   Hatchr layout & styles
-   =========================== */
-
+/* ROOT */
 .hatchr-root {
   min-height: 100vh;
   background-color: #f3f4f6;
@@ -36,7 +33,7 @@ body {
 }
 
 .hatchr-shell {
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   background-color: #ffffff;
   border-radius: 16px;
@@ -44,13 +41,11 @@ body {
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
 }
 
-/* Top bar */
-
+/* TOP BAR */
 .hatchr-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
   margin-bottom: 16px;
 }
 
@@ -76,16 +71,9 @@ body {
   object-fit: contain;
 }
 
-.hatchr-brand-logo-letter {
-  font-size: 16px;
-  font-weight: 700;
-  color: #f9fafb;
-}
-
 .hatchr-brand-title {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .hatchr-brand-title-main {
@@ -101,55 +89,37 @@ body {
 .hatchr-nav {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
 }
 
 .hatchr-nav-pill {
   font-size: 12px;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid #e5e7eb;
   background: #f9fafb;
+  border: 1px solid #e5e7eb;
   color: #4b5563;
 }
 
 .hatchr-nav-pill.primary {
   background: #4f46e5;
-  color: #ffffff;
-  border-color: transparent;
+  color: white;
 }
 
-/* Main grid: desktop */
-
+/* GRID — FIXED HERE */
 .hatchr-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2.4fr) minmax(260px, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 3fr) minmax(260px, 1fr);
+  gap: 24px;
   align-items: flex-start;
 }
 
-/* Filters */
-
+/* FILTERS */
 .hatchr-filters {
   display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 10px;
-  align-items: center;
   margin-bottom: 10px;
-}
-
-.hatchr-filters-left {
-  display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.hatchr-filters-search {
-  flex: 1;
-  max-width: 260px;
+  gap: 10px;
 }
 
 .hatchr-label {
@@ -159,368 +129,55 @@ body {
   gap: 6px;
 }
 
-.hatchr-select,
-.hatchr-input-number,
-.hatchr-search {
-  font-size: 13px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  border: 1px solid #d1d5db;
-  background: #ffffff;
-}
-
-.hatchr-search {
-  width: 100%;
-  padding: 6px 10px;
-}
-
-.hatchr-error {
-  margin-bottom: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background-color: #fee2e2;
-  color: #b91c1c;
-  font-size: 12px;
-  border: 1px solid #fecaca;
-}
-
-/* Table (legacy, сейчас не используется, но пусть останется) */
-
+/* TABLE */
 .hatchr-table-wrapper {
   border-radius: 10px;
   border: 1px solid #eee;
-  background-color: #ffffff;
+  background: white;
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
-.hatchr-table {
-  width: 100%;
-  min-width: 720px;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: 13px;
-}
-
-.hatchr-table thead tr {
-  background-color: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.hatchr-table th {
-  padding: 8px 10px;
-  font-weight: 500;
-  color: #4b5563;
-  white-space: nowrap;
-}
-
-.hatchr-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.hatchr-table-row.hovered {
-  background-color: #f9fafb;
-}
-
-.hatchr-table-empty {
-  padding: 18px 10px;
-  text-align: center;
-  color: #6b7280;
-}
-
-/* Source pill */
-
-.hatchr-source-pill {
-  display: inline-flex;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  font-size: 11px;
-  text-transform: lowercase;
-  color: #4b5563;
-  background: #f9fafb;
-}
-
-/* Right sidebar */
-
+/* FEED */
 .hatchr-feed {
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
-  padding: 10px 12px;
+  padding: 12px;
+  height: fit-content;
 }
 
-.hatchr-feed-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 500;
+/* MOBILE MODE */
+@media (max-width: 900px) {
+  .hatchr-main-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.hatchr-feed-badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-}
-
-.hatchr-feed-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* CARDS — MOBILE + DESKTOP */
+/* CARDS FIXED HERE */
+.token-card-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.hatchr-feed-item {
-  border-radius: 10px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  padding: 6px 8px;
-  font-size: 12px;
-}
-
-.hatchr-feed-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2px;
-}
-
-.hatchr-feed-main .token {
-  font-weight: 500;
-}
-
-.hatchr-feed-main .meta {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.hatchr-feed-sub {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-/* ================== Адаптив ================== */
-
-/* До ~900px: одна колонка (лево + фид друг под другом) */
-
-@media (max-width: 900px) {
-  .hatchr-shell {
-    padding: 14px 14px 18px;
-  }
-
-  .hatchr-main-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .hatchr-feed {
-    margin-top: 12px;
-  }
-
-  .hatchr-filters {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .hatchr-filters-left {
-    flex-wrap: wrap;
-    row-gap: 4px;
-  }
-
-  .hatchr-filters-search {
-    width: 100%;
-    max-width: none;
-  }
-
-  .hatchr-search {
-    width: 100%;
-  }
-}
-
-/* < 768px: компактная оболочка */
-
-@media (max-width: 768px) {
-  .hatchr-root {
-    padding: 12px;
-  }
-
-  .hatchr-shell {
-    padding: 12px;
-  }
-
-  .hatchr-main-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .hatchr-main-grid > section,
-  .hatchr-main-grid > aside {
-    width: 100%;
-  }
-
-  /* таблицу прячем на мобиле (на всякий случай) */
-  .hatchr-table-wrapper {
-    display: none;
-  }
-}
-
-/* ============= Карточки токенов: mobile + desktop ============= */
-
-.token-card-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 16px;
+  width: 100%; /* растягиваем карточки */
 }
 
 .token-card {
+  background: white;
+  padding: 14px 16px;
   border-radius: 18px;
-  background: #ffffff;
-  padding: 10px 12px 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
 }
 
-.token-card-top {
-  display: flex;
-  gap: 12px;
-}
-
-.token-card-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: #e5edff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 20px;
-  color: #111827;
-  flex-shrink: 0;
-}
-
-.token-card-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.token-card-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.token-card-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px;
-}
-
-.token-card-name {
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.token-card-symbol {
-  font-size: 12px;
-  opacity: 0.7;
-  text-transform: uppercase;
-}
-
-.token-card-time {
-  font-size: 11px;
-  opacity: 0.7;
-  white-space: nowrap;
-}
-
-.token-card-address {
-  margin-top: 2px;
-  font-size: 11px;
-  color: #6b7280;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.token-card-address-btn {
-  border: none;
-  background: none;
-  padding: 0;
-  font-family: monospace;
-  font-size: 11px;
-  color: #111827;
-  cursor: pointer;
-}
-
-.token-card-stats {
-  display: flex;
-  gap: 8px;
-  font-size: 12px;
-  margin-top: 2px;
-}
-
-.token-card-source {
-  display: flex;
-  align-items: center;
-  margin-top: 4px;
-  font-size: 11px;
-}
-
-.token-card-source-pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  color: #111827;
-}
-
-.token-card-creator {
-  margin-left: 4px;
-  font-size: 11px;
-  text-decoration: none;
-  opacity: 0.8;
-}
-
-.token-card-creator:hover {
-  text-decoration: underline;
-  opacity: 1;
-}
-
-.token-card-button {
-  margin-top: 8px;
-  display: block;
-  width: 100%;
-  text-align: center;
-  padding: 8px 0;
-  border-radius: 999px;
-  background: #0052ff;
-  color: #ffffff;
-  font-size: 14px;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-/* На широких экранах чуть ужимаем ширину блока с карточками,
-   чтобы он не растягивался на всю левую колонку */
+/* DESKTOP: карточки должны занимать ВСЮ левую область */
 @media (min-width: 1024px) {
   .token-card-list {
-    max-width: 620px;
+    width: 100%; /* фикс: больше не 560px */
   }
 }
 
-/* На всякий случай ещё раз прячем таблицу на совсем маленьких */
-@media (max-width: 767px) {
+/* MOBILE — скрываем таблицу */
+@media (max-width: 768px) {
   .hatchr-table-wrapper {
     display: none;
   }
