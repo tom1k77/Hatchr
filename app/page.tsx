@@ -532,82 +532,76 @@ export default function HomePage() {
         token.source === "clanker" ? "Clanker" : "Zora";
 
       return (
-        <div key={token.token_address} className="token-card">
-          <div className="token-card-top">
-            <div className="token-card-avatar">
-  {token.image_url ? (
-    <img
-      src={token.image_url}
-      alt={token.name || token.symbol || "Token"}
-      style={{
-        width: "100%",
-        height: "100%",
-        borderRadius: "16px",
-        objectFit: "cover",
-      }}
-      onError={(e) => {
-        // если картинка битая — показываем букву
-        e.currentTarget.style.display = "none";
-        const parent = e.currentTarget.parentElement;
-        if (parent && !parent.querySelector("span")) {
-          const span = document.createElement("span");
-          span.textContent = (token.symbol || token.name || "?")[0] ?? "?";
-          parent.appendChild(span);
-        }
-      }}
-    />
-  ) : (
-    <span>{(token.symbol || token.name || "?")[0]}</span>
-  )}
-</div>
+  <div key={token.token_address} className="token-card">
+    <div className="token-card-top">
+      {/* Левая часть — аватар */}
+      <div className="token-card-avatar">
+        {token.image_url ? (
+          <img
+            src={token.image_url}
+            alt={token.name || token.symbol || "Token"}
+            style={{
+              width: "100%",
+              height: "100%",
+              borderRadius: "16px",
+              objectFit: "cover",
+            }}
+          />
+        ) : (
+          <span>{(token.symbol || token.name || "?")[0]}</span>
+        )}
+      </div>
 
-            <div className="token-card-main">
-              <div className="token-card-title-row">
-                <div className="token-card-title">
-                  <span>{name}</span>
-                  {symbol && (
-                    <span className="token-card-symbol">{symbol}</span>
-                  )}
-                </div>
-                <div className="token-card-time">
-                  {time}
-                  {date && ` · ${date}`}
-                </div>
-              </div>
+      {/* Правая часть — инфо по токену */}
+      <div className="token-card-main">
+        <div className="token-card-header">
+          <span className="token-card-name">{name}</span>
+          {symbol && symbol !== name && (
+            <span className="token-card-symbol">{symbol}</span>
+          )}
+        </div>
 
-              <div className="token-card-stats">
-                <span>MC: {mcap}</span>
-                <span>Vol 24h: {vol}</span>
-              </div>
+        {/* Время + дата создания */}
+        <div className="token-card-time">
+          {time} · {date}
+        </div>
 
-              <div className="token-card-source">
-                <span className="token-card-source-pill">
-                  {sourceLabel}
-                </span>
-                {username && (
-                  <span style={{ marginLeft: 8, fontSize: 11 }}>
-                    · @{username}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+        {/* MC / Volume */}
+        <div className="token-card-stats">
+          <span>MC: {mcap}</span>
+          <span>Vol 24h: {vol}</span>
+        </div>
 
-          {token.source_url && (
+        {/* Source + создатель */}
+        <div className="token-card-source">
+          <span className="token-card-source-pill">{sourceLabel}</span>
+
+          {username && token.farcaster_url && (
             <a
-              href={token.source_url}
+              href={token.farcaster_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="token-card-button"
+              className="token-card-creator"
             >
-              View on {token.source === "zora" ? "Zora" : "Clanker"}
+              · @{username}
             </a>
           )}
         </div>
-      );
-    })
-  )}
-</div>
+      </div>
+    </div>
+
+    {token.source_url && (
+      <a
+        href={token.source_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="token-card-button"
+      >
+        View on {token.source === "zora" ? "Zora" : "Clanker"}
+      </a>
+    )}
+  </div>
+);
 
             {/* таблица */}
             <div className="hatchr-table-wrapper">
