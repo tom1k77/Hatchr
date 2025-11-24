@@ -184,19 +184,19 @@ body {
   border: 1px solid #fecaca;
 }
 
-/* Table (desktop / tablet) */
+/* Table (legacy, сейчас не используется, но пусть останется) */
 
 .hatchr-table-wrapper {
   border-radius: 10px;
   border: 1px solid #eee;
   background-color: #ffffff;
-  overflow-x: auto;              /* горизонтальный скролл */
+  overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .hatchr-table {
   width: 100%;
-  min-width: 720px;              /* чтобы колонки не схлопывались */
+  min-width: 720px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 13px;
@@ -308,7 +308,7 @@ body {
 
 /* ================== Адаптив ================== */
 
-/* До ~900px: одна колонка (таблица сверху, фид снизу) */
+/* До ~900px: одна колонка (лево + фид друг под другом) */
 
 @media (max-width: 900px) {
   .hatchr-shell {
@@ -343,7 +343,7 @@ body {
   }
 }
 
-/* < 768px: режим Pure.st — карточки вместо таблицы */
+/* < 768px: компактная оболочка */
 
 @media (max-width: 768px) {
   .hatchr-root {
@@ -365,111 +365,26 @@ body {
     width: 100%;
   }
 
-  /* таблицу прячем на мобиле */
+  /* таблицу прячем на мобиле (на всякий случай) */
   .hatchr-table-wrapper {
     display: none;
   }
+}
 
-  /* включаем карточки */
-  .token-card-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+/* ============= Карточки токенов: mobile + desktop ============= */
 
-  .token-card {
-    border-radius: 18px;
-    background: #ffffff;
-    padding: 10px 12px 12px;
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-  }
+.token-card-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
 
-  .token-card-top {
-    display: flex;
-    gap: 10px;
-  }
-
-  .token-card-avatar {
-    width: 52px;
-    height: 52px;
-    border-radius: 16px;
-    background: #e5edff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 20px;
-    color: #111827;
-    flex-shrink: 0;
-  }
-
-  .token-card-title-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .token-card-title-main {
-    font-weight: 600;
-    font-size: 15px;
-  }
-
-  .token-card-symbol {
-    margin-left: 6px;
-    font-size: 11px;
-    text-transform: uppercase;
-    color: #6b7280;
-  }
-
-  .token-card-time {
-    font-size: 11px;
-    color: #9ca3af;
-    white-space: nowrap;
-  }
-
-  .token-card-stats {
-    margin-top: 4px;
-    font-size: 12px;
-    color: #111827;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .token-card-source {
-    margin-top: 4px;
-  }
-
-  .token-card-source-pill {
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: #f3f4f6;
-    color: #111827;
-  }
-
-  .token-card-button {
-    margin-top: 8px;
-    display: block;
-    width: 100%;
-    text-align: center;
-    padding: 8px 0;
-    border-radius: 999px;
-    background: #0052ff;
-    color: #ffffff;
-    font-size: 14px;
-    text-decoration: none;
-    font-weight: 500;
-  }
-
-  .token-card-loadmore {
-    padding: 6px 14px;
-    font-size: 12px;
-    border-radius: 999px;
-    border: 1px solid #d1d5db;
-    background: #f9fafb;
-  }
+.token-card {
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 10px 12px 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .token-card-top {
@@ -478,15 +393,17 @@ body {
 }
 
 .token-card-avatar {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   border-radius: 16px;
-  background: #f3f3f6;
+  background: #e5edff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 20px;
+  color: #111827;
+  flex-shrink: 0;
 }
 
 .token-card-main {
@@ -499,7 +416,15 @@ body {
 .token-card-header {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 6px;
+}
+
+.token-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .token-card-name {
@@ -510,27 +435,58 @@ body {
 .token-card-symbol {
   font-size: 12px;
   opacity: 0.7;
+  text-transform: uppercase;
 }
 
 .token-card-time {
   font-size: 11px;
   opacity: 0.7;
+  white-space: nowrap;
+}
+
+.token-card-address {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.token-card-address-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: monospace;
+  font-size: 11px;
+  color: #111827;
+  cursor: pointer;
 }
 
 .token-card-stats {
   display: flex;
   gap: 8px;
   font-size: 12px;
+  margin-top: 2px;
 }
 
 .token-card-source {
   display: flex;
   align-items: center;
-  margin-top: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.token-card-source-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .token-card-creator {
-  margin-left: 8px;
+  margin-left: 4px;
   font-size: 11px;
   text-decoration: none;
   opacity: 0.8;
@@ -541,23 +497,29 @@ body {
   opacity: 1;
 }
 
-/* Карточки — показываем ВЕЗДЕ (мобилка + десктоп) */
-.token-card-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-top: 12px;
+.token-card-button {
+  margin-top: 8px;
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 8px 0;
+  border-radius: 999px;
+  background: #0052ff;
+  color: #ffffff;
+  font-size: 14px;
+  text-decoration: none;
+  font-weight: 500;
 }
 
 /* На широких экранах чуть ужимаем ширину блока с карточками,
-   чтобы он не растягивался на весь экран */
+   чтобы он не растягивался на всю левую колонку */
 @media (min-width: 1024px) {
   .token-card-list {
-    max-width: 560px;
+    max-width: 620px;
   }
 }
 
-/* На мобильных прячем таблицу, оставляем только карточки */
+/* На всякий случай ещё раз прячем таблицу на совсем маленьких */
 @media (max-width: 767px) {
   .hatchr-table-wrapper {
     display: none;
