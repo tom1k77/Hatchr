@@ -418,8 +418,10 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const volume24Num = toNum(n.volume24h);
       const priceUsdcNum = toNum(n.tokenPrice?.priceInUsdc);
 
-      // Соцсети из creatorProfile.socialAccounts
-      const social = n.creatorProfile?.socialAccounts ?? {};
+      // Профиль создателя (creatorProfile)
+      const creatorProfile = n.creatorProfile ?? {};
+      const social = creatorProfile.socialAccounts ?? {};
+
       let farcaster_url: string | undefined;
       let x_url: string | undefined;
       let instagram_url: string | undefined;
@@ -439,22 +441,28 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       }
 
       const source_url = `https://zora.co/coin/base:${addr}`;
-      // --- картинка токена из Zora ---
-      const rawImage: string | null =
-        // новый формат Zora — mediaContent.previewImage.url (или похоже)
-        (n.mediaContent?.previewImage?.url as string | undefined) ||
-        (n.mediaContent?.image?.url as string | undefined) ||
-        // возможные старые поля
+
+      // 1) Берём аватарку создателя
+      const creatorImageRaw =
+        (creatorProfile.avatarUrl as string | undefined) ||
+        (creatorProfile.imageUrl as string | undefined) ||
+        (creatorProfile.profileImageUrl as string | undefined) ||
+        (creatorProfile.profileImage?.url as string | undefined) ||
+        null;
+
+      // 2) Фолбэк — старые поля токена (если вдруг аватарки нет)
+      const tokenImageRaw =
         (n.imageUrl as string | undefined) ||
         (n.image_url as string | undefined) ||
         (n.image?.url as string | undefined) ||
-        (Array.isArray(n.media) && typeof n.media[0]?.url === "string"
+        (Array.isArray(n.media) && n.media[0]?.url
           ? (n.media[0].url as string)
           : undefined) ||
         null;
 
-      const image_url = normalizeImageUrl(rawImage);
-      
+      // 3) Нормализуем (ipfs и прочее) — функция уже есть и используется для Clanker
+      const image_url = normalizeImageUrl(creatorImageRaw || tokenImageRaw);
+
       tokens.push({
         token_address: addr,
         name,
