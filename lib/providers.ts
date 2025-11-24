@@ -439,11 +439,16 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       }
 
       const source_url = `https://zora.co/coin/base:${addr}`;
+      // --- картинка токена из Zora ---
       const rawImage: string | null =
+        // новый формат Zora — mediaContent.previewImage.url (или похоже)
+        (n.mediaContent?.previewImage?.url as string | undefined) ||
+        (n.mediaContent?.image?.url as string | undefined) ||
+        // возможные старые поля
         (n.imageUrl as string | undefined) ||
         (n.image_url as string | undefined) ||
         (n.image?.url as string | undefined) ||
-        (Array.isArray(n.media) && n.media[0]?.url
+        (Array.isArray(n.media) && typeof n.media[0]?.url === "string"
           ? (n.media[0].url as string)
           : undefined) ||
         null;
