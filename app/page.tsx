@@ -724,25 +724,25 @@ export default function HomePage() {
   })}
 </div>
 
-            {/* Load more */}
-            {filteredTokens.length > visibleRows && (
-              <div style={{ marginTop: 10, textAlign: "center" }}>
-                <button
-                  type="button"
-                  onClick={handleLoadMore}
-                  style={{
-                    padding: "6px 14px",
-                    fontSize: 12,
-                    borderRadius: 999,
-                    border: "1px solid #d1d5db",
-                    background: "#f9fafb",
-                    cursor: "pointer",
-                  }}
-                >
-                  Load more
-                </button>
-              </div>
-            )}
+            {/* Load more (только для десктопа) */}
+          {!isMobile && filteredTokens.length > visibleRows && (
+            <div style={{ marginTop: 10, textAlign: "center" }}>
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  borderRadius: 999,
+                  border: "1px solid #d1d5db",
+                  background: "#f9fafb",
+                  cursor: "pointer",
+                }}
+              >
+                Load more
+              </button>
+            </div>
+          )}
           </section>
 
           {/* правая колонка — live traded feed */}
