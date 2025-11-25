@@ -438,52 +438,68 @@ body {
   }
 }
 
+/* Карточка */
+
 .desktop-token-card {
   display: flex;
-  gap: 10px;
-  padding: 10px 12px 12px;
-  border-radius: 14px;
+  gap: 14px;
+  padding: 12px 14px 14px;
+  border-radius: 18px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
   align-items: flex-start;
 }
 
+/* Аватар токена — крупнее */
+
 .desktop-card-avatar {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
   background: #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 22px;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
-.desktop-card-body {
+.desktop-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+}
+
+/* Правая часть карточки */
+
+.desktop-card-main {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
+
+/* Верхняя строка: название + время */
 
 .desktop-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .desktop-card-title {
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .desktop-card-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -500,13 +516,44 @@ body {
   white-space: nowrap;
 }
 
+/* Блок с MC и Vol 24h */
+
+.desktop-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.desktop-card-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.desktop-card-meta-label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.desktop-card-meta-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* Остальные строки (Address / Source / Socials) */
+
 .desktop-card-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
-  margin-top: 3px;
+}
+
+.desktop-card-row + .desktop-card-row {
+  margin-top: 4px;
 }
 
 .desktop-card-row .label {
@@ -518,6 +565,8 @@ body {
   font-size: 12px;
   color: #111827;
 }
+
+/* Адрес + кнопка копирования */
 
 .desktop-card-row .address {
   display: inline-flex;
@@ -545,6 +594,8 @@ body {
   color: #0052ff;
 }
 
+/* Source pill */
+
 .desktop-source-pill {
   display: inline-flex;
   padding: 2px 8px;
@@ -555,27 +606,7 @@ body {
   color: #4b5563;
 }
 
-/* Строка с MC и Vol 24h */
-
-.desktop-card-row--stats {
-  display: grid;
-  grid-template-columns: auto 1fr auto 1fr;
-  column-gap: 4px;
-  align-items: center;
-}
-
-.desktop-card-row--stats .label {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.desktop-card-row--stats .value {
-  font-size: 12px;
-  color: #111827;
-  text-align: right;
-}
-
-/* Кнопка View on Clanker/Zora по центру */
+/* Кнопка View on Zora / Clanker — по центру */
 
 .desktop-card-footer {
   margin-top: 8px;
@@ -585,7 +616,7 @@ body {
 
 .desktop-card-link {
   display: inline-block;
-  padding: 6px 14px;
+  padding: 7px 16px;
   border-radius: 999px;
   background: #0052ff;
   color: #ffffff;
@@ -598,7 +629,7 @@ body {
   opacity: 0.9;
 }
 
-/* Соцки + Farcaster pill & tooltip */
+/* Соцки + Farcaster */
 
 .desktop-social-wrap {
   position: relative;
@@ -620,11 +651,13 @@ body {
 }
 
 .desktop-farcaster-pill img {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
   object-fit: cover;
 }
+
+/* Tooltip Farcaster */
 
 .desktop-farcaster-tooltip {
   position: absolute;
@@ -673,6 +706,8 @@ body {
 .tooltip-stats strong {
   font-weight: 600;
 }
+
+/* fallback-вторичная соцсеть (X / IG / TikTok) */
 
 .desktop-secondary-pill {
   display: inline-flex;
