@@ -26,7 +26,7 @@ body {
 }
 
 /* ===========================
-   Hatchr layout & top bar
+   Hatchr layout & styles
    =========================== */
 
 .hatchr-root {
@@ -119,20 +119,16 @@ body {
   border-color: transparent;
 }
 
-/* ===========================
-   Main grid
-   =========================== */
+/* Main grid: desktop */
 
 .hatchr-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 340px);
   gap: 18px;
   align-items: flex-start;
 }
 
-/* ===========================
-   Filters
-   =========================== */
+/* Filters */
 
 .hatchr-filters {
   display: flex;
@@ -188,152 +184,7 @@ body {
   border: 1px solid #fecaca;
 }
 
-/* ===========================
-   (Старая) таблица — прячем
-   =========================== */
-
-.hatchr-table-wrapper {
-  display: none;
-}
-
-/* ===========================
-   Token cards (универсально)
-   =========================== */
-
-.token-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
-}
-
-.token-card {
-  border-radius: 18px;
-  background: #ffffff;
-  padding: 10px 12px 12px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.token-card-top {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.token-card-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-  background: #e5edff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 20px;
-  color: #111827;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-/* на случай любых картинок внутри карточки — не даём им растягиваться
-   на весь экран неожиданно */
-.token-card-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 16px;
-}
-
-.token-card-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.token-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.token-card-title {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.token-card-name {
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.token-card-symbol {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #6b7280;
-}
-
-.token-card-time {
-  font-size: 11px;
-  color: #9ca3af;
-  white-space: nowrap;
-}
-
-.token-card-stats {
-  margin-top: 2px;
-  font-size: 12px;
-  color: #111827;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.token-card-source {
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  font-size: 12px;
-}
-
-.token-card-source-pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #f3f4f6;
-  color: #111827;
-}
-
-.token-card-creator {
-  margin-left: 6px;
-  font-size: 11px;
-  text-decoration: none;
-  color: #4f46e5;
-}
-
-.token-card-creator:hover {
-  text-decoration: underline;
-}
-
-.token-card-button {
-  margin-top: 8px;
-  display: block;
-  width: 100%;
-  text-align: center;
-  padding: 8px 0;
-  border-radius: 999px;
-  background: #0052ff;
-  color: #ffffff;
-  font-size: 14px;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-/* ===========================
-   Right sidebar (live feed)
-   =========================== */
+/* Right sidebar */
 
 .hatchr-feed {
   border-radius: 12px;
@@ -397,11 +248,13 @@ body {
   color: #6b7280;
 }
 
-/* ===========================
-   Адаптив
-   =========================== */
+.hatchr-table-empty {
+  padding: 18px 10px;
+  text-align: center;
+  color: #6b7280;
+}
 
-/* До ~900px: одна колонка */
+/* ================== Мобильные карточки ================== */
 
 @media (max-width: 900px) {
   .hatchr-shell {
@@ -419,7 +272,6 @@ body {
   .hatchr-filters {
     flex-direction: column;
     gap: 8px;
-    align-items: stretch;
   }
 
   .hatchr-filters-left {
@@ -437,7 +289,7 @@ body {
   }
 }
 
-/* Мобильные — чуть компактнее карточки и отступы */
+/* < 768px: карточки в один столбец */
 
 @media (max-width: 768px) {
   .hatchr-root {
@@ -448,32 +300,265 @@ body {
     padding: 12px;
   }
 
-  .token-card {
-    padding: 10px 10px 12px;
-  }
-
-  .token-card-avatar {
-    width: 48px;
-    height: 48px;
-    font-size: 18px;
-  }
-}
-
-/* Десктопные экраны: левый столбец шире, карточки занимают всю его ширину.
-   Убираем "дырку" между карточками и правым блоком. */
-
-@media (min-width: 1024px) {
   .hatchr-main-grid {
-    grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr);
-    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
-  .token-card-list {
+  .hatchr-main-grid > section,
+  .hatchr-main-grid > aside {
     width: 100%;
   }
+}
 
-  .hatchr-feed {
-    position: sticky;
-    top: 72px;
+/* Общий стиль карточек (используется мобильной разметкой) */
+
+.token-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.token-card {
+  border-radius: 18px;
+  background: #ffffff;
+  padding: 10px 12px 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.token-card-top {
+  display: flex;
+  gap: 12px;
+}
+
+.token-card-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: #e5edff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 20px;
+  color: #111827;
+  flex-shrink: 0;
+}
+
+.token-card-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.token-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.token-card-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.token-card-symbol {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.token-card-time {
+  font-size: 11px;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.token-card-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.token-card-source {
+  display: flex;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.token-card-source-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.token-card-creator {
+  margin-left: 8px;
+  font-size: 11px;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.token-card-creator:hover {
+  text-decoration: underline;
+  opacity: 1;
+}
+
+.token-card-button {
+  margin-top: 8px;
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 8px 0;
+  border-radius: 999px;
+  background: #0052ff;
+  color: #ffffff;
+  font-size: 14px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+/* ================== DESKTOP CARD GRID ================== */
+
+.desktop-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* На широких — две карточки в ряд */
+@media (min-width: 1100px) {
+  .desktop-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.desktop-token-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px 12px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+.desktop-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.desktop-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.desktop-card-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.desktop-card-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.desktop-card-symbol {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.03em;
+}
+
+.desktop-card-time {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.desktop-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.desktop-card-row.stats .label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.desktop-card-row.stats .value {
+  font-weight: 500;
+}
+
+.desktop-card-row .label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.desktop-card-row .value {
+  font-size: 12px;
+  color: #111827;
+}
+
+.desktop-card-row .address {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: monospace;
+}
+
+.copy-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  cursor: pointer;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #4b5563;
+}
+
+.copy-btn:hover {
+  border-color: #0052ff;
+  color: #0052ff;
+}
+
+.desktop-source-pill {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  font-size: 11px;
+  text-transform: lowercase;
+  color: #4b5563
