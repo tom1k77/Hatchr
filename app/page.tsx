@@ -722,11 +722,11 @@ export default function HomePage() {
                             </div>
                           </div>
 
-                          <div className="desktop-card-row stats">
-                            <span className="label">MC</span>
-                            <span className="value">{mcap}</span>
+                          <div className="desktop-card-row desktop-card-row--stats">
+                           <span className="label">MC</span>
+                            <span className="value">{formattedMc}</span>
                             <span className="label">Vol 24h</span>
-                            <span className="value">{vol}</span>
+                            <span className="value">{formattedVol24h}</span>
                           </div>
 
                           <div className="desktop-card-row">
