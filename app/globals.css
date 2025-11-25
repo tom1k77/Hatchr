@@ -553,3 +553,64 @@ body {
   text-transform: lowercase;
   color: #4b5563;
 }
+
+/* ================== HATCHR CARD FIX PATCH ================== */
+
+/* Desktop grid: 2 фиксированные колонки для ноутбуков */
+.desktop-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 350px);
+  gap: 16px;
+  justify-content: center;
+}
+
+/* Карточка — фиксированная структура, не прыгает по высоте */
+.desktop-token-card {
+  display: flex;
+  flex-direction: column;
+  width: 350px;
+  min-height: 180px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+}
+
+/* Аватар остаётся слева и фиксирует структуру */
+.desktop-card-avatar {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+/* Длинные строки больше не ломают сетку */
+.desktop-card-name,
+.desktop-card-symbol,
+.desktop-card-time,
+.desktop-card-row,
+.desktop-card-row .address {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Контент внутри карточки распределён равномерно */
+.desktop-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Mobile — оставляем как есть */
+@media (max-width: 900px) {
+  .desktop-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-token-card {
+    width: 100%;
+    min-height: auto;
+  }
+}
