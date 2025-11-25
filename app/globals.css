@@ -478,9 +478,10 @@ body {
    =========================== */
 
 .desktop-token-card {
+  postion: relative;
   display: flex;
   gap: 14px;
-  padding: 12px 14px 14px;
+  padding: 12px 14px 54px;
   border-radius: 18px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -534,11 +535,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .desktop-card-name {
   font-size: 15px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .desktop-card-symbol {
@@ -552,6 +557,7 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* MC и Vol 24h — сразу под названием */
@@ -732,9 +738,13 @@ body {
 /* Кнопка View on — строго по центру и снизу карточки */
 
 .desktop-card-button {
-  margin-top: auto;      /* прижимаем к низу колонки */
-  display: block;
-  width: 100%;           /* центр относительно всей карточки */
+  position: absolute;                /* привязка к всей карточке */
+  left: 50%;
+  transform: translateX(-50%);       /* точно по центру по горизонтали */
+  bottom: 10px;                      /* в самом низу карточки */
+  display: inline-block;
+  width: 80%;                        /* не во всю ширину, аккуратнее смотрится */
+  max-width: 220px;
   text-align: center;
   padding: 7px 0;
   border-radius: 999px;
@@ -868,6 +878,11 @@ body {
   font-family: monospace;
 }
 
+.desktop-card-left-row .address,
+.desktop-card-row .address {
+   white-space: nowrap;
+}
+
 /* правая колонка */
 
 .desktop-card-right {
@@ -890,11 +905,15 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .desktop-card-name {
   font-size: 15px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .desktop-card-symbol {
@@ -908,6 +927,7 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* MC и Vol 24h под названием */
