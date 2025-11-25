@@ -601,3 +601,24 @@ body {
   color: #111827;
   text-align: right;
 }
+
+.desktop-card-footer {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.desktop-card-link {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: #0052ff;
+  color: #ffffff;
+  font-size: 13px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.desktop-card-link:hover {
+  opacity: 0.9;
+}
