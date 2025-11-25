@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================
+   Общие переменные
+   =========================== */
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -28,7 +32,7 @@ body {
 }
 
 /* ===========================
-   Hatchr layout & styles
+   Hatchr layout & shell
    =========================== */
 
 .hatchr-root {
@@ -130,7 +134,9 @@ body {
   align-items: flex-start;
 }
 
-/* Filters */
+/* ===========================
+   Filters
+   =========================== */
 
 .hatchr-filters {
   display: flex;
@@ -174,6 +180,7 @@ body {
 .hatchr-search {
   width: 100%;
   padding: 6px 10px;
+  box-sizing: border-box;
 }
 
 .hatchr-error {
@@ -186,7 +193,9 @@ body {
   border: 1px solid #fecaca;
 }
 
-/* Right sidebar */
+/* ===========================
+   Right sidebar: live feed
+   =========================== */
 
 .hatchr-feed {
   border-radius: 12px;
@@ -256,7 +265,9 @@ body {
   color: #6b7280;
 }
 
-/* ================== Mobile ================== */
+/* ===========================
+   Mobile layout
+   =========================== */
 
 @media (max-width: 900px) {
   .hatchr-shell {
@@ -274,6 +285,7 @@ body {
   .hatchr-filters {
     flex-direction: column;
     gap: 8px;
+    align-items: stretch;
   }
 
   .hatchr-filters-left {
@@ -317,7 +329,9 @@ body {
   }
 }
 
-/* ================== Card styles (mobile & desktop base) ================== */
+/* ===========================
+   Mobile token cards
+   =========================== */
 
 .token-card-list {
   display: flex;
@@ -347,10 +361,17 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 22px;
+  font-size: 20px;
   color: #111827;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+.token-card-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  object-fit: cover;
 }
 
 .token-card-main {
@@ -362,7 +383,7 @@ body {
 
 .token-card-header {
   display: flex;
-  flex-direction: column;
+  flex-direction: column; /* время на новой строке */
   align-items: flex-start;
   gap: 4px;
 }
@@ -380,7 +401,6 @@ body {
 .token-card-time {
   font-size: 11px;
   opacity: 0.7;
-  white-space: nowrap;
 }
 
 .token-card-stats {
@@ -429,7 +449,9 @@ body {
   font-weight: 500;
 }
 
-/* ================== DESKTOP CARD GRID ================== */
+/* ===========================
+   DESKTOP CARD GRID
+   =========================== */
 
 .desktop-card-grid {
   display: grid;
@@ -438,21 +460,22 @@ body {
   margin-top: 12px;
 }
 
-/* >= 1024px — 2 карточки */
+/* от ноутбука — 2 карточки, на широком экране — 3 */
 @media (min-width: 1024px) {
   .desktop-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* >= 1360px — 3 карточки */
 @media (min-width: 1360px) {
   .desktop-card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-/* Карточка занимает всю высоту ячейки грида */
+/* ===========================
+   DESKTOP TOKEN CARD
+   =========================== */
 
 .desktop-token-card {
   display: flex;
@@ -466,7 +489,8 @@ body {
   height: 100%;
 }
 
-/* картинка токена ~в 1.5 раза больше прошлой (если было 60) */
+/* левая колонка: крупная картинка */
+
 .desktop-card-avatar {
   width: 100px;
   height: 100px;
@@ -484,20 +508,20 @@ body {
 .desktop-card-avatar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   border-radius: 22px;
+  object-fit: cover;
 }
 
-/* Правая часть карточки */
+/* правая колонка: всё содержимое */
 
-.desktop-card-main {
+.desktop-card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-/* Верх: название + время */
+/* верх: название/тикер + дата создания в правом верхнем углу */
 
 .desktop-card-header {
   display: flex;
@@ -530,32 +554,26 @@ body {
   white-space: nowrap;
 }
 
-/* MC / Vol 24h */
+/* MC и Vol 24h — сразу под названием */
 
-.desktop-card-meta {
+.desktop-card-row--stats {
   display: flex;
-  flex-wrap: wrap;
   gap: 16px;
+  font-size: 12px;
 }
 
-.desktop-card-meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.desktop-card-meta-label {
+.desktop-card-row--stats .label {
   font-size: 11px;
   color: #9ca3af;
 }
 
-.desktop-card-meta-value {
+.desktop-card-row--stats .value {
   font-size: 13px;
   font-weight: 500;
   color: #111827;
 }
 
-/* Строки Address / Source / Socials */
+/* Address / Source / Socials — столбцом слева */
 
 .desktop-card-row {
   display: flex;
@@ -571,7 +589,7 @@ body {
 .desktop-card-row .label {
   font-size: 11px;
   color: #9ca3af;
-  min-width: 60px;
+  min-width: 60px; /* подписи в ровную колонку */
 }
 
 .desktop-card-row .value {
@@ -579,7 +597,7 @@ body {
   color: #111827;
 }
 
-/* Адрес + копирование */
+/* адрес + кнопка копирования */
 
 .desktop-card-row .address {
   display: inline-flex;
@@ -607,7 +625,7 @@ body {
   color: #0052ff;
 }
 
-/* Source */
+/* Source pill */
 
 .desktop-source-pill {
   display: inline-flex;
@@ -619,32 +637,7 @@ body {
   color: #4b5563;
 }
 
-/* Кнопка строго по низу карточки, по центру */
-
-.desktop-card-footer {
-  margin-top: auto;          /* прижимает к низу */
-  padding-top: 12px;
-  display: flex;
-  justify-content: center;
-  width: 100%;
-}
-
-.desktop-card-link {
-  display: inline-block;
-  padding: 7px 16px;
-  border-radius: 999px;
-  background: #0052ff;
-  color: #ffffff;
-  font-size: 13px;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.desktop-card-link:hover {
-  opacity: 0.9;
-}
-
-/* Соцки / Farcaster */
+/* Socials / Farcaster */
 
 .desktop-social-wrap {
   position: relative;
@@ -722,7 +715,7 @@ body {
   font-weight: 600;
 }
 
-/* fallback для других соцсетей */
+/* fallback pill для X/Instagram/TikTok */
 
 .desktop-secondary-pill {
   display: inline-flex;
@@ -736,7 +729,27 @@ body {
   color: #111827;
 }
 
-/* запасные классы, вдруг где-то используются */
+/* Кнопка View on — строго по центру и снизу карточки */
+
+.desktop-card-button {
+  margin-top: auto;      /* прижимаем к низу колонки */
+  display: block;
+  width: 100%;           /* центр относительно всей карточки */
+  text-align: center;
+  padding: 7px 0;
+  border-radius: 999px;
+  background: #0052ff;
+  color: #ffffff;
+  font-size: 13px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.desktop-card-button:hover {
+  opacity: 0.9;
+}
+
+/* вспомогательные */
 
 .farcaster-icon {
   width: 16px;
