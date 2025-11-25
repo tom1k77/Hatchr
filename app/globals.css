@@ -284,10 +284,15 @@ body {
   .hatchr-filters-search {
     width: 100%;
     max-width: none;
+    padding-right: 6px;
+    box-sizing: border-box;
   }
 
   .hatchr-search {
     width: 100%;
+    box-sizing: border-box;
+    font-size: 13px;
+    padding: 5px 10px;
   }
 }
 
@@ -334,17 +339,18 @@ body {
 }
 
 .token-card-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
   background: #e5edff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 20px;
+  font-size: 22px;
   color: #111827;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .token-card-main {
@@ -414,11 +420,11 @@ body {
   display: block;
   width: 100%;
   text-align: center;
-  padding: 8px 0;
+  padding: 7px 0;
   border-radius: 999px;
   background: #0052ff;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 13px;
   text-decoration: none;
   font-weight: 500;
 }
@@ -432,9 +438,17 @@ body {
   margin-top: 12px;
 }
 
-@media (min-width: 1100px) {
+/* от ~1000px — две карточки */
+@media (min-width: 1000px) {
   .desktop-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* от ~1400px — три карточки в ряд */
+@media (min-width: 1400px) {
+  .desktop-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -454,15 +468,15 @@ body {
 /* Аватар токена — крупнее */
 
 .desktop-card-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
   background: #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 24px;
+  font-size: 26px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -481,6 +495,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-height: 160px;
 }
 
 /* Верхняя строка: название + время */
@@ -609,7 +624,8 @@ body {
 /* Кнопка View on Zora / Clanker — по центру */
 
 .desktop-card-footer {
-  margin-top: 12px;
+  margin-top: auto;
+  padding-top: 12px;
   display: flex;
   justify-content: center;
   width: 100%;
