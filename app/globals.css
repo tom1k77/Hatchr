@@ -775,3 +775,178 @@ body {
   text-overflow: ellipsis;
   font-size: 12px;
 }
+
+/* ========== DESKTOP CARD LAYOUT — СКЕТЧ ========== */
+
+.desktop-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+/* 2 карточки на ноуте, 3 — на широком экране */
+@media (min-width: 1024px) {
+  .desktop-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1360px) {
+  .desktop-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.desktop-token-card {
+  display: flex;
+  gap: 14px;
+  padding: 12px 14px 16px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  align-items: flex-start;
+  height: 100%;
+}
+
+/* левая колонка */
+
+.desktop-card-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.desktop-card-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 22px;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 28px;
+  overflow: hidden;
+}
+
+.desktop-card-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 22px;
+  object-fit: cover;
+}
+
+.desktop-card-left-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.desktop-card-left-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.desktop-card-left-row .left-label {
+  font-size: 11px;
+  color: #9ca3af;
+  min-width: 60px;
+}
+
+.desktop-card-left-row .left-value {
+  font-size: 12px;
+  color: #111827;
+}
+
+.desktop-card-left-row .address {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: monospace;
+}
+
+/* правая колонка */
+
+.desktop-card-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* верх: name / ticker + дата */
+
+.desktop-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.desktop-card-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.desktop-card-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.desktop-card-symbol {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.03em;
+}
+
+.desktop-card-time {
+  font-size: 11px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+/* MC и Vol 24h под названием */
+
+.desktop-card-row--stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.desktop-card-row--stats .label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.desktop-card-row--stats .value {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* кнопка View on — снизу, по центру */
+
+.desktop-card-button {
+  margin-top: auto;
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 7px 0;
+  border-radius: 999px;
+  background: #0052ff;
+  color: #ffffff;
+  font-size: 13px;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.desktop-card-button:hover {
+  opacity: 0.9;
+}
