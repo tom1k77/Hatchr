@@ -605,7 +605,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* ====== DESKTOP: карточки 2х2 ====== */}
+            {/* ====== DESKTOP: карточки (3 в ряд на широком экране) ====== */}
 {!isMobile && (
   <div className="desktop-card-grid">
     {visibleTokens.length === 0 ? (
