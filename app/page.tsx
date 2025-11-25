@@ -441,7 +441,7 @@ export default function HomePage() {
                       setMinVolume(Number(e.target.value) || 0)
                     }
                     className="hatchr-input-number"
-                    style={{ width: 110 }}
+                    style={{ width: 80 }}
                   />
                 </label>
 
