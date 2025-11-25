@@ -622,3 +622,28 @@ body {
 .desktop-card-link:hover {
   opacity: 0.9;
 }
+
+.farcaster-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.farcaster-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.creator-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
