@@ -438,21 +438,20 @@ body {
   margin-top: 12px;
 }
 
-/* от ~1000px — две карточки */
-@media (min-width: 1000px) {
+/* ноут/десктоп: 2 карточки; на широком — 3 */
+@media (min-width: 1024px) {
   .desktop-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* от ~1400px — три карточки в ряд */
-@media (min-width: 1400px) {
+@media (min-width: 1360px) {
   .desktop-card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-/* Карточка */
+/* Карточка занимает всю высоту ячейки грида */
 
 .desktop-token-card {
   display: flex;
@@ -463,13 +462,14 @@ body {
   border: 1px solid #e5e7eb;
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
   align-items: flex-start;
+  height: 100%;
 }
 
-/* Аватар токена — крупнее */
+/* Крупный аватар */
 
 .desktop-card-avatar {
-  width: 96px;
-  height: 96px;
+  width: 88px;
+  height: 88px;
   border-radius: 20px;
   background: #f3f4f6;
   display: flex;
@@ -485,7 +485,7 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 16px;
+  border-radius: 20px;
 }
 
 /* Правая часть карточки */
@@ -494,11 +494,9 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-height: 160px;
 }
 
-/* Верхняя строка: название + время */
+/* Верх: название + время */
 
 .desktop-card-header {
   display: flex;
@@ -531,13 +529,14 @@ body {
   white-space: nowrap;
 }
 
-/* Блок с MC и Vol 24h */
+/* MC / Vol 24h */
 
 .desktop-card-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 2px;
+  gap: 16px;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
 .desktop-card-meta-item {
@@ -557,7 +556,7 @@ body {
   color: #111827;
 }
 
-/* Остальные строки (Address / Source / Socials) */
+/* Строки Address / Source / Socials */
 
 .desktop-card-row {
   display: flex;
@@ -581,7 +580,7 @@ body {
   color: #111827;
 }
 
-/* Адрес + кнопка копирования */
+/* Адрес + копирование */
 
 .desktop-card-row .address {
   display: inline-flex;
@@ -609,7 +608,7 @@ body {
   color: #0052ff;
 }
 
-/* Source pill */
+/* Source */
 
 .desktop-source-pill {
   display: inline-flex;
@@ -621,10 +620,10 @@ body {
   color: #4b5563;
 }
 
-/* Кнопка View on Zora / Clanker — по центру */
+/* Кнопка строго по низу карточки, по центру */
 
 .desktop-card-footer {
-  margin-top: auto;
+  margin-top: auto;          /* прижимает к низу */
   padding-top: 12px;
   display: flex;
   justify-content: center;
@@ -646,7 +645,7 @@ body {
   opacity: 0.9;
 }
 
-/* Соцки + Farcaster */
+/* Соцки / Farcaster */
 
 .desktop-social-wrap {
   position: relative;
@@ -724,7 +723,7 @@ body {
   font-weight: 600;
 }
 
-/* fallback-вторичная соцсеть (X / IG / TikTok) */
+/* fallback для других соцсетей */
 
 .desktop-secondary-pill {
   display: inline-flex;
@@ -738,7 +737,7 @@ body {
   color: #111827;
 }
 
-/* запасные классы, если пригодятся */
+/* запасные классы, вдруг где-то используются */
 
 .farcaster-icon {
   width: 16px;
