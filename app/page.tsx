@@ -723,10 +723,10 @@ export default function HomePage() {
                           </div>
 
                           <div className="desktop-card-row desktop-card-row--stats">
-                           <span className="label">MC</span>
-                            <span className="value">{formattedMc}</span>
+                            <span className="label">MC</span>
+                            <span className="value">{mcap}</span>
                             <span className="label">Vol 24h</span>
-                            <span className="value">{formattedVol24h}</span>
+                            <span className="value">{vol}</span>
                           </div>
 
                           <div className="desktop-card-row">
@@ -777,7 +777,7 @@ export default function HomePage() {
                                   }
                                 >
                                   <a
-                                    href={`https://farcaster.xyz/${username}`}
+                                    href={`https://warpcast.com/${username}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="desktop-farcaster-pill"
@@ -861,14 +861,16 @@ export default function HomePage() {
                           </div>
 
                           {token.source_url && (
-                            <a
-                              href={token.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="desktop-card-button"
-                            >
-                              View on {sourceLabel}
-                            </a>
+                            <div className="desktop-card-footer">
+                              <a
+                                href={token.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="desktop-card-link"
+                              >
+                                View on {sourceLabel}
+                              </a>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -956,7 +958,7 @@ export default function HomePage() {
                       <div className="hatchr-feed-sub">
                         by{" "}
                         <a
-                          href={`https://farcaster.xyz/${username}`}
+                          href={`https://warpcast.com/${username}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
