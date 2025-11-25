@@ -256,7 +256,7 @@ body {
   color: #6b7280;
 }
 
-/* ================== Мобильные карточки ================== */
+/* ================== Mobile ================== */
 
 @media (max-width: 900px) {
   .hatchr-shell {
@@ -291,8 +291,6 @@ body {
   }
 }
 
-/* < 768px: карточки в один столбец */
-
 @media (max-width: 768px) {
   .hatchr-root {
     padding: 12px;
@@ -314,7 +312,7 @@ body {
   }
 }
 
-/* Общий стиль карточек (используется мобильной разметкой) */
+/* ================== Card styles (mobile & desktop base) ================== */
 
 .token-card-list {
   display: flex;
@@ -434,7 +432,6 @@ body {
   margin-top: 12px;
 }
 
-/* На широких — две карточки в ряд */
 @media (min-width: 1100px) {
   .desktop-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -511,15 +508,6 @@ body {
   margin-top: 3px;
 }
 
-.desktop-card-row.stats .label {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.desktop-card-row.stats .value {
-  font-weight: 500;
-}
-
 .desktop-card-row .label {
   font-size: 11px;
   color: #9ca3af;
@@ -563,4 +551,5 @@ body {
   border: 1px solid #e5e7eb;
   font-size: 11px;
   text-transform: lowercase;
-  color: #4b5563
+  color: #4b5563;
+}
