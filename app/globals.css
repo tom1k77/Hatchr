@@ -527,17 +527,20 @@ body {
 .desktop-card-name {
   font-size: 15px;
   font-weight: 600;
+  margin: 0;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
 }
 
 .desktop-card-symbol {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #6b7280;
-  letter-spacing: 0.03em;
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-oveflow: ellipsis;
 }
 
 .desktop-card-time {
