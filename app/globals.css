@@ -635,7 +635,7 @@ body {
 .h-card {
   display: flex;
   flex-direction: column;
-  padding: 8px 10px;
+  padding: 6px 12px 8px;
   border-radius: 14px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -648,7 +648,7 @@ body {
 .h-card-main {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
@@ -730,7 +730,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
+  gap: 4px;
 }
 
 /* шапка: слева name+symbol, справа дата */
