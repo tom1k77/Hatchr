@@ -634,8 +634,8 @@ export default function HomePage() {
 
         const fullAddress = token.token_address || "";
         const shortAddress =
-          fullAddress.length > 4
-            ? `0x…${fullAddress.slice(-4)}`
+          fullAddress && fullAddress.length > 10
+            ? `${fullAddress.slice(0, 6)}...${fullAddress.slice(-4)}`
             : fullAddress;
 
         const copyKey = fullAddress.toLowerCase();
@@ -692,123 +692,125 @@ export default function HomePage() {
                 </div>
 
                 <div className="h-card-left-meta">
-                  {/* Address */}
-                  <div className="h-card-row">
-                    <span className="h-card-row-label">Address</span>
-                    <span className="h-card-row-value h-card-row-value-address">
-                      <span title={fullAddress} style={{ marginRight: 6 }}>
-                        {shortAddress || "—"}
-                      </span>
-                      {fullAddress && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopyAddress(fullAddress)}
-                          className="copy-btn"
-                          title="Copy address"
-                        >
-                          {isCopied ? "✓" : "⧉"}
-                        </button>
-                      )}
-                    </span>
+  {/* Time */}
+  <div className="h-card-row">
+    <span className="h-card-row-label">Time</span>
+    <span className="h-card-row-value h-card-time">
+      {time} · {date}
+    </span>
+  </div>
+
+  {/* Address */}
+  <div className="h-card-row">
+    <span className="h-card-row-label">Address</span>
+    <span className="h-card-row-value h-card-row-value-address">
+      <span title={fullAddress} style={{ marginRight: 4 }}>
+        {shortAddress || "—"}
+      </span>
+      {fullAddress && (
+        <button
+          type="button"
+          onClick={() => handleCopyAddress(fullAddress)}
+          className="copy-btn"
+          title="Copy address"
+        >
+          {isCopied ? "✓" : "⧉"}
+        </button>
+      )}
+    </span>
+  </div>
+
+  {/* Source */}
+  <div className="h-card-row">
+    <span className="h-card-row-label">Source</span>
+    <span className="h-card-row-value">
+      <span className="desktop-source-pill">{sourceLabel}</span>
+    </span>
+  </div>
+
+  {/* Socials */}
+  <div className="h-card-row">
+    <span className="h-card-row-label">Socials</span>
+    <span className="h-card-row-value">
+      {username ? (
+        <div
+          className="desktop-social-wrap"
+          onMouseEnter={() => {
+            setHoveredRowKey(rowKey);
+            ensureProfile(username);
+          }}
+          onMouseLeave={() => setHoveredRowKey(null)}
+        >
+          <a
+            href={`https://warpcast.com/${username}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="desktop-farcaster-pill"
+          >
+            {/* сначала ник, потом иконка */}
+            <span>@{username}</span>
+            {profile?.pfp_url ? (
+              <img
+                src={profile.pfp_url}
+                alt={profile.display_name || username}
+                onError={(e) => {
+                  e.currentTarget.src = "/farcaster-logo.png";
+                }}
+              />
+            ) : (
+              <FarcasterFallbackIcon size={20} />
+            )}
+          </a>
+
+          {isTooltipVisible && profile && (
+            <div className="desktop-farcaster-tooltip">
+              <div className="tooltip-header">
+                {profile.pfp_url ? (
+                  <img
+                    src={profile.pfp_url}
+                    alt={profile.display_name || username}
+                    onError={(e) => {
+                      e.currentTarget.src = "/farcaster-logo.png";
+                    }}
+                  />
+                ) : (
+                  <FarcasterFallbackIcon size={30} />
+                )}
+                <div>
+                  <div className="tooltip-name">
+                    {profile.display_name || profile.username}
                   </div>
-
-                  {/* Source */}
-                  <div className="h-card-row">
-                    <span className="h-card-row-label">Source</span>
-                    <span className="h-card-row-value">
-                      <span className="desktop-source-pill">
-                        {sourceLabel}
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* Socials */}
-                  <div className="h-card-row">
-                    <span className="h-card-row-label">Socials</span>
-                    <span className="h-card-row-value">
-                      {username ? (
-                        <div
-                          className="desktop-social-wrap"
-                          onMouseEnter={() => {
-                            setHoveredRowKey(rowKey);
-                            ensureProfile(username);
-                          }}
-                          onMouseLeave={() => setHoveredRowKey(null)}
-                        >
-                          <a
-                            href={`https://warpcast.com/${username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="desktop-farcaster-pill"
-                          >
-                            {profile?.pfp_url ? (
-                              <img
-                                src={profile.pfp_url}
-                                alt={profile.display_name || username}
-                                onError={(e) => {
-                                  e.currentTarget.src = "/farcaster-logo.png";
-                                }}
-                              />
-                            ) : (
-                              <FarcasterFallbackIcon size={20} />
-                            )}
-                            <span>@{username}</span>
-                          </a>
-
-                          {isTooltipVisible && profile && (
-                            <div className="desktop-farcaster-tooltip">
-                              <div className="tooltip-header">
-                                {profile.pfp_url ? (
-                                  <img
-                                    src={profile.pfp_url}
-                                    alt={profile.display_name || username}
-                                    onError={(e) => {
-                                      e.currentTarget.src =
-                                        "/farcaster-logo.png";
-                                    }}
-                                  />
-                                ) : (
-                                  <FarcasterFallbackIcon size={30} />
-                                )}
-                                <div>
-                                  <div className="tooltip-name">
-                                    {profile.display_name ||
-                                      profile.username}
-                                  </div>
-                                  <div className="tooltip-handle">
-                                    @{profile.username}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="tooltip-stats">
-                                <span>
-                                  <strong>{profile.follower_count}</strong>{" "}
-                                  followers
-                                </span>
-                                <span>
-                                  <strong>{profile.following_count}</strong>{" "}
-                                  following
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : secondarySocial ? (
-                        <a
-                          href={secondarySocial.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="desktop-secondary-pill"
-                        >
-                          {secondarySocial.label}
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-                    </span>
+                  <div className="tooltip-handle">
+                    @{profile.username}
                   </div>
                 </div>
               </div>
+              <div className="tooltip-stats">
+                <span>
+                  <strong>{profile.follower_count}</strong> followers
+                </span>
+                <span>
+                  <strong>{profile.following_count}</strong> following
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : secondarySocial ? (
+        <a
+          href={secondarySocial.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="desktop-secondary-pill"
+        >
+          {secondarySocial.label}
+        </a>
+      ) : (
+        "—"
+      )}
+    </span>
+  </div>
+</div>
 
               {/* ПРАВАЯ КОЛОНКА: name/ticker/date + MC/Vol */}
               <div className="h-card-right">
