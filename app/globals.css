@@ -1121,3 +1121,93 @@ body {
 .desktop-card-grid {
   row-gap: 18px;          /* больше вертикальный отступ между рядами */
 }
+
+/* ===== FINAL TUNE: высота, отступы, тексты, расстояние между карточками ===== */
+
+/* больше вертикальный зазор, чтобы ряды не налезали друг на друга */
+.desktop-card-grid {
+  row-gap: 24px;          /* можно увеличить/уменьшить по вкусу */
+  grid-auto-rows: auto;
+}
+
+/* сама карточка чуть ниже, меньше паддинги */
+.h-card {
+  box-sizing: border-box;
+  padding: 10px 12px 12px;   /* было больше – делаем компактнее */
+  overflow: hidden;          /* ничего не вылезает за рамку */
+}
+
+/* картинку делаем чуть меньше, чтобы освободить место под текст */
+.h-card-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+}
+
+/* основной блок (лево+право) – меньше зазор до кнопки */
+.h-card-main {
+  margin-bottom: 6px;
+}
+
+/* правая колонка – строго в пределах карточки */
+.h-card-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;          /* важно, чтобы текст мог обрезаться */
+}
+
+/* заголовок: имя/тикер и дата – строго внутри карточки */
+.h-card-header {
+  display: flex;
+  flex-direction: column;   /* имя/тикер сверху, дата строкой ниже */
+  align-items: flex-start;
+  gap: 2px;
+}
+
+/* имя токена – одна строка, если длинное — троеточие */
+.h-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* тикер – маленький, серый, под именем */
+.h-card-symbol {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #6b7280;
+  letter-spacing: 0.03em;
+}
+
+/* дата – отдельной строкой, тоже не вылазит */
+.h-card-time {
+  font-size: 11px;
+  color: #9ca3af;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* адрес всегда в одну строку */
+.h-card-row-value-address {
+  white-space: nowrap;
+}
+
+/* кнопка по-прежнему по центру, но карта ниже → расстояние до socials меньше */
+.h-card-button {
+  margin-top: auto;
+  align-self: center;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: #0052ff;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
