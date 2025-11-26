@@ -504,6 +504,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
 /* верх: название/тикер + дата создания */
@@ -520,6 +521,7 @@ body {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  flex: 1;
 }
 
 .desktop-card-name {
@@ -541,6 +543,10 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 /* MC и Vol 24h — сразу под названием */
