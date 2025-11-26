@@ -640,7 +640,7 @@ body {
   background: #ffffff;
   border: 1px solid #e5e7eb;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
-  height: 100%;
+  height: auto;
 }
 
 /* верхняя часть: две колонки */
