@@ -511,9 +511,9 @@ body {
 
 .desktop-card-header {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  flex-wrap: nowrap;
+  gap: 2px;
 }
 
 .desktop-card-title {
@@ -527,30 +527,38 @@ body {
 .desktop-card-name {
   font-size: 15px;
   font-weight: 600;
-  margin: 0;
-  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .desktop-card-symbol {
-  font-size: 13px;
-  margin: 0;
-  line-height: 1.2;
-  white-space: nowrap;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #6b7280
+  letter-spacing: 0.03em;
+  max-width: 100%;
   overflow: hidden;
   text-oveflow: ellipsis;
+  white-space: nowrap;
 }
 
 .desktop-card-time {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
-  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: right;
+  max-width: 100%;
+}
+
+.desktop-card-right {
+   flex: 1;
+   display: flex;
+   flex-direction: column;
+   gap: 6px;
+   min-width: 0;
 }
 
 /* MC и Vol 24h — сразу под названием */
