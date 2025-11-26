@@ -723,6 +723,8 @@ body {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  min-height: 96px;
   gap: 6px;
 }
 
@@ -730,23 +732,22 @@ body {
 
 .h-card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
 }
 
 .h-card-title {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-width: 100%;
   min-width: 0;
+  max-width: 100%;
 }
 
 .h-card-name {
   font-size: 14px;
   font-weight: 600;
-  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -769,10 +770,12 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
-  max-width: 120px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-align: right;
+  align-self: flex-end;
+  order: -1;
+  margin-bottom: 4px;
 }
 
 /* MC и Vol 24h */
