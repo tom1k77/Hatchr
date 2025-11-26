@@ -605,9 +605,9 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* ====== DESKTOP: карточки как на скетче ====== */}
+            {/* ====== DESKTOP: простые аккуратные карточки ====== */}
 {!isMobile && (
-  <div className="desktop-card-grid">
+  <div className="grid grid-cols-1 gap-4 mt-3 md:grid-cols-2 xl:grid-cols-3">
     {visibleTokens.length === 0 ? (
       <div className="hatchr-table-empty">
         {isLoading
@@ -627,7 +627,6 @@ export default function HomePage() {
         const username = extractFarcasterUsername(
           token.farcaster_url || undefined
         );
-        const profile = username ? profiles[username] : undefined;
 
         const mcap = formatNumber(token.market_cap_usd);
         const vol = formatNumber(token.volume_24h_usd);
@@ -641,7 +640,9 @@ export default function HomePage() {
         const copyKey = fullAddress.toLowerCase();
         const isCopied = copiedKey === copyKey;
 
-        const xUsername = extractXUsername(token.x_url || undefined);
+        const xUsername = extractXUsername(
+          token.x_url || undefined
+        );
         const igUsername = extractInstagramUsername(
           token.instagram_url || undefined
         );
@@ -649,7 +650,9 @@ export default function HomePage() {
           token.tiktok_url || undefined
         );
 
-        let secondarySocial: { url: string; label: string } | null = null;
+        let secondarySocial:
+          | { url: string; label: string }
+          | null = null;
 
         if (!username) {
           if (token.x_url) {
@@ -670,184 +673,124 @@ export default function HomePage() {
           }
         }
 
-        const isTooltipVisible = hoveredRowKey === rowKey;
-
         return (
-          <div key={rowKey} className="h-card">
-            {/* ВЕРХ КАРТОЧКИ: две колонки */}
-            <div className="h-card-main">
-              {/* ЛЕВАЯ КОЛОНКА: картинка + Address/Source/Socials */}
-              <div className="h-card-left">
-                <div className="h-card-avatar">
-                  {token.image_url ? (
-                    <img src={token.image_url} alt={name} />
-                  ) : (
-                    <span>
-                      {(symbol || name)
-                        .trim()
-                        .charAt(0)
-                        .toUpperCase() || "₿"}
-                    </span>
-                  )}
-                </div>
-
-                <div className="h-card-left-meta">
-                  {/* Address */}
-                  <div className="h-card-row">
-                    <span className="h-card-row-label">Address</span>
-                    <span className="h-card-row-value h-card-row-value-address">
-                      <span title={fullAddress} style={{ marginRight: 6 }}>
-                        {shortAddress || "—"}
-                      </span>
-                      {fullAddress && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopyAddress(fullAddress)}
-                          className="copy-btn"
-                          title="Copy address"
-                        >
-                          {isCopied ? "✓" : "⧉"}
-                        </button>
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Source */}
-                  <div className="h-card-row">
-                    <span className="h-card-row-label">Source</span>
-                    <span className="h-card-row-value">
-                      <span className="desktop-source-pill">
-                        {sourceLabel}
-                      </span>
-                    </span>
-                  </div>
-
-                  {/* Socials */}
-                  <div className="h-card-row">
-                    <span className="h-card-row-label">Socials</span>
-                    <span className="h-card-row-value">
-                      {username ? (
-                        <div
-                          className="desktop-social-wrap"
-                          onMouseEnter={() => {
-                            setHoveredRowKey(rowKey);
-                            ensureProfile(username);
-                          }}
-                          onMouseLeave={() => setHoveredRowKey(null)}
-                        >
-                          <a
-                            href={`https://warpcast.com/${username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="desktop-farcaster-pill"
-                          >
-                            {profile?.pfp_url ? (
-                              <img
-                                src={profile.pfp_url}
-                                alt={profile.display_name || username}
-                                onError={(e) => {
-                                  e.currentTarget.src = "/farcaster-logo.png";
-                                }}
-                              />
-                            ) : (
-                              <FarcasterFallbackIcon size={20} />
-                            )}
-                            <span>@{username}</span>
-                          </a>
-
-                          {isTooltipVisible && profile && (
-                            <div className="desktop-farcaster-tooltip">
-                              <div className="tooltip-header">
-                                {profile.pfp_url ? (
-                                  <img
-                                    src={profile.pfp_url}
-                                    alt={profile.display_name || username}
-                                    onError={(e) => {
-                                      e.currentTarget.src =
-                                        "/farcaster-logo.png";
-                                    }}
-                                  />
-                                ) : (
-                                  <FarcasterFallbackIcon size={30} />
-                                )}
-                                <div>
-                                  <div className="tooltip-name">
-                                    {profile.display_name ||
-                                      profile.username}
-                                  </div>
-                                  <div className="tooltip-handle">
-                                    @{profile.username}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="tooltip-stats">
-                                <span>
-                                  <strong>{profile.follower_count}</strong>{" "}
-                                  followers
-                                </span>
-                                <span>
-                                  <strong>{profile.following_count}</strong>{" "}
-                                  following
-                                </span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : secondarySocial ? (
-                        <a
-                          href={secondarySocial.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="desktop-secondary-pill"
-                        >
-                          {secondarySocial.label}
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ПРАВАЯ КОЛОНКА: name/ticker/date + MC/Vol */}
-              <div className="h-card-right">
-                <div className="h-card-header">
-                  <div className="h-card-title">
-                    <span className="h-card-name">{name}</span>
-                    {symbol && symbol !== name && (
-                      <span className="h-card-symbol">{symbol}</span>
-                    )}
-                  </div>
-                  <div className="h-card-time">
-                    {time} · {date}
-                  </div>
-                </div>
-
-                <div className="h-card-stats">
-                  <div>
-                    <div className="h-card-stats-label">MC</div>
-                    <div className="h-card-stats-value">{mcap}</div>
-                  </div>
-                  <div>
-                    <div className="h-card-stats-label">Vol 24h</div>
-                    <div className="h-card-stats-value">{vol}</div>
-                  </div>
-                </div>
-              </div>
+          <div
+            key={rowKey}
+            className="flex flex-col border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm"
+          >
+            {/* Картинка токена сверху (как в примере Грока) */}
+            <div className="w-full h-[180px] bg-gray-100 flex items-center justify-center overflow-hidden">
+              {token.image_url ? (
+                <img
+                  src={token.image_url}
+                  alt={name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-2xl font-semibold text-gray-800">
+                  {(symbol || name).trim().charAt(0).toUpperCase() || "₿"}
+                </span>
+              )}
             </div>
 
-            {/* НИЗ КАРТОЧКИ: кнопка строго по центру */}
-            {token.source_url && (
-              <a
-                href={token.source_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-card-button"
-              >
-                View on {sourceLabel}
-              </a>
-            )}
+            {/* Информация по токену */}
+            <div className="flex flex-col gap-[2px] px-3 pt-2 pb-3">
+              {/* name */}
+              <h3 className="font-semibold text-[15px] leading-tight truncate">
+                {name}
+              </h3>
+
+              {/* ticker */}
+              {symbol && symbol !== name && (
+                <p className="text-[13px] text-gray-500 truncate">
+                  {symbol}
+                </p>
+              )}
+
+              {/* дата и время */}
+              <p className="text-[12px] text-gray-400 truncate">
+                {time} · {date}
+              </p>
+
+              {/* MC / Vol 24h */}
+              <div className="mt-2 flex flex-col gap-[2px] text-[12px] text-gray-700">
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-400">MC</span>
+                  <span className="font-medium">{mcap}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-gray-400">Vol 24h</span>
+                  <span className="font-medium">{vol}</span>
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                <span className="text-gray-400">Address</span>
+                <span className="flex items-center gap-1 font-mono truncate max-w-[130px]">
+                  <span title={fullAddress}>
+                    {shortAddress || "—"}
+                  </span>
+                  {fullAddress && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAddress(fullAddress)}
+                      className="w-[18px] h-[18px] rounded-full border border-gray-300 bg-gray-50 flex items-center justify-center text-[11px]"
+                      title="Copy address"
+                    >
+                      {isCopied ? "✓" : "⧉"}
+                    </button>
+                  )}
+                </span>
+              </div>
+
+              {/* Source & Socials */}
+              <div className="mt-1 flex flex-col gap-[2px] text-[11px] text-gray-500">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-gray-400">Source</span>
+                  <span className="px-2 py-[2px] rounded-full border border-gray-200 text-[11px]">
+                    {sourceLabel}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-gray-400">Socials</span>
+                  {username ? (
+                    <a
+                      href={`https://warpcast.com/${username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-blue-600 truncate"
+                    >
+                      @{username}
+                    </a>
+                  ) : secondarySocial ? (
+                    <a
+                      href={secondarySocial.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-blue-600 truncate"
+                    >
+                      {secondarySocial.label}
+                    </a>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Кнопка по центру карточки снизу */}
+              {token.source_url && (
+                <a
+                  href={token.source_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 self-center px-4 py-1.5 rounded-full bg-blue-600 text-white text-[12px] font-medium text-center"
+                >
+                  View on {sourceLabel}
+                </a>
+              )}
+            </div>
           </div>
         );
       })
