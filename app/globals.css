@@ -612,19 +612,25 @@ body {
 
 .desktop-card-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 16px;   /* горизонтальный зазор между карточками */
+  row-gap: 24px;      /* вертикальный зазор между рядами — сделал больше */
+  margin-top: 16px;
 }
 
-/* на ноутбуках – 2 карточки */
-
-@media (max-width: 1280px) {
+/* ноутбук — 2 карточки в ряд */
+@media (min-width: 1024px) {
   .desktop-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* широкий экран — 3 карточки в ряд */
+@media (min-width: 1360px) {
+  .desktop-card-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 /* сама карточка */
 
 .h-card {
