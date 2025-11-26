@@ -613,8 +613,7 @@ body {
 .desktop-card-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  column-gap: 16px;   /* горизонтальный зазор между карточками */
-  row-gap: 24px;      /* вертикальный зазор между рядами — сделал больше */
+  gap: 20px;
   margin-top: 16px;
 }
 
