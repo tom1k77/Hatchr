@@ -557,7 +557,6 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 /* MC и Vol 24h — сразу под названием */
@@ -739,12 +738,11 @@ body {
 
 .desktop-card-button {
   position: absolute;                /* привязка к всей карточке */
-  left: 50%;
-  transform: translateX(-50%);       /* точно по центру по горизонтали */
+  left: 14px;
+  right: 14px;
   bottom: 10px;                      /* в самом низу карточки */
+  tranform: none;
   display: inline-block;
-  width: 80%;                        /* не во всю ширину, аккуратнее смотрится */
-  max-width: 220px;
   text-align: center;
   padding: 7px 0;
   border-radius: 999px;
@@ -896,9 +894,9 @@ body {
 
 .desktop-card-header {
   display: flex;
-  justify-content: space-between;
+  felx-direstion: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 2px;
 }
 
 .desktop-card-title {
@@ -927,7 +925,6 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 /* MC и Vol 24h под названием */
