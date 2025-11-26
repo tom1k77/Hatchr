@@ -455,17 +455,19 @@ body {
    =========================== */
 
 .copy-btn {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   border: 1px solid #d1d5db;
   background: #f9fafb;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: #4b5563;
+  vertical-align: middle;
 }
 
 .copy-btn:hover {
@@ -476,13 +478,13 @@ body {
 /* Source pill */
 
 .desktop-source-pill {
-  display: inline-flex;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  font-size: 11px;
-  text-transform: lowercase;
-  color: #4b5563;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  text-transform: none;
+  color: #111827;
 }
 
 /* Socials / Farcaster */
@@ -628,13 +630,13 @@ body {
 .h-card {
   display: flex;
   flex-direction: column;
-  padding: 10px 12px 12px;
+  padding: 12px 14px 14px;
   border-radius: 18px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
   height: 100%;
-  box-sizing: border-box;
+  min-height: 180px;
 }
 
 /* верхняя часть: две колонки */
@@ -724,7 +726,6 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 96px;
   gap: 6px;
 }
 
@@ -733,7 +734,7 @@ body {
 .h-card-header {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 2px;
 }
 
@@ -770,12 +771,8 @@ body {
   font-size: 11px;
   color: #9ca3af;
   white-space: nowrap;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  align-self: flex-end;
-  order: -1;
-  margin-bottom: 4px;
 }
 
 /* MC и Vol 24h */
