@@ -635,14 +635,12 @@ body {
 .h-card {
   display: flex;
   flex-direction: column;
-  padding: 12px 14px 14px;
-  border-radius: 18px;
+  padding: 8px 10px;
+  border-radius: 14px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
   height: 100%;
-  min-height: 180px;
-  margin-bottom: 30px;
 }
 
 /* верхняя часть: две колонки */
