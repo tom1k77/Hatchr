@@ -673,7 +673,11 @@ export default function HomePage() {
         const isTooltipVisible = hoveredRowKey === rowKey;
 
         return (
-          <div key={rowKey} className="h-card">
+         <div
+  key={rowKey}
+  className="h-card"
+  style={{ marginBottom: "24px" }}  // расстояние между рядами карточек
+>
             {/* ВЕРХ КАРТОЧКИ: две колонки */}
             <div className="h-card-main">
               {/* ЛЕВАЯ КОЛОНКА */}
