@@ -511,9 +511,9 @@ body {
 
 .desktop-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .desktop-card-title {
@@ -530,6 +530,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .desktop-card-symbol {
@@ -599,7 +600,9 @@ body {
   align-items: center;
   gap: 4px;
   font-family: monospace;
-  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .copy-btn {
