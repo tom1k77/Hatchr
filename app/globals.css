@@ -801,7 +801,7 @@ body {
 /* кнопка внизу — строго по центру карточки */
 
 .h-card-button {
-  margin-top: auto;
+  margin-top: 8px;
   align-self: center;
   padding: 6px 18px;
   border-radius: 999px;
