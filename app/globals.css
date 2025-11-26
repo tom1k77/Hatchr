@@ -507,8 +507,8 @@ body {
 }
 
 .desktop-farcaster-pill img {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   object-fit: cover;
 }
@@ -646,13 +646,13 @@ body {
   margin-bottom: 6px;
 }
 
-/* левая колонка: картинка + address/source/socials */
+/* левая колонка */
 
 .h-card-left {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  width: 110px;
+  gap: 6px;
+  width: 110px;      /* фиксированная ширина колонки слева */
   flex-shrink: 0;
 }
 
@@ -679,7 +679,7 @@ body {
 .h-card-left-meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;          /* компактнее строки */
   font-size: 12px;
 }
 
@@ -693,10 +693,13 @@ body {
 .h-card-row-label {
   font-size: 11px;
   color: #9ca3af;
-  min-width: 60px;
+  min-width: 56px;   /* одинаковый столбец для Address / Source / Socials */
 }
 
 .h-card-row-value {
+  display: flex;     /* выравниваем текст и кнопки по центру по вертикали */
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #111827;
 }
@@ -705,8 +708,7 @@ body {
   white-space: nowrap;
 }
 
-/* чтобы адрес не ломал ширину колонки */
-
+/* чтобы длинный адрес не ломал сетку */
 .h-card-row-value-address span[title] {
   max-width: 96px;
   display: inline-block;
@@ -714,7 +716,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* правая колонка: name / ticker / date + MC / Vol */
+/* правая колонка */
 
 .h-card-right {
   flex: 1;
@@ -724,13 +726,13 @@ body {
   gap: 6px;
 }
 
-/* шапка справа */
+/* шапка: слева name+symbol, справа дата */
 
 .h-card-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: flex-start;
-  gap: 2px;
+  gap: 8px;
 }
 
 .h-card-title {
@@ -738,6 +740,7 @@ body {
   flex-direction: column;
   gap: 2px;
   max-width: 100%;
+  min-width: 0;
 }
 
 .h-card-name {
@@ -760,13 +763,16 @@ body {
   text-overflow: ellipsis;
 }
 
+/* дата/время – отдельный блок справа, лёгкий, «сервисный» */
+
 .h-card-time {
   font-size: 11px;
   color: #9ca3af;
-  max-width: 100%;
   white-space: nowrap;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: right;
 }
 
 /* MC и Vol 24h */
