@@ -607,7 +607,10 @@ export default function HomePage() {
 
             {/* ====== DESKTOP: карточки как на скетче ====== */}
 {!isMobile && (
-  <div className="desktop-card-grid">
+  <div
+    className="desktop-card-grid"
+    style={{ rowGap: "32px", columnGap: "18px" }}
+    >
     {visibleTokens.length === 0 ? (
       <div className="hatchr-table-empty">
         {isLoading
