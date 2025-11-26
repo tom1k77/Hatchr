@@ -383,9 +383,9 @@ body {
 
 .token-card-header {
   display: flex;
-  flex-direction: column; /* время на новой строке */
+  flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
+  gap: 2px;
 }
 
 .token-card-name {
@@ -456,28 +456,44 @@ body {
 .desktop-card-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 16px;
   margin-top: 12px;
+  grid-auto-rows: auto;
 }
 
-/* от ноутбука — 2 карточки, на широком экране — 3 */
+/* 2 карточки на ноуте */
 @media (min-width: 1024px) {
   .desktop-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* 3 карточки на широком экране */
 @media (min-width: 1360px) {
   .desktop-card-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-/* левая колонка: крупная картинка */
+/* сама карточка */
+
+.desktop-token-card {
+  display: flex;
+  gap: 14px;
+  padding: 12px 14px 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* левая колонка: крупный аватар */
 
 .desktop-card-avatar {
-  width: 100px;
-  height: 100px;
+  width: 96px;
+  height: 96px;
   border-radius: 22px;
   background: #f3f4f6;
   display: flex;
@@ -496,22 +512,23 @@ body {
   object-fit: cover;
 }
 
-/* правая колонка: всё содержимое */
+/* правая колонка */
 
 .desktop-card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 }
 
-/* верх: название/тикер + дата создания в правом верхнем углу */
+/* верх: name / ticker и дата (две строки, ничего не вылазит) */
 
 .desktop-card-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 2px;
 }
 
 .desktop-card-title {
@@ -519,11 +536,13 @@ body {
   flex-direction: column;
   gap: 2px;
   min-width: 0;
+  max-width: 100%;
 }
 
 .desktop-card-name {
   font-size: 15px;
   font-weight: 600;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -539,14 +558,19 @@ body {
 .desktop-card-time {
   font-size: 11px;
   color: #9ca3af;
+  max-width: 100%;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* MC и Vol 24h — сразу под названием */
+/* MC и Vol 24h под названием */
 
 .desktop-card-row--stats {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
   font-size: 12px;
 }
 
@@ -561,7 +585,7 @@ body {
   color: #111827;
 }
 
-/* Address / Source / Socials — столбцом слева */
+/* Address / Source / Socials */
 
 .desktop-card-row {
   display: flex;
@@ -577,7 +601,7 @@ body {
 .desktop-card-row .label {
   font-size: 11px;
   color: #9ca3af;
-  min-width: 60px; /* подписи в ровную колонку */
+  min-width: 60px;
 }
 
 .desktop-card-row .value {
@@ -585,14 +609,17 @@ body {
   color: #111827;
 }
 
-/* адрес + кнопка копирования */
+/* адрес в одну строку */
 
 .desktop-card-row .address {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-family: monospace;
+  white-space: nowrap;
 }
+
+/* копирование адреса */
 
 .copy-btn {
   width: 18px;
@@ -744,319 +771,11 @@ body {
   font-size: 12px;
 }
 
-/* ========== DESKTOP CARD LAYOUT — СКЕТЧ ========== */
+/* кнопка View on — по центру внизу карточки */
 
-.desktop-card-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  margin-top: 12px;
-}
-
-/* 2 карточки на ноуте, 3 — на широком экране */
-@media (min-width: 1024px) {
-  .desktop-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (min-width: 1360px) {
-  .desktop-card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* левая колонка */
-
-.desktop-card-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.desktop-card-avatar {
-  width: 100px;
-  height: 100px;
-  border-radius: 22px;
-  background: #f3f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 28px;
-  overflow: hidden;
-}
-
-.desktop-card-avatar img {
-  width: 100%;
-  height: 100%;
-  border-radius: 22px;
-  object-fit: cover;
-}
-
-.desktop-card-left-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.desktop-card-left-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.desktop-card-left-row .left-label {
-  font-size: 11px;
-  color: #9ca3af;
-  min-width: 60px;
-}
-
-.desktop-card-left-row .left-value {
-  font-size: 12px;
-  color: #111827;
-}
-
-.desktop-card-left-row .address {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-family: monospace;
-}
-
-.desktop-card-left-row .address,
-.desktop-card-row .address {
-   white-space: nowrap;
-}
-
-/* правая колонка */
-
-.desktop-card-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-/* верх: name / ticker + дата */
-
-.desktop-card-header {
-  display: flex;
-  felx-direstion: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.desktop-card-title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.desktop-card-name {
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.desktop-card-symbol {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #6b7280;
-  letter-spacing: 0.03em;
-}
-
-.desktop-card-time {
-  font-size: 11px;
-  color: #9ca3af;
-  white-space: nowrap;
-}
-
-/* MC и Vol 24h под названием */
-
-.desktop-card-row--stats {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-}
-
-.desktop-card-row--stats .label {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.desktop-card-row--stats .value {
-  font-size: 13px;
-  font-weight: 500;
-  color: #111827;
-}
-
-/* ======== GRID для десктоп-карточек ======== */
-
-.desktop-card-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  margin-top: 12px;
-}
-
-@media (min-width: 1024px) {
-  .desktop-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1360px) {
-  .desktop-card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* ======== НОВАЯ КАРТОЧКА h-card ======== */
-
-.h-card {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 14px 14px;
-  border-radius: 18px;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
-  height: 100%;
-}
-
-.h-card-main {
-  display: flex;
-  gap: 14px;
-}
-
-/* левая колонка */
-
-.h-card-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.h-card-avatar {
-  width: 96px;
-  height: 96px;
-  border-radius: 22px;
-  background: #f3f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: 28px;
-  overflow: hidden;
-}
-
-.h-card-avatar img {
-  width: 100%;
-  height: 100%;
-  border-radius: 22px;
-  object-fit: cover;
-}
-
-.h-card-left-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.h-card-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.h-card-row-label {
-  font-size: 11px;
-  color: #9ca3af;
-  min-width: 60px;
-}
-
-.h-card-row-value {
-  font-size: 12px;
-  color: #111827;
-}
-
-.h-card-row-value-address {
-  white-space: nowrap;
-}
-
-/* правая колонка */
-
-.h-card-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.h-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.h-card-title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.h-card-name {
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.h-card-symbol {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #6b7280;
-  letter-spacing: 0.03em;
-}
-
-.h-card-time {
-  font-size: 11px;
-  color: #9ca3af;
-  white-space: nowrap;
-}
-
-.h-card-stats {
-  display: flex;
-  gap: 16px;
-  font-size: 12px;
-}
-
-.h-card-stats-label {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-.h-card-stats-value {
-  font-size: 13px;
-  font-weight: 500;
-  color: #111827;
-}
-
-/* кнопка по центру внизу карточки */
-
-.h-card-button {
-  margin-top: auto;           /* прижали к низу h-card */
-  align-self: center;         /* по центру по ширине */
+.desktop-card-button {
+  margin-top: auto;
+  align-self: center;
   padding: 7px 18px;
   border-radius: 999px;
   background: #0052ff;
@@ -1066,148 +785,6 @@ body {
   text-decoration: none;
 }
 
-.h-card-button:hover {
+.desktop-card-button:hover {
   opacity: 0.9;
-}
-
-/* === FIX: заголовок и дата внутри карточки === */
-
-.h-card-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;           /* чтобы можно было обрезать текст по ширине */
-}
-
-.h-card-header {
-  display: flex;
-  flex-direction: column; /* ИМЯ и ДАТА теперь друг под другом */
-  align-items: flex-start;
-  gap: 2px;
-}
-
-.h-card-title {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.h-card-name {
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis; /* длинные имена обрезаем "..." */
-}
-
-.h-card-symbol {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #6b7280;
-  letter-spacing: 0.03em;
-}
-
-.h-card-time {
-  font-size: 11px;
-  color: #9ca3af;
-  white-space: nowrap;
-}
-
-/* === FIX: расстояние между карточками === */
-
-.desktop-card-grid {
-  row-gap: 18px;          /* больше вертикальный отступ между рядами */
-}
-
-/* ===== FINAL TUNE: высота, отступы, тексты, расстояние между карточками ===== */
-
-/* больше вертикальный зазор, чтобы ряды не налезали друг на друга */
-.desktop-card-grid {
-  row-gap: 24px;          /* можно увеличить/уменьшить по вкусу */
-  grid-auto-rows: auto;
-}
-
-/* сама карточка чуть ниже, меньше паддинги */
-.h-card {
-  box-sizing: border-box;
-  padding: 10px 12px 12px;   /* было больше – делаем компактнее */
-  overflow: hidden;          /* ничего не вылезает за рамку */
-}
-
-/* картинку делаем чуть меньше, чтобы освободить место под текст */
-.h-card-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 18px;
-}
-
-/* основной блок (лево+право) – меньше зазор до кнопки */
-.h-card-main {
-  margin-bottom: 6px;
-}
-
-/* правая колонка – строго в пределах карточки */
-.h-card-right {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;          /* важно, чтобы текст мог обрезаться */
-}
-
-/* заголовок: имя/тикер и дата – строго внутри карточки */
-.h-card-header {
-  display: flex;
-  flex-direction: column;   /* имя/тикер сверху, дата строкой ниже */
-  align-items: flex-start;
-  gap: 2px;
-}
-
-/* имя токена – одна строка, если длинное — троеточие */
-.h-card-name {
-  font-size: 14px;
-  font-weight: 600;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* тикер – маленький, серый, под именем */
-.h-card-symbol {
-  font-size: 11px;
-  text-transform: uppercase;
-  color: #6b7280;
-  letter-spacing: 0.03em;
-}
-
-/* дата – отдельной строкой, тоже не вылазит */
-.h-card-time {
-  font-size: 11px;
-  color: #9ca3af;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* адрес всегда в одну строку */
-.h-card-row-value-address {
-  white-space: nowrap;
-}
-
-/* кнопка по-прежнему по центру, но карта ниже → расстояние до socials меньше */
-.h-card-button {
-  margin-top: auto;
-  align-self: center;
-  padding: 6px 18px;
-  border-radius: 999px;
-  background: #0052ff;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
 }
