@@ -642,6 +642,7 @@ body {
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
   height: 100%;
   min-height: 180px;
+  margin-bottom: 30px;
 }
 
 /* верхняя часть: две колонки */
