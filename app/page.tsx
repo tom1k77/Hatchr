@@ -609,7 +609,7 @@ export default function HomePage() {
 {!isMobile && (
   <div
     className="desktop-card-grid"
-    style={{ rowGap: "32px", columnGap: "18px" }}
+    style={{ rowGap: "18px", columnGap: "18px" }}
     >
     {visibleTokens.length === 0 ? (
       <div className="hatchr-table-empty">
