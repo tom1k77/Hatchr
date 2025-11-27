@@ -23,6 +23,11 @@ type TokenItem = {
   instagram_url?: string | null;
   tiktok_url?: string | null;
   image_url?: string | null;
+
+  // 🔵 Hatchr score (из /api/tokens)
+  hatchr_score?: number | null;
+  hatchr_creator_score?: number | null;
+  hatchr_followers_score?: number | null;
 };
 
 type TokensResponse = {
@@ -92,6 +97,14 @@ function formatTimeAgo(dateString: string | null | undefined): string {
 
   const diffD = Math.floor(diffH / 24);
   return `${diffD}d ago`;
+}
+
+function getHatchrColor(score?: number | null): string {
+  if (score == null || Number.isNaN(score)) return "#6b7280"; // gray
+  if (score >= 80) return "#16a34a"; // green
+  if (score >= 50) return "#ca8a04"; // yellow
+  if (score >= 20) return "#f97316"; // orange
+  return "#dc2626"; // red
 }
 
 function extractFarcasterUsername(url?: string | null): string | null {
@@ -588,6 +601,29 @@ export default function HomePage() {
                           </div>
                         </div>
 
+                        {/* 🔵 Hatchr score (mobile) */}
+        {typeof token.hatchr_score === "number" && (
+          <div
+            style={{
+              marginTop: 6,
+              display: "flex",
+              justifyContent: "flex-end",
+              fontSize: 12,
+              gap: 4,
+            }}
+          >
+            <span style={{ opacity: 0.6 }}>Hatchr:</span>
+            <span
+              style={{
+                fontWeight: 600,
+                color: getHatchrColor(token.hatchr_score),
+              }}
+            >
+              {token.hatchr_score}
+            </span>
+          </div>
+        )}
+
                         {token.source_url && (
                           <a
                             href={token.source_url}
@@ -849,8 +885,29 @@ export default function HomePage() {
                     <div className="h-card-stats-value">{vol}</div>
                   </div>
                 </div>
+              {/* 🔵 Hatchr score (desktop) */}
+                {typeof token.hatchr_score === "number" && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      display: "flex",
+                      justifyContent: "flex-end",
+                      fontSize: 12,
+                      gap: 4,
+                    }}
+                  >
+                    <span style={{ opacity: 0.6 }}>Hatchr:</span>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color: getHatchrColor(token.hatchr_score),
+                      }}
+                    >
+                      {token.hatchr_score}
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
 
             {/* НИЗ КАРТОЧКИ: кнопка */}
             {token.source_url && (
