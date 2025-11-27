@@ -55,6 +55,13 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
   }
 }
 
+// --- Создатели, для которых НЕ считаем Hatchr score ---
+const HATCHR_SCORE_BLOCKED_HANDLES = ["bankrbot", "livestream"];
+
+function isHatchrScoreBlockedHandle(handle: string): boolean {
+  return HATCHR_SCORE_BLOCKED_HANDLES.includes(handle.toLowerCase());
+}
+
 // ======================= Neynar + Hatchr Score V1 =======================
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
@@ -741,6 +748,12 @@ export async function enrichWithHatchrScores(
 
     const handle = extractFarcasterHandle(t.farcaster_url);
     if (!handle) {
+      result.push(t);
+      continue;
+    }
+
+    // 🔵 здесь отсекаем аккаунты, для которых НЕ считаем Hatchr score
+    if (isHatchrScoreBlockedHandle(handle)) {
       result.push(t);
       continue;
     }
