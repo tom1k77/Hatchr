@@ -166,17 +166,17 @@ function normalizeImageUrl(url?: string | null): string | null {
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
+  const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 часа
   const windowAgo = now - WINDOW_MS;
   const startDateUnix = Math.floor(windowAgo / 1000);
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 15; // до ~300 токенов
+  const MAX_PAGES = 100; // сильно больше 300
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
-      limit: "20",
+      limit: "50",
       sort: "desc",
       startDate: String(startDateUnix),
       includeUser: "true",
@@ -356,7 +356,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
+  const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 часа
 
   if (!ZORA_API_KEY) {
     console.error(
@@ -367,8 +367,8 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
-  const PAGE_SIZE = 50; // сколько токенов просим за один запрос
-  const MAX_PAGES = 10; // защита от бесконечного цикла
+  const PAGE_SIZE = 100; // вместо 50
+  const MAX_PAGES = 100; // вместо 10
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
