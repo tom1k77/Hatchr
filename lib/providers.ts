@@ -166,17 +166,17 @@ function normalizeImageUrl(url?: string | null): string | null {
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW_MS = 6 * 60 * 60 * 1000; // 6 часов
+  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 часа
   const windowAgo = now - WINDOW_MS;
   const startDateUnix = Math.floor(windowAgo / 1000);
 
   let cursor: string | undefined = undefined;
   const collected: any[] = [];
-  const MAX_PAGES = 30; // сильно больше 300
+  const MAX_PAGES = 15; // около 300 токенов
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params = new URLSearchParams({
-      limit: "30",
+      limit: "20",
       sort: "desc",
       startDate: String(startDateUnix),
       includeUser: "true",
