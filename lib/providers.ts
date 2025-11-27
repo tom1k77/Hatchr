@@ -88,70 +88,79 @@ function extractFarcasterHandle(farcasterUrl?: string | null): string | null {
   }
 }
 
-// ⬇️ заглушки под реальные Neynar endpoint'ы – их тебе надо будет
-// заменить на актуальные пути, с которыми ты уже работаешь
+// ---- Neynar helpers: creator + followers ----
 
-async function fetchCreatorScoreByHandle(handle: string): Promise<number> {
+// Вернём и score, и fid, потому что fid нужен для followers
+async function fetchCreatorScoreByHandle(
+  handle: string
+): Promise<{ fid: number | null; score: number }> {
   if (!NEYNAR_API_KEY) {
     console.error("[Neynar] NEYNAR_API_KEY is not set");
-    return 0;
+    return { fid: null, score: 0 };
   }
 
   try {
-    // ЗАМЕНИ путь на рабочий:
-    // например, что-то вроде:
-    // https://api.neynar.com/v2/farcaster/user-by-username?username=<handle>
-    const url = `https://api.neynar.com/.../user?username=${encodeURIComponent(
-      handle
-    )}`;
+    const url = new URL(
+      "https://api.neynar.com/v2/farcaster/user/by_username/"
+    );
+    url.searchParams.set("username", handle);
 
-    const res = await fetch(url, {
+    const res = await fetch(url.toString(), {
       headers: {
-        "api-key": NEYNAR_API_KEY,
-        accept: "application/json",
+        "x-api-key": NEYNAR_API_KEY,
+        "x-neynar-experimental": "true", // чтобы точно был neynar_user_score
       },
       cache: "no-store",
     });
 
     if (!res.ok) {
-      console.error("[Neynar] fetchCreatorScore error", res.status, handle);
-      return 0;
+      console.error(
+        "[Neynar] fetchCreatorScore error",
+        res.status,
+        handle
+      );
+      return { fid: null, score: 0 };
     }
 
     const data: any = await res.json();
-    // тут подставь правильный путь к score из ответа Neynar
+    const user = data?.user;
+
+    const rawScore =
+      user?.score ?? user?.experimental?.neynar_user_score ?? 0;
     const score =
-      data?.user?.score ?? data?.result?.user?.score ?? data?.result?.score ?? 0;
+      typeof rawScore === "number"
+        ? Math.max(0, Math.min(1, rawScore))
+        : 0;
 
-    if (typeof score !== "number") return 0;
+    const fid =
+      typeof user?.fid === "number" ? (user.fid as number) : null;
 
-    // Neynar уже даёт 0–1, просто ограничим
-    return Math.max(0, Math.min(1, score));
+    return { fid, score };
   } catch (e) {
-    console.error("[Neynar] fetchCreatorScore exception", e);
-    return 0;
+    console.error("[Neynar] fetchCreatorScore exception", e, handle);
+    return { fid: null, score: 0 };
   }
 }
 
-async function fetchFollowersScoresByHandle(handle: string): Promise<number[]> {
-  const scores: number[] = [];
-  if (!NEYNAR_API_KEY) return scores;
+// Тянем скор всех подписчиков по fid
+async function fetchFollowersScoresByFid(fid: number): Promise<number[]> {
+  if (!NEYNAR_API_KEY) return [];
 
+  const scores: number[] = [];
   let cursor: string | undefined;
-  const MAX_PAGES = 5; // защита от слишком долгой пагинации
+  const MAX_PAGES = 5;
 
   for (let i = 0; i < MAX_PAGES; i++) {
     try {
-      // ЗАМЕНИ на реальный путь Neynar для followers:
-      const url = new URL("https://api.neynar.com/.../followers");
-      url.searchParams.set("username", handle);
-      url.searchParams.set("limit", "200");
+      const url = new URL("https://api.neynar.com/v2/farcaster/followers/");
+      url.searchParams.set("fid", String(fid));
+      url.searchParams.set("limit", "100");
       if (cursor) url.searchParams.set("cursor", cursor);
 
       const res = await fetch(url.toString(), {
         headers: {
-          "api-key": NEYNAR_API_KEY,
-          accept: "application/json",
+          "x-api-key": NEYNAR_API_KEY,
+          "x-neynar-experimental": "true",
         },
         cache: "no-store",
       });
@@ -160,29 +169,27 @@ async function fetchFollowersScoresByHandle(handle: string): Promise<number[]> {
         console.error(
           "[Neynar] fetchFollowersScores error",
           res.status,
-          handle
+          fid
         );
         break;
       }
 
       const data: any = await res.json();
-      const users: any[] =
-        data?.result?.users ??
-        data?.users ??
-        data?.result?.followers ??
-        data?.followers ??
-        [];
+      const users: any[] = data?.users ?? [];
 
-      for (const u of users) {
-        if (typeof u.score === "number") {
-          scores.push(Math.max(0, Math.min(1, u.score)));
+      for (const follower of users) {
+        const s =
+          follower?.user?.score ??
+          follower?.user?.experimental?.neynar_user_score;
+        if (typeof s === "number") {
+          scores.push(Math.max(0, Math.min(1, s)));
         }
       }
 
-      cursor = data?.next?.cursor ?? data?.result?.next?.cursor;
+      cursor = data?.next?.cursor;
       if (!cursor) break;
     } catch (e) {
-      console.error("[Neynar] fetchFollowersScores exception", e);
+      console.error("[Neynar] fetchFollowersScores exception", e, fid);
       break;
     }
   }
@@ -727,7 +734,6 @@ export async function enrichWithHatchrScores(
   const result: Token[] = [];
 
   for (const t of tokens) {
-    // если нет Farcaster-точки входа — пропускаем
     if (!t.farcaster_url) {
       result.push(t);
       continue;
@@ -740,12 +746,17 @@ export async function enrichWithHatchrScores(
     }
 
     try {
-      const [creatorScore, followerScores] = await Promise.all([
-        fetchCreatorScoreByHandle(handle),
-        fetchFollowersScoresByHandle(handle),
-      ]);
+      const creator = await fetchCreatorScoreByHandle(handle);
 
-      const hatchr = computeHatchrScoreV1(creatorScore, followerScores);
+      // если не знаем fid — значит, не можем тянуть followers
+      const followerScores = creator.fid
+        ? await fetchFollowersScoresByFid(creator.fid)
+        : [];
+
+      const hatchr = computeHatchrScoreV1(
+        creator.score,
+        followerScores
+      );
 
       result.push({
         ...t,
@@ -757,7 +768,6 @@ export async function enrichWithHatchrScores(
       });
     } catch (e) {
       console.error("[Hatchr] enrichWithHatchrScores error", e);
-      // в случае ошибки не ломаем пайплайн — просто возвращаем исходный токен
       result.push(t);
     }
   }
