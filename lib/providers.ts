@@ -735,36 +735,67 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
 // ======================= Hatchr Score Enricher =======================
 
+const HATCHR_SCORE_BLOCKED_HANDLES = ["bankrbot", "livestream"];
+
+function isHatchrScoreBlockedHandle(handle: string): boolean {
+  return HATCHR_SCORE_BLOCKED_HANDLES.includes(handle.toLowerCase());
+}
+
 export async function enrichWithHatchrScores(
   tokens: Token[]
 ): Promise<Token[]> {
+  const MAX_HATCHR_TOKENS = 12; // считаем скор максимум для 12 токенов за запрос
+
+  // Берём только токены с Farcaster и не из заблокированных хэндлов
+  const candidates = tokens
+    .filter((t) => !!t.farcaster_url)
+    .map((t) => {
+      const handle = extractFarcasterHandle(t.farcaster_url);
+      return handle && !isHatchrScoreBlockedHandle(handle)
+        ? { token: t, handle }
+        : null;
+    })
+    .filter(Boolean) as { token: Token; handle: string }[];
+
+  // Сортируем по свежести — самые новые токены сверху
+  const sorted = candidates.sort((a, b) => {
+    const ta = new Date(a.token.first_seen_at || 0).getTime();
+    const tb = new Date(b.token.first_seen_at || 0).getTime();
+    return tb - ta;
+  });
+
+  // Оставляем только первые N токенов, для остальных скор не считаем
+  const limited = sorted.slice(0, MAX_HATCHR_TOKENS);
+  const addressesWithScore = new Set(
+    limited.map((x) => x.token.token_address.toLowerCase())
+  );
+
   const result: Token[] = [];
 
   for (const t of tokens) {
-    if (!t.farcaster_url) {
+    const addr = t.token_address.toLowerCase();
+
+    // если токен не попал в limited — просто возвращаем его как есть
+    if (!addressesWithScore.has(addr)) {
       result.push(t);
       continue;
     }
 
-    const handle = extractFarcasterHandle(t.farcaster_url);
-    if (!handle) {
+    const item = limited.find(
+      (x) => x.token.token_address.toLowerCase() === addr
+    );
+    if (!item) {
       result.push(t);
       continue;
     }
 
-    // 🔵 здесь отсекаем аккаунты, для которых НЕ считаем Hatchr score
-    if (isHatchrScoreBlockedHandle(handle)) {
-      result.push(t);
-      continue;
-    }
-
+    const handle = item.handle;
     try {
+      // 1) тянем только создателя (fid + score)
       const creator = await fetchCreatorScoreByHandle(handle);
 
-      // если не знаем fid — значит, не можем тянуть followers
-      const followerScores = creator.fid
-        ? await fetchFollowersScoresByFid(creator.fid)
-        : [];
+      // 2) followers пока НЕ используем, чтобы минимизировать запросы
+      const followerScores: number[] = [];
 
       const hatchr = computeHatchrScoreV1(
         creator.score,
@@ -775,7 +806,7 @@ export async function enrichWithHatchrScores(
         ...t,
         hatchr_score: hatchr.hatchrScore,
         hatchr_creator_score: hatchr.creatorScore,
-        hatchr_followers_score: hatchr.followersScore,
+        hatchr_followers_score: hatchr.followersScore, // сейчас 0
         hatchr_followers_count: hatchr.followerCount,
         hatchr_followers_mean_score: hatchr.meanFollowerScore,
       });
