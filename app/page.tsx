@@ -43,7 +43,7 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 30_000;
+const REFRESH_INTERVAL_MS = 60_000;
 const LEFT_PAGE_SIZE = 9;
 const RIGHT_PAGE_SIZE = 7;
 
