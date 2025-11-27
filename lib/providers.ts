@@ -19,6 +19,13 @@ export interface Token {
   instagram_url?: string;
   tiktok_url?: string;
 
+   // Hatchr social score (Farcaster / Neynar)
+  hatchr_score?: number;                // 0–100 (то, что показываем в UI)
+  hatchr_creator_score?: number;        // 0–1 (Neynar score создателя)
+  hatchr_followers_score?: number;      // 0–1 (объединённый скор подписчиков)
+  hatchr_followers_count?: number;      // общее число подписчиков
+  hatchr_followers_mean_score?: number; // средний Neynar score всех подписчиков (0–1)
+
   // запасные цифры из Zora (если Gecko не знает токен)
   zora_price_usd?: number | null;
   zora_market_cap_usd?: number | null;
@@ -46,6 +53,214 @@ function isBlockedCreator(farcasterUrl?: string | null): boolean {
   } catch {
     return false;
   }
+}
+
+// ======================= Neynar + Hatchr Score V1 =======================
+
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
+
+// Достаём хендл Farcaster/ Warpcast из farcaster_url
+function extractFarcasterHandle(farcasterUrl?: string | null): string | null {
+  if (!farcasterUrl) return null;
+  try {
+    const url = new URL(farcasterUrl);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+
+    // Поддерживаем warpcast.com и farcaster.xyz
+    if (
+      host === "warpcast.com" ||
+      host === "farcaster.xyz" ||
+      host.endsWith(".farcaster.xyz")
+    ) {
+      // /<handle> или /profiles/<fid>
+      if (parts[0] === "profiles") {
+        // v1: если ссылка вида /profiles/<fid>, хендл не знаем — скипаем
+        return null;
+      }
+      return parts[0]; // handle
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ⬇️ заглушки под реальные Neynar endpoint'ы – их тебе надо будет
+// заменить на актуальные пути, с которыми ты уже работаешь
+
+async function fetchCreatorScoreByHandle(handle: string): Promise<number> {
+  if (!NEYNAR_API_KEY) {
+    console.error("[Neynar] NEYNAR_API_KEY is not set");
+    return 0;
+  }
+
+  try {
+    // ЗАМЕНИ путь на рабочий:
+    // например, что-то вроде:
+    // https://api.neynar.com/v2/farcaster/user-by-username?username=<handle>
+    const url = `https://api.neynar.com/.../user?username=${encodeURIComponent(
+      handle
+    )}`;
+
+    const res = await fetch(url, {
+      headers: {
+        "api-key": NEYNAR_API_KEY,
+        accept: "application/json",
+      },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      console.error("[Neynar] fetchCreatorScore error", res.status, handle);
+      return 0;
+    }
+
+    const data: any = await res.json();
+    // тут подставь правильный путь к score из ответа Neynar
+    const score =
+      data?.user?.score ?? data?.result?.user?.score ?? data?.result?.score ?? 0;
+
+    if (typeof score !== "number") return 0;
+
+    // Neynar уже даёт 0–1, просто ограничим
+    return Math.max(0, Math.min(1, score));
+  } catch (e) {
+    console.error("[Neynar] fetchCreatorScore exception", e);
+    return 0;
+  }
+}
+
+async function fetchFollowersScoresByHandle(handle: string): Promise<number[]> {
+  const scores: number[] = [];
+  if (!NEYNAR_API_KEY) return scores;
+
+  let cursor: string | undefined;
+  const MAX_PAGES = 5; // защита от слишком долгой пагинации
+
+  for (let i = 0; i < MAX_PAGES; i++) {
+    try {
+      // ЗАМЕНИ на реальный путь Neynar для followers:
+      const url = new URL("https://api.neynar.com/.../followers");
+      url.searchParams.set("username", handle);
+      url.searchParams.set("limit", "200");
+      if (cursor) url.searchParams.set("cursor", cursor);
+
+      const res = await fetch(url.toString(), {
+        headers: {
+          "api-key": NEYNAR_API_KEY,
+          accept: "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        console.error(
+          "[Neynar] fetchFollowersScores error",
+          res.status,
+          handle
+        );
+        break;
+      }
+
+      const data: any = await res.json();
+      const users: any[] =
+        data?.result?.users ??
+        data?.users ??
+        data?.result?.followers ??
+        data?.followers ??
+        [];
+
+      for (const u of users) {
+        if (typeof u.score === "number") {
+          scores.push(Math.max(0, Math.min(1, u.score)));
+        }
+      }
+
+      cursor = data?.next?.cursor ?? data?.result?.next?.cursor;
+      if (!cursor) break;
+    } catch (e) {
+      console.error("[Neynar] fetchFollowersScores exception", e);
+      break;
+    }
+  }
+
+  return scores;
+}
+
+// ---- математика Hatchr followers/creator ----
+
+interface HatchrFollowersScoreResult {
+  followerCount: number;
+  meanFollowerScore: number;
+  sizeFactor: number;
+  followersScore: number; // 0–1
+}
+
+function computeFollowersScoreAll(
+  followerScores: number[],
+  maxFollowersRef: number = 1000
+): HatchrFollowersScoreResult {
+  const followerCount = followerScores.length;
+  if (!followerCount) {
+    return {
+      followerCount: 0,
+      meanFollowerScore: 0,
+      sizeFactor: 0,
+      followersScore: 0,
+    };
+  }
+
+  const sum = followerScores.reduce((acc, s) => acc + s, 0);
+  const meanFollowerScore = sum / followerCount; // 0–1
+
+  const denom = Math.log10(maxFollowersRef + 1);
+  const sizeFactor =
+    denom > 0 ? Math.min(1, Math.log10(followerCount + 1) / denom) : 1;
+
+  // multiplier: при маленькой аудитории ↓, при большой →1
+  const multiplier = 0.5 + 0.5 * sizeFactor;
+  const followersScore = Math.max(
+    0,
+    Math.min(1, meanFollowerScore * multiplier)
+  );
+
+  return {
+    followerCount,
+    meanFollowerScore,
+    sizeFactor,
+    followersScore,
+  };
+}
+
+interface HatchrScoreResult extends HatchrFollowersScoreResult {
+  creatorScore: number;
+  hatchrSocialScore: number; // 0–1
+  hatchrScore: number; // 0–100
+}
+
+function computeHatchrScoreV1(
+  creatorScore: number,
+  followerScores: number[],
+  wCreator = 0.6,
+  wFollowers = 0.4
+): HatchrScoreResult {
+  const safeCreatorScore = Math.max(0, Math.min(1, creatorScore || 0));
+  const followers = computeFollowersScoreAll(followerScores);
+
+  const hatchrSocialScore =
+    wCreator * safeCreatorScore + wFollowers * followers.followersScore;
+
+  const hatchrScore = Math.round(hatchrSocialScore * 100);
+
+  return {
+    creatorScore: safeCreatorScore,
+    hatchrSocialScore,
+    hatchrScore,
+    ...followers,
+  };
 }
 
 // -------- Константы --------
@@ -504,6 +719,52 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
   });
 }
 
+// ======================= Hatchr Score Enricher =======================
+
+export async function enrichWithHatchrScores(
+  tokens: Token[]
+): Promise<Token[]> {
+  const result: Token[] = [];
+
+  for (const t of tokens) {
+    // если нет Farcaster-точки входа — пропускаем
+    if (!t.farcaster_url) {
+      result.push(t);
+      continue;
+    }
+
+    const handle = extractFarcasterHandle(t.farcaster_url);
+    if (!handle) {
+      result.push(t);
+      continue;
+    }
+
+    try {
+      const [creatorScore, followerScores] = await Promise.all([
+        fetchCreatorScoreByHandle(handle),
+        fetchFollowersScoresByHandle(handle),
+      ]);
+
+      const hatchr = computeHatchrScoreV1(creatorScore, followerScores);
+
+      result.push({
+        ...t,
+        hatchr_score: hatchr.hatchrScore,
+        hatchr_creator_score: hatchr.creatorScore,
+        hatchr_followers_score: hatchr.followersScore,
+        hatchr_followers_count: hatchr.followerCount,
+        hatchr_followers_mean_score: hatchr.meanFollowerScore,
+      });
+    } catch (e) {
+      console.error("[Hatchr] enrichWithHatchrScores error", e);
+      // в случае ошибки не ломаем пайплайн — просто возвращаем исходный токен
+      result.push(t);
+    }
+  }
+
+  return result;
+}
+
 // ======================= GeckoTerminal =======================
 
 export async function enrichWithGeckoTerminal(
@@ -593,6 +854,11 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
   }
 
   const merged = Array.from(byAddress.values());
-  const withMarket = await enrichWithGeckoTerminal(merged);
+
+  // 🔵 новый шаг — обогащаем токены Hatchr Score V1 (creator + followers)
+  const withHatchr = await enrichWithHatchrScores(merged);
+
+  // GeckoTerminal поверх уже обогащённых токенов
+  const withMarket = await enrichWithGeckoTerminal(withHatchr);
   return withMarket;
 }
