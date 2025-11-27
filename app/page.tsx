@@ -396,7 +396,8 @@ export default function HomePage() {
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
               <span className="hatchr-brand-title-sub">
-                New Base tokens. Farcaster-native.
+                Analytics layer for Base.
+                Discover new tokens on Base live.
               </span>
             </div>
           </div>
