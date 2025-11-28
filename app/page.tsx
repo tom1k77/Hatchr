@@ -499,116 +499,97 @@ export default function HomePage() {
 
             {/* ====== MOBILE: карточки в один столбец ====== */}
             {isMobile && (
-              <div className="token-card-list">
-                {visibleTokens.length === 0 ? (
-                  <div className="hatchr-table-empty">
-                    {isLoading
-                      ? "Loading Base mints…"
-                      : "Nothing here yet. Try again in a minute."}
+  <div className="token-card-list">
+    {visibleTokens.length === 0 ? (
+      <div className="hatchr-table-empty">
+        {isLoading
+          ? "Loading Base mints…"
+          : "Nothing here yet. Try again in a minute."}
+      </div>
+    ) : (
+      visibleTokens.map((token) => {
+        const { time, date } = formatCreated(token.first_seen_at);
+        const symbol = token.symbol || "";
+        const name = token.name || symbol || "New token";
+        const username = extractFarcasterUsername(
+          token.farcaster_url || undefined
+        );
+        const mcap = formatNumber(token.market_cap_usd);
+        const vol = formatNumber(token.volume_24h_usd);
+
+        const firstLetter =
+          (symbol || name).trim().charAt(0).toUpperCase() || "₿";
+
+        const sourceLabel =
+          token.source === "clanker" ? "Clanker" : "Zora";
+
+        return (
+          <Link
+            key={token.token_address}
+            href={`/token/${token.token_address.toLowerCase()}`}
+            className="token-card-link"
+          >
+            <div className="token-card">
+              <div className="token-card-top">
+                <div className="token-card-avatar">
+                  {token.image_url ? (
+                    <img
+                      src={token.image_url}
+                      alt={name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: "16px",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <span>{firstLetter}</span>
+                  )}
+                </div>
+
+                <div className="token-card-main">
+                  <div className="token-card-header">
+                    <div className="token-card-title">
+                      <span className="token-card-name">{name}</span>
+                      {symbol && symbol !== name && (
+                        <span className="token-card-symbol">
+                          &nbsp;{symbol}
+                        </span>
+                      )}
+                    </div>
+                    <div className="token-card-time">
+                      {time} · {date}
+                    </div>
                   </div>
-                ) : (
-                  visibleTokens.map((token) => {
-                    const { time, date } = formatCreated(token.first_seen_at);
-                    const symbol = token.symbol || "";
-                    const name = token.name || symbol || "New token";
-                    const username = extractFarcasterUsername(
-                      token.farcaster_url || undefined
-                    );
-                    const mcap = formatNumber(token.market_cap_usd);
-                    const vol = formatNumber(token.volume_24h_usd);
 
-                    const firstLetter =
-                      (symbol || name).trim().charAt(0).toUpperCase() || "₿";
+                  <div className="token-card-stats">
+                    <span>MC: {mcap}</span>
+                    <span>Vol 24h: {vol}</span>
+                  </div>
 
-                    const sourceLabel =
-                      token.source === "clanker" ? "Clanker" : "Zora";
-
-                    return (
-                      <div
-                        key={token.token_address}
-                        href={'/token/${token.token_address}'}
-                        className="token-card-link"
-                      >
-                        <div className="token-card">
-                        <div className="token-card-top">
-                          <div className="token-card-avatar">
-                            {token.image_url ? (
-                              <img
-                                src={token.image_url}
-                                alt={name}
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  borderRadius: "16px",
-                                  objectFit: "cover",
-                                }}
-                              />
-                            ) : (
-                              <span>{firstLetter}</span>
-                            )}
-                          </div>
-
-                          <div className="token-card-main">
-                            <div className="token-card-header">
-                              <div className="token-card-title">
-                                <span className="token-card-name">
-                                  {name}
-                                </span>
-                                {symbol && symbol !== name && (
-                                  <span className="token-card-symbol">
-                                    &nbsp;{symbol}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="token-card-time">
-                                {time} · {date}
-                              </div>
-                            </div>
-
-                            <div className="token-card-stats">
-                              <span>MC: {mcap}</span>
-                              <span>Vol 24h: {vol}</span>
-                            </div>
-
-                            <div className="token-card-source">
-                              <span className="token-card-source-pill">
-                                {sourceLabel}
-                              </span>
-                              {username && (
-                                <>
-                                  <span style={{ margin: "0 4px" }}>·</span>
-                                  <a
-                                    href={`https://warpcast.com/${username}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="token-card-creator"
-                                  >
-                                    @{username}
-                                  </a>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {token.source_url && (
-                          <a
-                            href={token.source_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="token-card-button"
-                            onClick={(e) =>e.stopPropagation()} // чтобы не открывался /token/...
-                          >
-                            View on {token.source === "zora" ? "Zora" : "Clanker"}
-                          </a>
-                        )}
-                      </div>
-                      </Link>
-                    );
-                  })
-                )}
+                  <div className="token-card-source">
+                    <span className="token-card-source-pill">
+                      {sourceLabel}
+                    </span>
+                    {username && (
+                      <>
+                        <span style={{ margin: "0 4px" }}>·</span>
+                        <span className="token-card-creator">
+                          @{username}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
+          </Link>
+        );
+      })
+    )}
+  </div>
+)}
 
             {/* ====== DESKTOP: карточки как на скетче ====== */}
 {!isMobile && (
