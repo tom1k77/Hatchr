@@ -684,7 +684,7 @@ export default function HomePage() {
                     <div className="h-card-row">
                       <span className="h-card-row-label">Time</span>
                       <span className="h-card-row-value h-card-row-value-time">
-                        {time && date ? '${time} · ${date}' : "-"}
+                        {time} · {date}
                       </span>
                     </div>
 
