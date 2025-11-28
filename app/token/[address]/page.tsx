@@ -39,34 +39,35 @@ export default async function TokenPage({ params }: PageProps) {
   // адрес из URL
   const rawAddress = (params.address || "").trim().toLowerCase();
 
-  // минимальная валидация, чтобы не падать
-  if (!rawAddress.startsWith("0x") || rawAddress.length !== 42) {
-    return (
-      <main className="token-page-root">
-        <div className="token-page-shell">
-          <h1 className="token-page-title">Token</h1>
-          <p>Invalid token address.</p>
-        </div>
+// Минимальная проверка: должен хотя бы начинаться с 0x.
+// Длину больше НЕ проверяем, дальше просто ищем такой адрес в списке токенов.
+if (!rawAddress.startsWith("0x")) {
+  return (
+    <div className="hatchr-root">
+      <main className="hatchr-shell">
+        <h1>Token</h1>
+        <p>Invalid token address.</p>
       </main>
-    );
-  }
-
-  // забираем все токены так же, как на главной
-  const tokens: TokenWithMarket[] = await getTokens();
-  const token = tokens.find(
-    (t) => t.token_address.toLowerCase() === rawAddress
+    </div>
   );
+}
+  
+  // забираем все токены так же, как на главной
+  const tokens = await getTokens();
+const token = tokens.find(
+  (t) => t.token_address.toLowerCase() === rawAddress
+);
 
-  if (!token) {
-    return (
-      <main className="token-page-root">
-        <div className="token-page-shell">
-          <h1 className="token-page-title">Token</h1>
-          <p>Token not found in the current window.</p>
-        </div>
+if (!token) {
+  return (
+    <div className="hatchr-root">
+      <main className="hatchr-shell">
+        <h1>Token</h1>
+        <p>Token not found.</p>
       </main>
-    );
-  }
+    </div>
+  );
+}
 
   const name = token.name || token.symbol || "New token";
   const symbol =
