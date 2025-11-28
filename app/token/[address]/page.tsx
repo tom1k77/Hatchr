@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { getTokens, TokenWithMarket } from "@/lib/providers";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 interface TokenPageProps {
   params: {
     address: string;
