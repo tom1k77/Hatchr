@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "./hooks/useIsMobile";
+import Link from "next/link";
 
 type TokenItem = {
   token_address: string;
@@ -525,8 +526,10 @@ export default function HomePage() {
                     return (
                       <div
                         key={token.token_address}
-                        className="token-card"
+                        href={'/token/${token.token_address}'}
+                        className="token-card-link"
                       >
+                        <div className="token-card">
                         <div className="token-card-top">
                           <div className="token-card-avatar">
                             {token.image_url ? (
@@ -594,12 +597,13 @@ export default function HomePage() {
                             target="_blank"
                             rel="noopener noreferrer"
                             className="token-card-button"
+                            onClick={(e) =>e.stopPropagation()} // чтобы не открывался /token/...
                           >
-                            View on{" "}
-                            {token.source === "zora" ? "Zora" : "Clanker"}
+                            View on {token.source === "zora" ? "Zora" : "Clanker"}
                           </a>
                         )}
                       </div>
+                      </Link>
                     );
                   })
                 )}
@@ -677,10 +681,11 @@ export default function HomePage() {
         const isTooltipVisible = hoveredRowKey === rowKey;
 
         return (
-         <div
+         <Link
   key={rowKey}
-  className="h-card"
-  style={{ marginBottom: "24px" }}  // расстояние между рядами карточек
+  href={'/token/${token.token_address}'}
+  className="h-card-link"
+  style={{ marginBottom: "20px" }}  // расстояние между рядами карточек
 >
             {/* ВЕРХ КАРТОЧКИ: две колонки */}
             <div className="h-card-main">
@@ -859,11 +864,13 @@ export default function HomePage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="h-card-button"
+                onClick={(e) => e.stopPropagation()}
               >
                 View on {sourceLabel}
               </a>
             )}
           </div>
+          </Link>
         );
       })
     )}
