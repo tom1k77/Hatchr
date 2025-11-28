@@ -737,6 +737,7 @@ export default function HomePage() {
                               className="desktop-farcaster-pill"
                               onClick={(e) => e.stopPropagation()}
                             >
+                              <span>@{username}</span>
                               {profile?.pfp_url ? (
                                 <img
                                   src={profile.pfp_url}
@@ -748,7 +749,6 @@ export default function HomePage() {
                               ) : (
                                 <FarcasterFallbackIcon size={20} />
                               )}
-                              <span>@{username}</span>
                             </a>
 
                             {isTooltipVisible && profile && (
