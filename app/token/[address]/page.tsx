@@ -97,31 +97,6 @@ export default async function TokenPage({
 }) {
   const address = params.address;
 
-  if (!address || !address.startsWith("0x") || address.length < 10) {
-    return (
-      <main className="hatchr-root">
-        <div className="hatchr-shell">
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>
-            Token
-          </h1>
-          <p style={{ fontSize: 14, marginBottom: 12 }}>Invalid token address.</p>
-          <Link
-            href="/"
-            style={{
-              fontSize: 13,
-              padding: "6px 14px",
-              borderRadius: 999,
-              border: "1px solid #d1d5db",
-              textDecoration: "none",
-            }}
-          >
-            ← Back to Hatchr
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
   const token = await fetchToken(address);
 
   if (!token) {
