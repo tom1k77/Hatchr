@@ -25,13 +25,14 @@ type Token = {
 };
 
 async function fetchTokensFromApi(): Promise<Token[]> {
-  const h = headers();
+  // БЫЛО: const h = headers();
+  const h = await headers();                          // ← добавили await
+
   const protocol = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("host")!;
+  const host = h.get("host") ?? "localhost:3000";
   const baseUrl = `${protocol}://${host}`;
 
   const res = await fetch(`${baseUrl}/api/tokens`, {
-    // берём те же данные, что и главная
     cache: "no-store",
   });
 
@@ -43,7 +44,6 @@ async function fetchTokensFromApi(): Promise<Token[]> {
   const json = await res.json();
   return (json.items ?? []) as Token[];
 }
-
 export default async function TokenPage({
   params,
 }: {
