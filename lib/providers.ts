@@ -356,7 +356,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW_MS = 24 * 60 * 60 * 1000; // 24 часа
+  const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 часов
 
   if (!ZORA_API_KEY) {
     console.error(
@@ -367,8 +367,8 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
-  const PAGE_SIZE = 100; // вместо 50
-  const MAX_PAGES = 100; // вместо 10
+  const PAGE_SIZE = 50; // вместо 50
+  const MAX_PAGES = 20; // вместо 10
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
