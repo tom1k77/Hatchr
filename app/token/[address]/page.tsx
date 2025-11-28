@@ -3,96 +3,122 @@
 import Link from "next/link";
 import { getTokens, type TokenWithMarket } from "@/lib/providers";
 
-export const dynamic = "force-dynamic"; // без статической генерации и кеша
+export const dynamic = "force-dynamic";
 
-interface TokenPageProps {
+type PageProps = {
   params: { address: string };
-}
+};
 
-export default async function TokenPage({ params }: TokenPageProps) {
-  const address = params.address?.toLowerCase();
+export default async function TokenPage({ params }: PageProps) {
+  const address = decodeURIComponent(params.address || "").toLowerCase();
 
-  // базовая проверка адреса
-  if (!address || !address.startsWith("0x") || address.length !== 42) {
+  // НИКАКОЙ строгой проверки длины — работаем только с тем, что есть
+  if (!address || !address.startsWith("0x")) {
     return (
-      <TokenLayout>
+      <Shell>
+        <Title>Token</Title>
         <p className="text-sm text-gray-600 mb-4">Invalid token address.</p>
         <BackLink />
-      </TokenLayout>
+      </Shell>
     );
   }
 
   let tokens: TokenWithMarket[] = [];
   try {
-    tokens = await getTokens(); // берём те же токены, что и на главной
+    // Берём те же данные, что и на главной, напрямую
+    tokens = await getTokens();
   } catch (e) {
-    console.error("[TokenPage] getTokens error", e);
+    console.error("[token page] getTokens error", e);
+    return (
+      <Shell>
+        <Title>Token</Title>
+        <p className="text-sm text-gray-600 mb-4">
+          Error loading token data. Try again in a minute.
+        </p>
+        <BackLink />
+      </Shell>
+    );
   }
 
   const token = tokens.find(
-    (t) => t.token_address?.toLowerCase() === address
+    (t) => t.token_address.toLowerCase() === address
   );
 
   if (!token) {
     return (
-      <TokenLayout>
+      <Shell>
+        <Title>Token</Title>
         <p className="text-sm text-gray-600 mb-4">Token not found.</p>
         <BackLink />
-      </TokenLayout>
+      </Shell>
     );
   }
 
-  // ====== ВРЕМЕННО: просто показываем сырые данные токена ======
-  // Потом красиво оформим карточку с графиком / Hatchr score и т.п.
+  const shortAddress =
+    token.token_address.slice(0, 6) +
+    "..." +
+    token.token_address.slice(-4);
+
   return (
-    <TokenLayout>
-      <h1 className="text-xl font-semibold mb-2">
-        {token.name || "Unnamed token"}{" "}
-        {token.symbol ? `(${token.symbol})` : ""}
-      </h1>
+    <Shell>
+      <Title>{token.name || token.symbol || shortAddress}</Title>
 
-      <p className="text-sm text-gray-600 mb-4 break-all">
-        Address: {token.token_address}
-      </p>
-
-      <div className="mb-4 text-sm text-gray-700">
-        <div>Source: {token.source}</div>
-        {token.price_usd != null && <div>Price (USD): {token.price_usd}</div>}
+      <div className="mt-2 text-sm text-gray-600">
+        {token.symbol && (
+          <p className="mb-1">
+            <span className="text-gray-400">Symbol:</span> {token.symbol}
+          </p>
+        )}
+        <p className="mb-1">
+          <span className="text-gray-400">Address:</span> {shortAddress}
+        </p>
+        {token.source && (
+          <p className="mb-1">
+            <span className="text-gray-400">Source:</span> {token.source}
+          </p>
+        )}
         {token.market_cap_usd != null && (
-          <div>MC (USD): {token.market_cap_usd}</div>
+          <p className="mb-1">
+            <span className="text-gray-400">MC:</span>{" "}
+            {token.market_cap_usd.toLocaleString("en-US", {
+              maximumFractionDigits: 0,
+            })}
+          </p>
         )}
         {token.volume_24h_usd != null && (
-          <div>Vol 24h (USD): {token.volume_24h_usd}</div>
+          <p className="mb-1">
+            <span className="text-gray-400">Vol 24h:</span>{" "}
+            {token.volume_24h_usd.toLocaleString("en-US", {
+              maximumFractionDigits: 0,
+            })}
+          </p>
         )}
       </div>
 
-      <pre className="text-xs bg-gray-100 rounded-md p-3 overflow-x-auto whitespace-pre-wrap">
-        {JSON.stringify(token, null, 2)}
-      </pre>
-
-      <div className="mt-4">
-        <BackLink />
-      </div>
-    </TokenLayout>
+      <BackLink className="mt-6" />
+    </Shell>
   );
 }
 
-function TokenLayout({ children }: { children: React.ReactNode }) {
+/* ===== маленькие помощники ===== */
+
+function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="hatchr-root">
-      <div className="hatchr-shell">
-        <h2 className="text-lg font-semibold mb-3">Token</h2>
-        {children}
-      </div>
-    </div>
+    <main className="hatchr-root">
+      <div className="hatchr-shell">{children}</div>
+    </main>
   );
 }
 
-function BackLink() {
+function Title({ children }: { children: React.ReactNode }) {
+  return <h1 className="text-xl font-semibold mb-3">{children}</h1>;
+}
+
+function BackLink({ className = "" }: { className?: string }) {
   return (
     <Link
       href="/"
-      className="inline-flex items-center text-sm text-blue-600 hover:underline"
+      className={`inline-flex items-center text-sm text-blue-600 hover:underline ${className}`}
     >
       ← Back to Hatchr
     </Link>
