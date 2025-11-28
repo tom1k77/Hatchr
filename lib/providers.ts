@@ -352,8 +352,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   });
 }
 
-// ======================= ZORA (3 часа, NEW_CREATORS) =======================
-
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
   const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 часов
@@ -367,8 +365,10 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
-  const PAGE_SIZE = 50; // вместо 50
-  const MAX_PAGES = 10; // вместо 20
+
+  // можно чуть увеличить покрытие
+  const PAGE_SIZE = 50;  // можно 75, если захочешь
+  const MAX_PAGES = 20;  // было 10
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
@@ -400,7 +400,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const name = (n.name || "").toString();
       const symbol = (n.symbol || "").toString();
 
-      // createdAt приходит без "Z", нормализуем
+      // createdAt нормализуем
       const createdRaw = n.createdAt ?? null;
       let createdIso: string | undefined;
       if (typeof createdRaw === "string" && createdRaw) {
@@ -414,12 +414,12 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
         }
       }
 
-      // цифры с Zora
+      // Zora-цифры
       const marketCapNum = toNum(n.marketCap);
       const volume24Num = toNum(n.volume24h);
       const priceUsdcNum = toNum(n.tokenPrice?.priceInUsdc);
 
-      // соцсети создателя
+      // соцки создателя
       const social = n.creatorProfile?.socialAccounts ?? {};
       let farcaster_url: string | undefined;
       let x_url: string | undefined;
@@ -441,27 +441,17 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 
       const source_url = `https://zora.co/coin/base:${addr}`;
 
-      // --- картинка токена / аватар создателя (Zora) ---
-      let rawImage: string | null = null;
-
-      // 1) сначала пробуем любые "прямые" поля у токена
-      const directImage: string | undefined =
-        (n.imageUrl as string | undefined) ??
-        (n.image_url as string | undefined) ??
-        (n.image?.url as string | undefined) ??
+      // картинка: токен → аватар создателя → нормализация
+      const rawImage: string | null =
+        (n.imageUrl as string | undefined) ||
+        (n.image_url as string | undefined) ||
+        (n.image?.url as string | undefined) ||
         (Array.isArray(n.media) && n.media[0]?.url
           ? (n.media[0].url as string)
-          : undefined);
-
-      if (directImage) {
-        rawImage = directImage;
-      } else {
-        // 2) если ничего нет — берём первый URL из avatar создателя
-        const avatarUrls = collectUrls(n.creatorProfile?.avatar ?? null);
-        if (avatarUrls.length > 0) {
-          rawImage = avatarUrls[0];
-        }
-      }
+          : undefined) ||
+        (n.creatorProfile?.avatar?.previewImage?.url as string | undefined) ||
+        (n.creatorProfile?.avatar?.url as string | undefined) ||
+        null;
 
       const image_url = normalizeImageUrl(rawImage);
 
@@ -483,20 +473,12 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       });
     }
 
-    // курсор на следующую страницу
     cursor = json?.exploreList?.pageInfo?.endCursor;
     const hasNextPage = Boolean(json?.exploreList?.pageInfo?.hasNextPage);
     if (!hasNextPage) break;
-
-    // если последние токены уже старше 3 часов — выходим
-    const last = tokens[tokens.length - 1];
-    if (last?.first_seen_at) {
-      const ts = new Date(last.first_seen_at).getTime();
-      if (now - ts > WINDOW_MS) break;
-    }
   }
 
-  // финальный фильтр по окну 3 часа
+  // финальный фильтр: только последние 12 часов
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
