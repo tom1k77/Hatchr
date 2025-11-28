@@ -721,6 +721,13 @@ body {
   white-space: nowrap;
 }
 
+.h-card-row-value-time {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 400;
+  white-space: nowrap; /* чтобы не было двух строк */
+}
+
 /* чтобы длинный адрес не ломал сетку */
 .h-card-row-value-address span[title] {
   max-width: 96px;
