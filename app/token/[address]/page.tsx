@@ -11,24 +11,11 @@ interface TokenPageProps {
 
 export default async function TokenPage({ params }: TokenPageProps) {
   // аккуратно читаем адрес из URL
-  const rawAddress = (params.address ?? "").toString().trim().toLowerCase();
-
-  // простая проверка: должен начинаться с 0x
-  if (!rawAddress || !rawAddress.startsWith("0x")) {
-    return (
-      <div className="hatchr-root">
-        <main className="hatchr-shell">
-          <h1>Token</h1>
-          <p>Invalid token address.</p>
-          <p>
-            <Link href="/" className="hatchr-nav-pill">
-              ← Back to Hatchr
-            </Link>
-          </p>
-        </main>
-      </div>
-    );
-  }
+    const rawAddress = decodeURIComponent(
+    (params.address ?? "").toString()
+  )
+    .trim()
+    .toLowerCase();
 
   // тянем все токены (как на главной)
   const tokens: TokenWithMarket[] = await getTokens();
