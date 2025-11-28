@@ -643,6 +643,13 @@ body {
   height: auto;
 }
 
+.h-card-link,
+.token-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
 /* верхняя часть: две колонки */
 
 .h-card-main {
