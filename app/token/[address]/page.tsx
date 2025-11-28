@@ -1,258 +1,247 @@
 // app/token/[address]/page.tsx
+
+import Link from "next/link";
 import { getTokens, TokenWithMarket } from "@/lib/providers";
 
-type PageProps = {
+interface TokenPageProps {
   params: {
     address: string;
   };
-};
-
-function formatNumber(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) return "—";
-  if (value === 0) return "—";
-  const abs = Math.abs(value);
-  if (abs < 1) return value.toFixed(6);
-  if (abs < 10) return value.toFixed(4);
-  if (abs < 1000) return value.toFixed(2);
-  if (abs < 1_000_000) return (value / 1_000).toFixed(1) + "K";
-  return (value / 1_000_000).toFixed(1) + "M";
 }
 
-function formatDateTime(dateString?: string | null): string {
-  if (!dateString) return "—";
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return "—";
-  const date = d.toLocaleDateString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  return `${time} · ${date}`;
-}
+export default async function TokenPage({ params }: TokenPageProps) {
+  // аккуратно читаем адрес из URL
+  const rawAddress = (params.address ?? "").toString().trim().toLowerCase();
 
-export default async function TokenPage({ params }: PageProps) {
-  // адрес из URL
-  const rawAddress = (params.address || "").trim().toLowerCase();
+  // простая проверка: должен начинаться с 0x
+  if (!rawAddress || !rawAddress.startsWith("0x")) {
+    return (
+      <div className="hatchr-root">
+        <main className="hatchr-shell">
+          <h1>Token</h1>
+          <p>Invalid token address.</p>
+          <p>
+            <Link href="/" className="hatchr-nav-pill">
+              ← Back to Hatchr
+            </Link>
+          </p>
+        </main>
+      </div>
+    );
+  }
 
-// Минимальная проверка: должен хотя бы начинаться с 0x.
-// Длину больше НЕ проверяем, дальше просто ищем такой адрес в списке токенов.
-if (!rawAddress.startsWith("0x")) {
+  // тянем все токены (как на главной)
+  const tokens: TokenWithMarket[] = await getTokens();
+
+  // ищем токен по адресу
+  const token = tokens.find(
+    (t) =>
+      typeof t.token_address === "string" &&
+      t.token_address.toLowerCase() === rawAddress
+  );
+
+  if (!token) {
+    return (
+      <div className="hatchr-root">
+        <main className="hatchr-shell">
+          <h1>Token</h1>
+          <p>Token not found.</p>
+          <p>
+            <Link href="/" className="hatchr-nav-pill">
+              ← Back to Hatchr
+            </Link>
+          </p>
+        </main>
+      </div>
+    );
+  }
+
+  const symbol = token.symbol || "";
+  const name = token.name || symbol || "New token";
+
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
-        <h1>Token</h1>
-        <p>Invalid token address.</p>
-      </main>
-    </div>
-  );
-}
-  
-  // забираем все токены так же, как на главной
-  const tokens = await getTokens();
-const token = tokens.find(
-  (t) => t.token_address.toLowerCase() === rawAddress
-);
-
-if (!token) {
-  return (
-    <div className="hatchr-root">
-      <main className="hatchr-shell">
-        <h1>Token</h1>
-        <p>Token not found.</p>
-      </main>
-    </div>
-  );
-}
-
-  const name = token.name || token.symbol || "New token";
-  const symbol =
-    token.symbol && token.symbol !== name ? token.symbol.toUpperCase() : "";
-  const created = formatDateTime(token.first_seen_at);
-  const mcap = formatNumber(token.market_cap_usd);
-  const vol = formatNumber(token.volume_24h_usd);
-  const price = formatNumber(token.price_usd);
-
-  const shortAddress =
-    token.token_address.length > 10
-      ? `${token.token_address.slice(0, 6)}…${token.token_address.slice(-4)}`
-      : token.token_address;
-
-  return (
-    <main className="token-page-root">
-      <div className="token-page-shell">
-        {/* шапка */}
-        <div className="token-page-breadcrumb">
-          <a href="/" className="token-page-back">
-            ← Back to Hatchr
-          </a>
+        <div
+          style={{
+            marginBottom: 16,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Token</h1>
+          <Link href="/" className="hatchr-nav-pill">
+            ← Back
+          </Link>
         </div>
 
-        <div className="token-page-grid">
-          {/* ЛЕВАЯ ПЛИТКА: основная инфа по токену */}
-          <section className="token-page-main-card">
-            <div className="token-page-main-top">
-              <div className="token-page-avatar-wrap">
-                {token.image_url ? (
-                  <img
-                    src={token.image_url}
-                    alt={name}
-                    className="token-page-avatar"
-                  />
-                ) : (
-                  <div className="token-page-avatar placeholder">
-                    {(symbol || name).charAt(0).toUpperCase()}
-                  </div>
-                )}
-              </div>
-
-              <div className="token-page-main-meta">
-                <div className="token-page-name-row">
-                  <h1 className="token-page-title">{name}</h1>
-                  {symbol && (
-                    <span className="token-page-symbol">{symbol}</span>
-                  )}
-                </div>
-                <div className="token-page-created">{created}</div>
-
-                <div className="token-page-stats-row">
-                  <div className="token-page-stat">
-                    <div className="token-page-stat-label">Price</div>
-                    <div className="token-page-stat-value">
-                      {price === "—" ? "—" : `$${price}`}
-                    </div>
-                  </div>
-                  <div className="token-page-stat">
-                    <div className="token-page-stat-label">MC</div>
-                    <div className="token-page-stat-value">
-                      {mcap === "—" ? "—" : `$${mcap}`}
-                    </div>
-                  </div>
-                  <div className="token-page-stat">
-                    <div className="token-page-stat-label">Vol 24h</div>
-                    <div className="token-page-stat-value">
-                      {vol === "—" ? "—" : `$${vol}`}
-                    </div>
-                  </div>
-                </div>
-              </div>
+        <div
+          style={{
+            borderRadius: 16,
+            border: "1px solid #e5e7eb",
+            padding: 16,
+            background: "#ffffff",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: 16,
+              alignItems: "flex-start",
+            }}
+          >
+            {/* картинка */}
+            <div
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: 22,
+                background: "#f3f4f6",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 600,
+                fontSize: 28,
+                overflow: "hidden",
+                flexShrink: 0,
+              }}
+            >
+              {token.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={token.image_url}
+                  alt={name}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    borderRadius: 22,
+                  }}
+                />
+              ) : (
+                <span>
+                  {(symbol || name).trim().charAt(0).toUpperCase() || "₿"}
+                </span>
+              )}
             </div>
 
-            {/* сетка с деталями, плиточно как у pure st */}
-            <div className="token-page-info-grid">
-              <div className="token-page-info-tile">
-                <div className="token-page-info-label">Address</div>
-                <div className="token-page-info-value mono">
-                  {shortAddress}
+            {/* текстовая часть */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  marginBottom: 8,
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {name}
+                  </div>
+                  {symbol && symbol !== name && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        textTransform: "uppercase",
+                        color: "#6b7280",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      {symbol}
+                    </div>
+                  )}
                 </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "#9ca3af",
+                    textAlign: "right",
+                  }}
+                >
+                  {token.first_seen_at && (
+                    <>
+                      <div>
+                        {new Date(token.first_seen_at).toLocaleTimeString(
+                          "en-US",
+                          {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                          }
+                        )}
+                      </div>
+                      <div>
+                        {new Date(token.first_seen_at).toLocaleDateString(
+                          "en-US",
+                          {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          }
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: 12,
+                  marginBottom: 12,
+                  fontSize: 13,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>Address</div>
+                  <div style={{ fontFamily: "monospace" }}>
+                    {token.token_address}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>Source</div>
+                  <div>{token.source === "clanker" ? "Clanker" : "Zora"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>MC</div>
+                  <div>{token.market_cap_usd ?? "—"}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>
+                    Vol 24h
+                  </div>
+                  <div>{token.volume_24h_usd ?? "—"}</div>
+                </div>
+              </div>
+
+              {token.source_url && (
                 <a
-                  href={`https://basescan.org/token/${token.token_address}`}
+                  href={token.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="token-page-link"
+                  className="h-card-button"
                 >
-                  View on Basescan
+                  View on {token.source === "zora" ? "Zora" : "Clanker"}
                 </a>
-              </div>
-
-              <div className="token-page-info-tile">
-                <div className="token-page-info-label">Source</div>
-                <div className="token-page-info-value">
-                  {token.source === "clanker"
-                    ? "Clanker"
-                    : token.source === "zora"
-                    ? "Zora"
-                    : token.source || "—"}
-                </div>
-                {token.source_url && (
-                  <a
-                    href={token.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-link"
-                  >
-                    Open on {token.source === "zora" ? "Zora" : "Clanker"}
-                  </a>
-                )}
-              </div>
-
-              <div className="token-page-info-tile">
-                <div className="token-page-info-label">Hatchr Score</div>
-                <div className="token-page-info-value">soon™</div>
-                <p className="token-page-info-note">
-                  Score based on creator social+onchain profile.
-                </p>
-              </div>
+              )}
             </div>
-          </section>
-
-          {/* ПРАВАЯ КОЛОНКА: соцсети + график-заглушка */}
-          <aside className="token-page-side">
-            <div className="token-page-side-card">
-              <h2 className="token-page-side-title">Socials</h2>
-              <div className="token-page-social-list">
-                {token.farcaster_url && (
-                  <a
-                    href={token.farcaster_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-social-link"
-                  >
-                    Farcaster
-                  </a>
-                )}
-                {token.x_url && (
-                  <a
-                    href={token.x_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-social-link"
-                  >
-                    Twitter
-                  </a>
-                )}
-                {token.telegram_url && (
-                  <a
-                    href={token.telegram_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-social-link"
-                  >
-                    Telegram
-                  </a>
-                )}
-                {token.website_url && (
-                  <a
-                    href={token.website_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-social-link"
-                  >
-                    Website
-                  </a>
-                )}
-                {!token.farcaster_url &&
-                  !token.x_url &&
-                  !token.telegram_url &&
-                  !token.website_url && (
-                    <div className="token-page-social-empty">No socials yet.</div>
-                  )}
-              </div>
-            </div>
-
-            <div className="token-page-side-card">
-              <h2 className="token-page-side-title">Chart</h2>
-              <div className="token-page-chart-placeholder">
-                Chart integration coming soon.
-              </div>
-            </div>
-          </aside>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
