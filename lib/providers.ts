@@ -368,7 +368,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
   const PAGE_SIZE = 50; // вместо 50
-  const MAX_PAGES = 20; // вместо 10
+  const MAX_PAGES = 10; // вместо 20
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
