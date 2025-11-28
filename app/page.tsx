@@ -23,11 +23,6 @@ type TokenItem = {
   instagram_url?: string | null;
   tiktok_url?: string | null;
   image_url?: string | null;
-
-  // 🔵 Hatchr score (из /api/tokens)
-  hatchr_score?: number | null;
-  hatchr_creator_score?: number | null;
-  hatchr_followers_score?: number | null;
 };
 
 type TokensResponse = {
@@ -43,7 +38,7 @@ type FarcasterProfile = {
   following_count: number;
 };
 
-const REFRESH_INTERVAL_MS = 60_000;
+const REFRESH_INTERVAL_MS = 30_000;
 const LEFT_PAGE_SIZE = 9;
 const RIGHT_PAGE_SIZE = 7;
 
@@ -97,14 +92,6 @@ function formatTimeAgo(dateString: string | null | undefined): string {
 
   const diffD = Math.floor(diffH / 24);
   return `${diffD}d ago`;
-}
-
-function getHatchrColor(score?: number | null): string {
-  if (score == null || Number.isNaN(score)) return "#6b7280"; // gray
-  if (score >= 80) return "#16a34a"; // green
-  if (score >= 50) return "#ca8a04"; // yellow
-  if (score >= 20) return "#f97316"; // orange
-  return "#dc2626"; // red
 }
 
 function extractFarcasterUsername(url?: string | null): string | null {
@@ -601,29 +588,6 @@ export default function HomePage() {
                           </div>
                         </div>
 
-                        {/* 🔵 Hatchr score (mobile) */}
-        {typeof token.hatchr_score === "number" && (
-          <div
-            style={{
-              marginTop: 6,
-              display: "flex",
-              justifyContent: "flex-end",
-              fontSize: 12,
-              gap: 4,
-            }}
-          >
-            <span style={{ opacity: 0.6 }}>Hatchr:</span>
-            <span
-              style={{
-                fontWeight: 600,
-                color: getHatchrColor(token.hatchr_score),
-              }}
-            >
-              {token.hatchr_score}
-            </span>
-          </div>
-        )}
-
                         {token.source_url && (
                           <a
                             href={token.source_url}
@@ -643,328 +607,268 @@ export default function HomePage() {
             )}
 
             {/* ====== DESKTOP: карточки как на скетче ====== */}
-            {!isMobile && (
-              <div
-                className="desktop-card-grid"
-                style={{ rowGap: "2px", columnGap: "18px" }}
-              >
-                {visibleTokens.length === 0 ? (
-                  <div className="hatchr-table-empty">
-                    {isLoading
-                      ? "Loading Base mints…"
-                      : "Nothing here yet. Try again in a minute."}
+{!isMobile && (
+  <div
+    className="desktop-card-grid"
+    style={{ rowGap: "2px", columnGap: "18px" }}
+    >
+    {visibleTokens.length === 0 ? (
+      <div className="hatchr-table-empty">
+        {isLoading
+          ? "Loading Base mints…"
+          : "Nothing here yet. Try again in a minute."}
+      </div>
+    ) : (
+      visibleTokens.map((token) => {
+        const rowKey = `${token.source}-${token.token_address}`;
+        const { time, date } = formatCreated(token.first_seen_at);
+
+        const symbol = token.symbol || "";
+        const name = token.name || symbol || "New token";
+        const sourceLabel =
+          token.source === "clanker" ? "Clanker" : "Zora";
+
+        const username = extractFarcasterUsername(
+          token.farcaster_url || undefined
+        );
+        const profile = username ? profiles[username] : undefined;
+
+        const mcap = formatNumber(token.market_cap_usd);
+        const vol = formatNumber(token.volume_24h_usd);
+
+        const fullAddress = token.token_address || "";
+        const shortAddress =
+          fullAddress && fullAddress.length > 10
+            ? `${fullAddress.slice(0, 6)}…${fullAddress.slice(-4)}`
+            : fullAddress;
+
+        const copyKey = fullAddress.toLowerCase();
+        const isCopied = copiedKey === copyKey;
+
+        const xUsername = extractXUsername(token.x_url || undefined);
+        const igUsername = extractInstagramUsername(
+          token.instagram_url || undefined
+        );
+        const ttUsername = extractTiktokUsername(
+          token.tiktok_url || undefined
+        );
+
+        let secondarySocial: { url: string; label: string } | null = null;
+
+        if (!username) {
+          if (token.x_url) {
+            secondarySocial = {
+              url: token.x_url,
+              label: xUsername ? `@${xUsername}` : "X",
+            };
+          } else if (token.instagram_url) {
+            secondarySocial = {
+              url: token.instagram_url,
+              label: igUsername ? `@${igUsername}` : "Instagram",
+            };
+          } else if (token.tiktok_url) {
+            secondarySocial = {
+              url: token.tiktok_url,
+              label: ttUsername ? `@${ttUsername}` : "TikTok",
+            };
+          }
+        }
+
+        const isTooltipVisible = hoveredRowKey === rowKey;
+
+        return (
+         <div
+  key={rowKey}
+  className="h-card"
+  style={{ marginBottom: "24px" }}  // расстояние между рядами карточек
+>
+            {/* ВЕРХ КАРТОЧКИ: две колонки */}
+            <div className="h-card-main">
+              {/* ЛЕВАЯ КОЛОНКА */}
+              <div className="h-card-left">
+                <div className="h-card-avatar">
+                  {token.image_url ? (
+                    <img src={token.image_url} alt={name} />
+                  ) : (
+                    <span>
+                      {(symbol || name).trim().charAt(0).toUpperCase() ||
+                        "₿"}
+                    </span>
+                  )}
+                </div>
+
+                <div className="h-card-left-meta">
+                  {/* Time */}
+                  <div className="h-card-row">
+                    <span className="h-card-row-label">Time</span>
+                    <span className="h-card-row-value h-card-time">
+                      {time} · {date}
+                    </span>
                   </div>
-                ) : (
-                  visibleTokens.map((token) => {
-                    const rowKey = `${token.source}-${token.token_address}`;
-                    const { time, date } = formatCreated(token.first_seen_at);
 
-                    const symbol = token.symbol || "";
-                    const name = token.name || symbol || "New token";
-                    const sourceLabel =
-                      token.source === "clanker" ? "Clanker" : "Zora";
+                  {/* Address */}
+                  <div className="h-card-row">
+                    <span className="h-card-row-label">Address</span>
+                    <span className="h-card-row-value h-card-row-value-address">
+                      <span title={fullAddress} style={{ marginRight: 4 }}>
+                        {shortAddress || "—"}
+                      </span>
+                      {fullAddress && (
+                        <button
+                          type="button"
+                          onClick={() => handleCopyAddress(fullAddress)}
+                          className="copy-btn"
+                          title="Copy address"
+                        >
+                          {isCopied ? "✓" : "⧉"}
+                        </button>
+                      )}
+                    </span>
+                  </div>
 
-                    const username = extractFarcasterUsername(
-                      token.farcaster_url || undefined
-                    );
-                    const profile = username ? profiles[username] : undefined;
+                  {/* Source */}
+                  <div className="h-card-row">
+                    <span className="h-card-row-label">Source</span>
+                    <span className="h-card-row-value">
+                      <span className="desktop-source-pill">
+                        {sourceLabel}
+                      </span>
+                    </span>
+                  </div>
 
-                    const mcap = formatNumber(token.market_cap_usd);
-                    const vol = formatNumber(token.volume_24h_usd);
-
-                    const fullAddress = token.token_address || "";
-                    const shortAddress =
-                      fullAddress && fullAddress.length > 10
-                        ? `${fullAddress.slice(0, 6)}…${fullAddress.slice(
-                            -4
-                          )}`
-                        : fullAddress;
-
-                    const copyKey = fullAddress.toLowerCase();
-                    const isCopied = copiedKey === copyKey;
-
-                    const xUsername = extractXUsername(token.x_url || undefined);
-                    const igUsername = extractInstagramUsername(
-                      token.instagram_url || undefined
-                    );
-                    const ttUsername = extractTiktokUsername(
-                      token.tiktok_url || undefined
-                    );
-
-                    let secondarySocial: { url: string; label: string } | null =
-                      null;
-
-                    if (!username) {
-                      if (token.x_url) {
-                        secondarySocial = {
-                          url: token.x_url,
-                          label: xUsername ? `@${xUsername}` : "X",
-                        };
-                      } else if (token.instagram_url) {
-                        secondarySocial = {
-                          url: token.instagram_url,
-                          label: igUsername ? `@${igUsername}` : "Instagram",
-                        };
-                      } else if (token.tiktok_url) {
-                        secondarySocial = {
-                          url: token.tiktok_url,
-                          label: ttUsername ? `@${ttUsername}` : "TikTok",
-                        };
-                      }
-                    }
-
-                    const isTooltipVisible = hoveredRowKey === rowKey;
-
-                    return (
-                      <div
-                        key={rowKey}
-                        className="h-card"
-                        style={{ marginBottom: "24px" }}
-                      >
-                        {/* ВЕРХ КАРТОЧКИ */}
-                        <div className="h-card-main">
-                          {/* ЛЕВАЯ КОЛОНКА */}
-                          <div className="h-card-left">
-                            <div className="h-card-avatar">
-                              {token.image_url ? (
-                                <img src={token.image_url} alt={name} />
-                              ) : (
-                                <span>
-                                  {(symbol || name)
-                                    .trim()
-                                    .charAt(0)
-                                    .toUpperCase() || "₿"}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="h-card-left-meta">
-                              {/* Time */}
-                              <div className="h-card-row">
-                                <span className="h-card-row-label">Time</span>
-                                <span className="h-card-row-value h-card-time">
-                                  {time} · {date}
-                                </span>
-                              </div>
-
-                              {/* Address */}
-                              <div className="h-card-row">
-                                <span className="h-card-row-label">
-                                  Address
-                                </span>
-                                <span className="h-card-row-value h-card-row-value-address">
-                                  <span
-                                    title={fullAddress}
-                                    style={{ marginRight: 4 }}
-                                  >
-                                    {shortAddress || "—"}
-                                  </span>
-                                  {fullAddress && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleCopyAddress(fullAddress)
-                                      }
-                                      className="copy-btn"
-                                      title="Copy address"
-                                    >
-                                      {isCopied ? "✓" : "⧉"}
-                                    </button>
-                                  )}
-                                </span>
-                              </div>
-
-                              {/* Source */}
-                              <div className="h-card-row">
-                                <span className="h-card-row-label">
-                                  Source
-                                </span>
-                                <span className="h-card-row-value">
-                                  <span className="desktop-source-pill">
-                                    {sourceLabel}
-                                  </span>
-                                </span>
-                              </div>
-
-                              {/* Socials */}
-                              <div className="h-card-row">
-                                <span className="h-card-row-label">
-                                  Socials
-                                </span>
-                                <span className="h-card-row-value">
-                                  {username ? (
-                                    <div
-                                      className="desktop-social-wrap"
-                                      onMouseEnter={() => {
-                                        setHoveredRowKey(rowKey);
-                                        ensureProfile(username);
-                                      }}
-                                      onMouseLeave={() =>
-                                        setHoveredRowKey(null)
-                                      }
-                                    >
-                                      <a
-                                        href={`https://warpcast.com/${username}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="desktop-farcaster-pill"
-                                      >
-                                        <span>@{username}</span>
-                                        {profile?.pfp_url ? (
-                                          <img
-                                            src={profile.pfp_url}
-                                            alt={
-                                              profile.display_name ||
-                                              username
-                                            }
-                                            onError={(e) => {
-                                              e.currentTarget.src =
-                                                "/farcaster-logo.png";
-                                            }}
-                                          />
-                                        ) : (
-                                          <FarcasterFallbackIcon size={20} />
-                                        )}
-                                      </a>
-
-                                      {isTooltipVisible && profile && (
-                                        <div className="desktop-farcaster-tooltip">
-                                          <div className="tooltip-header">
-                                            {profile.pfp_url ? (
-                                              <img
-                                                src={profile.pfp_url}
-                                                alt={
-                                                  profile.display_name ||
-                                                  username
-                                                }
-                                                onError={(e) => {
-                                                  e.currentTarget.src =
-                                                    "/farcaster-logo.png";
-                                                }}
-                                              />
-                                            ) : (
-                                              <FarcasterFallbackIcon
-                                                size={30}
-                                              />
-                                            )}
-                                            <div>
-                                              <div className="tooltip-name">
-                                                {profile.display_name ||
-                                                  profile.username}
-                                              </div>
-                                              <div className="tooltip-handle">
-                                                @{profile.username}
-                                              </div>
-                                            </div>
-                                          </div>
-                                          <div className="tooltip-stats">
-                                            <span>
-                                              <strong>
-                                                {profile.follower_count}
-                                              </strong>{" "}
-                                              followers
-                                            </span>
-                                            <span>
-                                              <strong>
-                                                {profile.following_count}
-                                              </strong>{" "}
-                                              following
-                                            </span>
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : secondarySocial ? (
-                                    <a
-                                      href={secondarySocial.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="desktop-secondary-pill"
-                                    >
-                                      {secondarySocial.label}
-                                    </a>
-                                  ) : (
-                                    "—"
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* ПРАВАЯ КОЛОНКА */}
-                          <div className="h-card-right">
-                            <div className="h-card-header">
-                              <div className="h-card-title">
-                                <span className="h-card-name">{name}</span>
-                                {symbol && symbol !== name && (
-                                  <span className="h-card-symbol">
-                                    {symbol}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="h-card-stats">
-                              <div>
-                                <div className="h-card-stats-label">MC</div>
-                                <div className="h-card-stats-value">
-                                  {mcap}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="h-card-stats-label">
-                                  Vol 24h
-                                </div>
-                                <div className="h-card-stats-value">
-                                  {vol}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 🔵 Hatchr score (desktop) */}
-                            {typeof token.hatchr_score === "number" && (
-                              <div
-                                style={{
-                                  marginTop: 6,
-                                  display: "flex",
-                                  justifyContent: "flex-end",
-                                  fontSize: 12,
-                                  gap: 4,
-                                }}
-                              >
-                                <span style={{ opacity: 0.6 }}>Hatchr:</span>
-                                <span
-                                  style={{
-                                    fontWeight: 600,
-                                    color: getHatchrColor(
-                                      token.hatchr_score
-                                    ),
-                                  }}
-                                >
-                                  {token.hatchr_score}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* НИЗ КАРТОЧКИ: кнопка */}
-                        {token.source_url && (
+                  {/* Socials */}
+                  <div className="h-card-row">
+                    <span className="h-card-row-label">Socials</span>
+                    <span className="h-card-row-value">
+                      {username ? (
+                        <div
+                          className="desktop-social-wrap"
+                          onMouseEnter={() => {
+                            setHoveredRowKey(rowKey);
+                            ensureProfile(username);
+                          }}
+                          onMouseLeave={() => setHoveredRowKey(null)}
+                        >
                           <a
-                            href={token.source_url}
+                            href={`https://warpcast.com/${username}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="h-card-button"
+                            className="desktop-farcaster-pill"
                           >
-                            View on {sourceLabel}
+                            {/* сначала ник, потом иконка */}
+                            <span>@{username}</span>
+                            {profile?.pfp_url ? (
+                              <img
+                                src={profile.pfp_url}
+                                alt={profile.display_name || username}
+                                onError={(e) => {
+                                  e.currentTarget.src =
+                                    "/farcaster-logo.png";
+                                }}
+                              />
+                            ) : (
+                              <FarcasterFallbackIcon size={20} />
+                            )}
                           </a>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+
+                          {isTooltipVisible && profile && (
+                            <div className="desktop-farcaster-tooltip">
+                              <div className="tooltip-header">
+                                {profile.pfp_url ? (
+                                  <img
+                                    src={profile.pfp_url}
+                                    alt={
+                                      profile.display_name || username
+                                    }
+                                    onError={(e) => {
+                                      e.currentTarget.src =
+                                        "/farcaster-logo.png";
+                                    }}
+                                  />
+                                ) : (
+                                  <FarcasterFallbackIcon size={30} />
+                                )}
+                                <div>
+                                  <div className="tooltip-name">
+                                    {profile.display_name ||
+                                      profile.username}
+                                  </div>
+                                  <div className="tooltip-handle">
+                                    @{profile.username}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="tooltip-stats">
+                                <span>
+                                  <strong>{profile.follower_count}</strong>{" "}
+                                  followers
+                                </span>
+                                <span>
+                                  <strong>{profile.following_count}</strong>{" "}
+                                  following
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : secondarySocial ? (
+                        <a
+                          href={secondarySocial.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="desktop-secondary-pill"
+                        >
+                          {secondarySocial.label}
+                        </a>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
+                  </div>
+                </div>
               </div>
+
+              {/* ПРАВАЯ КОЛОНКА */}
+              <div className="h-card-right">
+                <div className="h-card-header">
+                  <div className="h-card-title">
+                    <span className="h-card-name">{name}</span>
+                    {symbol && symbol !== name && (
+                      <span className="h-card-symbol">{symbol}</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="h-card-stats">
+                  <div>
+                    <div className="h-card-stats-label">MC</div>
+                    <div className="h-card-stats-value">{mcap}</div>
+                  </div>
+                  <div>
+                    <div className="h-card-stats-label">Vol 24h</div>
+                    <div className="h-card-stats-value">{vol}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* НИЗ КАРТОЧКИ: кнопка */}
+            {token.source_url && (
+              <a
+                href={token.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-card-button"
+              >
+                View on {sourceLabel}
+              </a>
             )}
+          </div>
+        );
+      })
+    )}
+  </div>
+)}
             {/* Load more – и для мобилы, и для десктопа */}
             {filteredTokens.length > visibleRows && (
               <div style={{ marginTop: 10, textAlign: "center" }}>
