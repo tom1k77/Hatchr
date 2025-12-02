@@ -1526,3 +1526,48 @@ body {
     flex-direction: column;
   }
 }
+
+/* -------- Token detail: address row -------- */
+
+.token-detail-address-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 4px;
+}
+
+.token-detail-address-pill {
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e5edf7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: #111827;
+  text-decoration: none;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.token-detail-address-pill:hover {
+  background: #d6e3f6;
+}
+
+.token-detail-copy-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.token-detail-copy-btn:hover {
+  background: #eef2f7;
+}
