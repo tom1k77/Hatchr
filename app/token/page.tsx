@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
-// Тип токена — тот же, что и в app/page.tsx (минимальный нужный набор полей)
+// запретить статическую генерацию этой страницы
+export const dynamic = "force-dynamic";
+
+// Тип токена — минимальный набор полей
 type TokenItem = {
   token_address: string;
   name: string;
@@ -32,7 +35,7 @@ type TokensResponse = {
   items: TokenItem[];
 };
 
-// ===== вспомогательные форматтеры =====
+// ===== форматтеры =====
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
@@ -76,9 +79,9 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-// ===== сама страница токена =====
+// ===== ВНУТРЕННИЙ КОМПОНЕНТ (в нём все хуки) =====
 
-export default function TokenPage() {
+function TokenPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -87,18 +90,17 @@ export default function TokenPage() {
 
   const [token, setToken] = useState<TokenItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState<"idle" | "invalid" | "not-found" | "ok" | "error">(
-    "idle"
-  );
+  const [status, setStatus] = useState<
+    "idle" | "invalid" | "not-found" | "ok" | "error"
+  >("idle");
 
-  // проверяем валидность адреса
+  // проверка адреса
   useEffect(() => {
     if (!normalizedAddress) {
       setStatus("invalid");
       return;
     }
 
-    // простая проверка формата 0x + 40 hex
     const isHex = /^0x[0-9a-fA-F]{40}$/.test(normalizedAddress);
     if (!isHex) {
       setStatus("invalid");
@@ -108,7 +110,7 @@ export default function TokenPage() {
     setStatus("idle");
   }, [normalizedAddress]);
 
-  // подгружаем токен из /api/tokens
+  // загрузка токена
   useEffect(() => {
     if (!normalizedAddress) return;
     if (status === "invalid") return;
@@ -167,7 +169,7 @@ export default function TokenPage() {
 
   const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
 
-  // ====== RENDER ======
+  // ===== RENDER =====
 
   return (
     <div className="hatchr-root">
@@ -239,7 +241,9 @@ export default function TokenPage() {
                   </div>
                   <div className="token-page-address-row">
                     <span className="token-page-label">Address:</span>
-                    <code className="token-page-address">{token.token_address}</code>
+                    <code className="token-page-address">
+                      {token.token_address}
+                    </code>
                   </div>
                 </div>
               </div>
@@ -371,5 +375,31 @@ export default function TokenPage() {
         )}
       </main>
     </div>
+  );
+}
+
+// ===== ВНЕШНИЙ КОМПОНЕНТ С SUSPENSE =====
+
+export default function TokenPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="hatchr-root">
+          <main className="hatchr-shell">
+            <div className="token-page-header">
+              <h1 className="token-page-title">Token</h1>
+              <Link href="/" className="token-page-back">
+                ← Back to Hatchr
+              </Link>
+            </div>
+            <div className="token-page-card">
+              <p>Loading token…</p>
+            </div>
+          </main>
+        </div>
+      }
+    >
+      <TokenPageInner />
+    </Suspense>
   );
 }
