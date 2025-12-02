@@ -1,126 +1,137 @@
 // app/token/[address]/page.tsx
 
-import Link from "next/link";
-import { getTokens, type TokenWithMarket } from "@/lib/providers";
+import React from "react";
+import { getTokens } from "@/lib/providers";
+
+type TokenPageProps = {
+  params: { address?: string };
+};
 
 export const dynamic = "force-dynamic";
 
-type PageProps = {
-  params: { address: string };
-};
+export default async function TokenPage({ params }: TokenPageProps) {
+  // берём то, что в URL, декодируем и приводим к нижнему регистру
+  const rawAddress = params.address ?? "";
+  const address = decodeURIComponent(rawAddress).trim().toLowerCase();
 
-export default async function TokenPage({ params }: PageProps) {
-  const address = decodeURIComponent(params.address || "").toLowerCase();
-
-  // НИКАКОЙ строгой проверки длины — работаем только с тем, что есть
-  if (!address || !address.startsWith("0x")) {
+  // НЕ делаем никаких регекспов, длины и т.п.
+  if (!address) {
     return (
-      <Shell>
-        <Title>Token</Title>
-        <p className="text-sm text-gray-600 mb-4">Invalid token address.</p>
-        <BackLink />
-      </Shell>
+      <div
+        style={{
+          padding: "24px",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "900px",
+            width: "100%",
+            background: "#f9fafb",
+            borderRadius: "16px",
+            padding: "18px 20px",
+          }}
+        >
+          <h1 style={{ fontSize: "20px", fontWeight: 600, marginBottom: 8 }}>
+            Token
+          </h1>
+          <p style={{ fontSize: "14px", marginBottom: 16 }}>
+            Invalid token address.
+          </p>
+          <a href="/" style={{ fontSize: "13px", textDecoration: "underline" }}>
+            ← Back to Hatchr
+          </a>
+        </div>
+      </div>
     );
   }
 
-  let tokens: TokenWithMarket[] = [];
-  try {
-    // Берём те же данные, что и на главной, напрямую
-    tokens = await getTokens();
-  } catch (e) {
-    console.error("[token page] getTokens error", e);
-    return (
-      <Shell>
-        <Title>Token</Title>
-        <p className="text-sm text-gray-600 mb-4">
-          Error loading token data. Try again in a minute.
-        </p>
-        <BackLink />
-      </Shell>
-    );
-  }
+  // тянем все токены так же, как на главной
+  const tokens = await getTokens();
 
+  // ищем точное совпадение по адресу (без проверки длины/формата)
   const token = tokens.find(
     (t) => t.token_address.toLowerCase() === address
   );
 
   if (!token) {
     return (
-      <Shell>
-        <Title>Token</Title>
-        <p className="text-sm text-gray-600 mb-4">Token not found.</p>
-        <BackLink />
-      </Shell>
+      <div
+        style={{
+          padding: "24px",
+          display: "flex",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "900px",
+            width: "100%",
+            background: "#f9fafb",
+            borderRadius: "16px",
+            padding: "18px 20px",
+          }}
+        >
+          <h1 style={{ fontSize: "20px", fontWeight: 600, marginBottom: 8 }}>
+            Token
+          </h1>
+          <p style={{ fontSize: "14px", marginBottom: 16 }}>Token not found.</p>
+          <a href="/" style={{ fontSize: "13px", textDecoration: "underline" }}>
+            ← Back to Hatchr
+          </a>
+        </div>
+      </div>
     );
   }
 
-  const shortAddress =
-    token.token_address.slice(0, 6) +
-    "..." +
-    token.token_address.slice(-4);
-
+  // простейший вывод данных токена — потом оформим красиво
   return (
-    <Shell>
-      <Title>{token.name || token.symbol || shortAddress}</Title>
-
-      <div className="mt-2 text-sm text-gray-600">
-        {token.symbol && (
-          <p className="mb-1">
-            <span className="text-gray-400">Symbol:</span> {token.symbol}
-          </p>
-        )}
-        <p className="mb-1">
-          <span className="text-gray-400">Address:</span> {shortAddress}
-        </p>
-        {token.source && (
-          <p className="mb-1">
-            <span className="text-gray-400">Source:</span> {token.source}
-          </p>
-        )}
-        {token.market_cap_usd != null && (
-          <p className="mb-1">
-            <span className="text-gray-400">MC:</span>{" "}
-            {token.market_cap_usd.toLocaleString("en-US", {
-              maximumFractionDigits: 0,
-            })}
-          </p>
-        )}
-        {token.volume_24h_usd != null && (
-          <p className="mb-1">
-            <span className="text-gray-400">Vol 24h:</span>{" "}
-            {token.volume_24h_usd.toLocaleString("en-US", {
-              maximumFractionDigits: 0,
-            })}
-          </p>
-        )}
-      </div>
-
-      <BackLink className="mt-6" />
-    </Shell>
-  );
-}
-
-/* ===== маленькие помощники ===== */
-
-function Shell({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="hatchr-root">
-      <div className="hatchr-shell">{children}</div>
-    </main>
-  );
-}
-
-function Title({ children }: { children: React.ReactNode }) {
-  return <h1 className="text-xl font-semibold mb-3">{children}</h1>;
-}
-
-function BackLink({ className = "" }: { className?: string }) {
-  return (
-    <Link
-      href="/"
-      className={`inline-flex items-center text-sm text-blue-600 hover:underline ${className}`}
+    <div
+      style={{
+        padding: "24px",
+        display: "flex",
+        justifyContent: "center",
+      }}
     >
-      ← Back to Hatchr
-    </Link>
+      <div
+        style={{
+          maxWidth: "900px",
+          width: "100%",
+          background: "#f9fafb",
+          borderRadius: "16px",
+          padding: "18px 20px",
+        }}
+      >
+        <h1 style={{ fontSize: "20px", fontWeight: 600, marginBottom: 12 }}>
+          {token.name || token.symbol || token.token_address}
+        </h1>
+
+        <p style={{ fontSize: "13px", marginBottom: 4 }}>
+          <strong>Address:</strong> {token.token_address}
+        </p>
+        <p style={{ fontSize: "13px", marginBottom: 4 }}>
+          <strong>Source:</strong> {token.source}
+        </p>
+        <p style={{ fontSize: "13px", marginBottom: 4 }}>
+          <strong>MC:</strong> {token.market_cap_usd ?? "—"}
+        </p>
+        <p style={{ fontSize: "13px", marginBottom: 4 }}>
+          <strong>Vol 24h:</strong> {token.volume_24h_usd ?? "—"}
+        </p>
+
+        <a
+          href="/"
+          style={{
+            display: "inline-block",
+            marginTop: 16,
+            fontSize: "13px",
+            textDecoration: "underline",
+          }}
+        >
+          ← Back to Hatchr
+        </a>
+      </div>
+    </div>
   );
 }
