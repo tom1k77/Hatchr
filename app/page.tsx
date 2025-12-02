@@ -525,10 +525,10 @@ export default function HomePage() {
 
         return (
           <Link
-            key={token.token_address}
-            href={`/token/${token.token_address.toLowerCase()}`}
-            className="token-card-link"
-          >
+  key={token.token_address}
+  href={`/token?address=${token.token_address.toLowerCase()}`}
+  className="token-card-link"
+>
             <div className="token-card">
               <div className="token-card-top">
                 <div className="token-card-avatar">
