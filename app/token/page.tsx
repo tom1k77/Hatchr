@@ -1,171 +1,297 @@
-import Link from "next/link";
-import { getTokens, type TokenWithMarket } from "@/lib/providers";
+// app/token/page.tsx
+"use client";
 
-type TokenPageProps = {
-  searchParams?: { address?: string | string[] };
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
+type Token = {
+  token_address: string;
+  name?: string;
+  symbol?: string;
+  source?: string;
+  source_url?: string;
+  first_seen_at?: string | null;
+  image_url?: string | null;
+  farcaster_url?: string;
+  website_url?: string;
+  x_url?: string;
+  telegram_url?: string;
+  instagram_url?: string;
+  tiktok_url?: string;
+  price_usd?: number | null;
+  market_cap_usd?: number | null;
+  liquidity_usd?: number | null;
+  volume_24h_usd?: number | null;
 };
 
-// Нормализуем адрес из query-параметра
-function normalizeAddress(raw: string | string[] | undefined): string | null {
-  if (!raw) return null;
+export default function TokenPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const s = Array.isArray(raw) ? raw[0] : raw;
-  if (!s) return null;
+  const rawAddress = searchParams.get("address") ?? "";
+  const [token, setToken] = useState<Token | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const trimmed = s.trim().toLowerCase();
-  if (!trimmed.startsWith("0x")) return null;
-  if (trimmed.length !== 42) return null;
+  useEffect(() => {
+    // если адреса нет — не дергаем API
+    if (!rawAddress) return;
 
-  return trimmed;
-}
+    const addr = rawAddress.toLowerCase().trim();
+    if (!addr.startsWith("0x") || addr.length !== 42) {
+      setError("Invalid token address.");
+      return;
+    }
 
-export default async function TokenPage({ searchParams }: TokenPageProps) {
-  const rawAddress = searchParams?.address;
-  const address = normalizeAddress(rawAddress);
+    setLoading(true);
+    setError(null);
 
-  if (!address) {
-    return (
-      <div className="hatchr-root">
-        <div className="hatchr-shell">
-          <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>Token</h1>
-          <p style={{ marginBottom: 12 }}>Invalid token address.</p>
-          <div
-            style={{
-              fontSize: 12,
-              background: "#f3f4f6",
-              borderRadius: 8,
-              padding: 8,
-              marginBottom: 16,
-            }}
-          >
-            <div>debug:</div>
-            <div>rawAddress =&nbsp;{Array.isArray(rawAddress) ? rawAddress[0] : rawAddress ?? ""}</div>
-          </div>
-          <Link href="/" style={{ fontSize: 14 }}>
-            ← Back to Hatchr
-          </Link>
-        </div>
-      </div>
-    );
-  }
+    fetch("/api/tokens")
+      .then((res) => res.json())
+      .then((data) => {
+        const items: Token[] = data?.items ?? [];
+        const found =
+          items.find(
+            (t) =>
+              (t.token_address || "").toLowerCase().trim() === addr
+          ) ?? null;
+        setToken(found);
+        if (!found) {
+          setError("Token not found.");
+        }
+      })
+      .catch((e) => {
+        console.error("Error loading token:", e);
+        setError("Failed to load token data.");
+      })
+      .finally(() => setLoading(false));
+  }, [rawAddress]);
 
-  // Берём токены напрямую с сервера
-  let tokens: TokenWithMarket[] = [];
-  try {
-    tokens = await getTokens();
-  } catch (e) {
-    console.error("[TokenPage] getTokens error", e);
-  }
+  const handleBack = () => {
+    router.push("/");
+  };
 
-  const token = tokens.find(
-    (t) => t.token_address.toLowerCase() === address
-  );
+  // ---------- РЕНДЕР ----------
 
-  if (!token) {
-    return (
-      <div className="hatchr-root">
-        <div className="hatchr-shell">
-          <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>Token</h1>
-          <p style={{ marginBottom: 12 }}>Token not found.</p>
-          <div
-            style={{
-              fontSize: 12,
-              background: "#f3f4f6",
-              borderRadius: 8,
-              padding: 8,
-              marginBottom: 16,
-            }}
-          >
-            <div>debug:</div>
-            <div>rawAddress =&nbsp;{Array.isArray(rawAddress) ? rawAddress[0] : rawAddress ?? ""}</div>
-            <div>address =&nbsp;{address}</div>
-            <div>tokens loaded =&nbsp;{tokens.length}</div>
-          </div>
-          <Link href="/" style={{ fontSize: 14 }}>
-            ← Back to Hatchr
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const shortAddress = `${token.token_address.slice(0, 6)}…${token.token_address.slice(-4)}`;
+  const hasAddress = !!rawAddress;
 
   return (
-    <div className="hatchr-root">
-      <div className="hatchr-shell">
-        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 16 }}>
-          {token.name || "Token"} ({token.symbol || "—"})
+    <main style={{ padding: "32px" }}>
+      <div
+        style={{
+          maxWidth: "960px",
+          margin: "0 auto",
+          background: "#f5f5f7",
+          borderRadius: "16px",
+          padding: "24px 28px",
+          fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+        }}
+      >
+        <h1 style={{ fontSize: "24px", fontWeight: 600, marginBottom: "16px" }}>
+          Token
         </h1>
 
+        {/* DEBUG – ПОКА ОСТАВИМ, ЧТОБЫ УВИДЕТЬ АДРЕС */}
         <div
           style={{
-            display: "flex",
-            gap: 16,
-            alignItems: "flex-start",
-            marginBottom: 24,
+            fontSize: "12px",
+            background: "#e4e4ea",
+            borderRadius: "8px",
+            padding: "8px 10px",
+            marginBottom: "16px",
+            fontFamily: "monospace",
           }}
         >
-          {/* Картинка */}
-          <div
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 24,
-              background: "#f3f4f6",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              overflow: "hidden",
-              fontSize: 32,
-              fontWeight: 600,
-            }}
-          >
-            {token.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={token.image_url}
-                alt={token.name || token.symbol || "token"}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            ) : (
-              (token.symbol || token.name || "?")
-                .toString()
-                .trim()
-                .charAt(0)
-                .toUpperCase()
-            )}
-          </div>
-
-          {/* Инфо по токену */}
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>
-              Address:&nbsp;
-              <span style={{ fontFamily: "monospace" }}>{shortAddress}</span>
-            </div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>
-              Source:&nbsp;
-              <span style={{ fontWeight: 500 }}>{token.source || "—"}</span>
-            </div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>
-              MC:&nbsp;
-              <span style={{ fontWeight: 500 }}>
-                {token.market_cap_usd ? `$${token.market_cap_usd.toLocaleString()}` : "—"}
-              </span>
-            </div>
-            <div style={{ fontSize: 14, color: "#6b7280" }}>
-              Vol 24h:&nbsp;
-              <span style={{ fontWeight: 500 }}>
-                {token.volume_24h_usd ? `$${token.volume_24h_usd.toLocaleString()}` : "—"}
-              </span>
-            </div>
-          </div>
+          debug:
+          <br />
+          rawAddress = {rawAddress || "(empty)"}
         </div>
 
-        <Link href="/" style={{ fontSize: 14 }}>
+        {!hasAddress && (
+          <p style={{ marginBottom: "16px" }}>No address in URL.</p>
+        )}
+
+        {hasAddress && loading && <p>Loading token data…</p>}
+
+        {hasAddress && !loading && error && (
+          <p style={{ marginBottom: "16px" }}>{error}</p>
+        )}
+
+        {hasAddress && token && !loading && (
+          <div
+            style={{
+              display: "flex",
+              gap: "24px",
+              alignItems: "flex-start",
+            }}
+          >
+            {/* Левая колонка: аватар */}
+            <div>
+              <div
+                style={{
+                  width: "120px",
+                  height: "120px",
+                  borderRadius: "24px",
+                  overflow: "hidden",
+                  background: "#ddd",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "40px",
+                  fontWeight: 600,
+                }}
+              >
+                {token.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={token.image_url}
+                    alt={token.name ?? token.symbol ?? "Token"}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
+                ) : (
+                  (token.symbol || token.name || "?")
+                    .toString()
+                    .charAt(0)
+                    .toUpperCase()
+                )}
+              </div>
+            </div>
+
+            {/* Правая колонка: инфа */}
+            <div style={{ flex: 1 }}>
+              <h2
+                style={{
+                  fontSize: "20px",
+                  fontWeight: 600,
+                  marginBottom: "4px",
+                }}
+              >
+                {token.name || "Unnamed token"}
+              </h2>
+              <p style={{ margin: 0, marginBottom: "8px", color: "#555" }}>
+                {token.symbol ? `${token.symbol} · ` : ""}
+                {token.token_address}
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                  marginBottom: "12px",
+                  fontSize: "13px",
+                }}
+              >
+                <span>
+                  Source:{" "}
+                  {token.source_url ? (
+                    <a
+                      href={token.source_url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {token.source}
+                    </a>
+                  ) : (
+                    token.source || "—"
+                  )}
+                </span>
+                <span>
+                  Price:{" "}
+                  {token.price_usd != null
+                    ? `$${token.price_usd.toFixed(6)}`
+                    : "—"}
+                </span>
+                <span>
+                  MC:{" "}
+                  {token.market_cap_usd != null
+                    ? `$${token.market_cap_usd.toLocaleString()}`
+                    : "—"}
+                </span>
+                <span>
+                  Vol 24h:{" "}
+                  {token.volume_24h_usd != null
+                    ? `$${token.volume_24h_usd.toLocaleString()}`
+                    : "—"}
+                </span>
+              </div>
+
+              {/* Соцсети */}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                  fontSize: "13px",
+                  marginBottom: "16px",
+                }}
+              >
+                {token.farcaster_url && (
+                  <a href={token.farcaster_url} target="_blank" rel="noreferrer">
+                    Farcaster
+                  </a>
+                )}
+                {token.x_url && (
+                  <a href={token.x_url} target="_blank" rel="noreferrer">
+                    X
+                  </a>
+                )}
+                {token.website_url && (
+                  <a
+                    href={token.website_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Website
+                  </a>
+                )}
+                {token.telegram_url && (
+                  <a
+                    href={token.telegram_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Telegram
+                  </a>
+                )}
+                {token.instagram_url && (
+                  <a
+                    href={token.instagram_url}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Instagram
+                  </a>
+                )}
+                {token.tiktok_url && (
+                  <a href={token.tiktok_url} target="_blank" rel="noreferrer">
+                    TikTok
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleBack}
+          style={{
+            marginTop: "20px",
+            padding: "8px 14px",
+            borderRadius: "999px",
+            border: "1px solid #aaa",
+            background: "white",
+            cursor: "pointer",
+          }}
+        >
           ← Back to Hatchr
-        </Link>
+        </button>
       </div>
-    </div>
+    </main>
   );
 }
