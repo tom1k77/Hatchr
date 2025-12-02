@@ -664,6 +664,8 @@ export default function HomePage() {
   href={`/token?address=${token.token_address.toLowerCase()}`}
   className="no-underline"
 >
+  {/* содержимое карточки */}
+</Link>
             <div className="h-card">
               {/* ВЕРХ КАРТОЧКИ: две колонки */}
               <div className="h-card-main">
