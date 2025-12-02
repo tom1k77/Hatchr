@@ -196,7 +196,7 @@ function TokenPageInner() {
           <div className="token-page-card">
             <p>Failed to load token data. Try again in a minute.</p>
           </div>
-        ) : status === "not-found" || !token ? (
+                ) : status === "not-found" || !token ? (
           <div className="token-page-card">
             <p>Token not found.</p>
           </div>
@@ -204,10 +204,13 @@ function TokenPageInner() {
           <div className="token-page-layout">
             {/* левая часть — основная инфа */}
             <section className="token-page-card token-page-main">
-              <div className="token-page-main-top">
+              <div className="token-page-main-header">
                 <div className="token-page-avatar">
                   {token.image_url ? (
-                    <img src={token.image_url} alt={token.name || token.symbol} />
+                    <img
+                      src={token.image_url}
+                      alt={token.name || token.symbol}
+                    />
                   ) : (
                     <span>
                       {(token.symbol || token.name || "T")
@@ -217,30 +220,32 @@ function TokenPageInner() {
                     </span>
                   )}
                 </div>
-                <div className="token-page-main-text">
+
+                <div className="token-page-title-block">
                   <div className="token-page-name-row">
                     <span className="token-page-name">
                       {token.name || token.symbol || "New token"}
                     </span>
                     {token.symbol && token.symbol !== token.name && (
-                      <span className="token-page-symbol">{token.symbol}</span>
+                      <span className="token-page-symbol">
+                        {token.symbol}
+                      </span>
                     )}
-                  </div>
-                  <div className="token-page-meta-row">
-                    <span>
-                      Source:{" "}
-                      <strong>
-                        {token.source === "clanker" ? "Clanker" : "Zora"}
-                      </strong>
+                    <span className="token-page-source-pill">
+                      {token.source === "clanker" ? "Clanker" : "Zora"}
                     </span>
+                  </div>
+
+                  <div className="token-page-meta-row">
                     {time !== "—" && (
-                      <span style={{ marginLeft: 16 }}>
+                      <span>
                         Created: <strong>{time}</strong> · {date}
                       </span>
                     )}
                   </div>
+
                   <div className="token-page-address-row">
-                    <span className="token-page-label">Address:</span>
+                    <span className="token-page-label">Address</span>
                     <code className="token-page-address">
                       {token.token_address}
                     </code>
@@ -249,19 +254,19 @@ function TokenPageInner() {
               </div>
 
               <div className="token-page-stats-grid">
-                <div>
+                <div className="token-page-stat-tile">
                   <div className="token-page-stat-label">Price</div>
                   <div className="token-page-stat-value">${price}</div>
                 </div>
-                <div>
+                <div className="token-page-stat-tile">
                   <div className="token-page-stat-label">Market cap</div>
                   <div className="token-page-stat-value">${mcap}</div>
                 </div>
-                <div>
+                <div className="token-page-stat-tile">
                   <div className="token-page-stat-label">Liquidity</div>
                   <div className="token-page-stat-value">${liq}</div>
                 </div>
-                <div>
+                <div className="token-page-stat-tile">
                   <div className="token-page-stat-label">Vol 24h</div>
                   <div className="token-page-stat-value">${vol}</div>
                 </div>
@@ -275,7 +280,8 @@ function TokenPageInner() {
                     rel="noopener noreferrer"
                     className="token-page-primary-btn"
                   >
-                    View on {token.source === "clanker" ? "Clanker" : "Zora"}
+                    View on{" "}
+                    {token.source === "clanker" ? "Clanker" : "Zora"}
                   </a>
                 </div>
               )}
@@ -286,7 +292,7 @@ function TokenPageInner() {
               <h2 className="token-page-side-title">Socials</h2>
               <ul className="token-page-social-list">
                 <li>
-                  <span className="token-page-label">Farcaster:</span>
+                  <span className="token-page-label">Farcaster</span>
                   {farcasterHandle ? (
                     <a
                       href={`https://warpcast.com/${farcasterHandle}`}
@@ -300,7 +306,7 @@ function TokenPageInner() {
                   )}
                 </li>
                 <li>
-                  <span className="token-page-label">Website:</span>
+                  <span className="token-page-label">Website</span>
                   {token.website_url ? (
                     <a
                       href={token.website_url}
@@ -314,7 +320,7 @@ function TokenPageInner() {
                   )}
                 </li>
                 <li>
-                  <span className="token-page-label">X:</span>
+                  <span className="token-page-label">X</span>
                   {token.x_url ? (
                     <a
                       href={token.x_url}
@@ -328,7 +334,7 @@ function TokenPageInner() {
                   )}
                 </li>
                 <li>
-                  <span className="token-page-label">Telegram:</span>
+                  <span className="token-page-label">Telegram</span>
                   {token.telegram_url ? (
                     <a
                       href={token.telegram_url}
@@ -342,7 +348,7 @@ function TokenPageInner() {
                   )}
                 </li>
                 <li>
-                  <span className="token-page-label">Instagram:</span>
+                  <span className="token-page-label">Instagram</span>
                   {token.instagram_url ? (
                     <a
                       href={token.instagram_url}
@@ -356,7 +362,7 @@ function TokenPageInner() {
                   )}
                 </li>
                 <li>
-                  <span className="token-page-label">TikTok:</span>
+                  <span className="token-page-label">TikTok</span>
                   {token.tiktok_url ? (
                     <a
                       href={token.tiktok_url}
