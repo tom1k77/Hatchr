@@ -4,16 +4,21 @@ import React from "react";
 import { getTokens } from "@/lib/providers";
 
 type TokenPageProps = {
-  params: { address?: string };
+  params: Record<string, string | string[] | undefined>;
 };
 
 export const dynamic = "force-dynamic";
 
 export default async function TokenPage({ params }: TokenPageProps) {
-  const rawAddress = params.address ?? "";
-  const address = decodeURIComponent(rawAddress).trim().toLowerCase();
+  // Берём первое значение из params, независимо от ключа
+  const allValues = Object.values(params ?? {});
+  const rawAddressValue = Array.isArray(allValues[0])
+    ? (allValues[0] as string[])[0]
+    : (allValues[0] as string | undefined);
 
-  // ⚠️ НИКАКИХ проверок на валидность адреса — просто используем строку
+  const rawAddress = (rawAddressValue ?? "").toString();
+  const address = rawAddress.trim().toLowerCase();
+
   const tokens = await getTokens();
   const token = tokens.find(
     (t) => t.token_address.toLowerCase() === address
@@ -41,11 +46,8 @@ export default async function TokenPage({ params }: TokenPageProps) {
             Token
           </h1>
 
-          <p style={{ fontSize: "14px", marginBottom: 8 }}>
-            Token not found.
-          </p>
+          <p style={{ fontSize: "14px", marginBottom: 8 }}>Token not found.</p>
 
-          {/* маленький debug-блок, чтобы понять, что за адрес прилетает */}
           <pre
             style={{
               fontSize: "11px",
@@ -58,6 +60,7 @@ export default async function TokenPage({ params }: TokenPageProps) {
             }}
           >
 {`debug:
+params     = ${JSON.stringify(params, null, 2)}
 rawAddress = ${rawAddress}
 address    = ${address}`}
           </pre>
@@ -70,7 +73,7 @@ address    = ${address}`}
     );
   }
 
-  // ===== НИЖЕ — простая версия страницы токена =====
+  // ===== Простая страница токена, пока без красоты =====
   return (
     <div
       style={{
