@@ -660,10 +660,10 @@ export default function HomePage() {
 
         return (
           <Link
-            key={rowKey}
-            href={`/token/${token.token_address.toLowerCase()}`}
-            className="no-underline"
-          >
+  key={rowKey}
+  href={`/token/${encodeURIComponent(token.token_address.toLowerCase())}`}
+  className="no-underline"
+>
             <div className="h-card">
               {/* ВЕРХ КАРТОЧКИ: две колонки */}
               <div className="h-card-main">
