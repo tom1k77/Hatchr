@@ -336,6 +336,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
   telegram_url,
   instagram_url,
   tiktok_url,
+  farcaster_fid: farcaster_fid_raw,
 };
 
       if (isBlockedCreator(token.farcaster_url)) return null;
