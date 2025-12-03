@@ -246,28 +246,27 @@ function TokenPageInner() {
 
                   <div className="token-page-address-row">
   <span className="token-page-label">Address</span>
-
   <div className="token-page-address-wrap">
-
     <a
-      href={`https://basescan.org/token/${token.token_address}`}
+      href={baseScanUrl}
       target="_blank"
       rel="noopener noreferrer"
       className="token-page-address-link"
-      title="Open on Basescan"
+      title={fullAddress}
     >
-      {token.token_address}
+      {shortAddress}
     </a>
 
-    <button
-      type="button"
-      className="token-page-copy-btn"
-      aria-label="Copy address"
-      onClick={() => navigator.clipboard.writeText(token.token_address)}
-    >
-      ⧉
-    </button>
-
+    {fullAddress && (
+      <button
+        type="button"
+        className="token-page-copy-btn"
+        onClick={() => navigator.clipboard?.writeText(fullAddress)}
+        title="Copy address"
+      >
+        ⧉
+      </button>
+    )}
   </div>
 </div>
                 </div>
