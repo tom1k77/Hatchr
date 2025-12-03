@@ -624,14 +624,11 @@ export default function HomePage() {
                                 <span>Vol 24h: {vol}</span>
                               </div>
 
-                              {creatorScore != null && (
-                                <div className="token-card-score">
-                                  Hatchr score:{" "}
-                                  <strong>
-                                    {creatorScore.toFixed(1)}
-                                  </strong>
-                                </div>
-                              )}
+                              {creatorFid && (
+  <div className="token-card-score">
+    Creator score: {creatorScore ?? "…"}
+  </div>
+)}
 
                               <div className="token-card-source">
                                 <span className="token-card-source-pill">
@@ -852,16 +849,14 @@ export default function HomePage() {
                                           )}
                                         </a>
 
-                                        {creatorScore != null && (
-                                          <div className="h-card-score-row">
-                                            <span className="h-card-stats-label">
-                                              Hatchr score
-                                            </span>
-                                            <span className="h-card-stats-value">
-                                              {creatorScore.toFixed(1)}
-                                            </span>
-                                          </div>
-                                        )}
+                                        {creatorFid && (
+  <div className="h-card-score-row">
+    <span className="h-card-stats-label">Creator score</span>
+    <span className="h-card-stats-value">
+      {creatorScore ?? "…"}
+    </span>
+  </div>
+)}
 
                                         {isTooltipVisible && profile && (
                                           <div className="desktop-farcaster-tooltip">
