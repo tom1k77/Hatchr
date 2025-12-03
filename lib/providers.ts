@@ -13,6 +13,7 @@ export interface Token {
 
   // socials (ТОКЕНА)
   farcaster_url?: string; // ТОЛЬКО создатель, а не то, что вписали в метадату
+  farcaster_fid?: number | null;
   website_url?: string;
   x_url?: string;
   telegram_url?: string;
@@ -260,6 +261,17 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       } else if (typeof fid !== "undefined") {
         // создатель по fid
         farcasterUrl = `https://farcaster.xyz/profiles/${fid}`;
+      }
+
+            // нормализуем FID в число
+      let farcaster_fid_raw: number | null = null;
+      if (typeof fid === "number" && Number.isFinite(fid)) {
+        farcaster_fid_raw = fid;
+      } else if (typeof fid === "string") {
+        const parsed = Number(fid);
+        if (Number.isFinite(parsed)) {
+          farcaster_fid_raw = parsed;
+        }
       }
 
       // --- 2. Соцсети токена ТОЛЬКО из metadata (то, что создатель вписал вручную) ---
