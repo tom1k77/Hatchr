@@ -104,9 +104,9 @@ const shortAddress =
     : fullAddress;
 
 // ссылка на Basescan
-const baseScanUrl: string | null = fullAddress
+const baseScanUrl: string | undefined = fullAddress
   ? `https://basescan.org/token/${fullAddress}`
-  : null;
+  : undefined;
 
   // проверка адреса
   useEffect(() => {
