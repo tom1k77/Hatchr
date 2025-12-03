@@ -187,6 +187,10 @@ export default function HomePage() {
   const [visibleFeed, setVisibleFeed] = useState(RIGHT_PAGE_SIZE);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  const [creatorScores, setCreatorScores] = useState<
+  Record<number, number>
+>({});
+
   // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
     try {
@@ -305,6 +309,30 @@ export default function HomePage() {
     () => filteredTokens.slice(0, visibleRows),
     [filteredTokens, visibleRows]
   );
+
+  // Загружаем Neynar score для создателей с FID
+useEffect(() => {
+  // локальный сет загруженных fid, чтобы не дёргать API по 100 раз
+  const loadedFids = new Set<number>(Object.keys(creatorScores).map(Number));
+
+  tokens.forEach((t) => {
+    const fid = (t as any).farcaster_fid as number | null | undefined;
+    if (!fid) return;
+    if (loadedFids.has(fid)) return;
+
+    fetch(`/api/token-score?fid=${fid}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (typeof json.score === "number") {
+          setCreatorScores((prev) => ({
+            ...prev,
+            [fid]: json.score,
+          }));
+        }
+      })
+      .catch(() => {});
+  });
+}, [tokens, creatorScores]);
 
   // все торгуемые токены для live feed
   const tradedTokensAll = useMemo(() => {
@@ -524,6 +552,10 @@ export default function HomePage() {
         const sourceLabel =
           token.source === "clanker" ? "Clanker" : "Zora";
 
+        const creatorFid = (token as any).farcaster_fid as number | null | undefined;
+const creatorScore =
+  creatorFid != null ? creatorScores[creatorFid] : undefined;
+
         return (
           <Link
   key={token.token_address}
@@ -568,6 +600,12 @@ export default function HomePage() {
                     <span>MC: {mcap}</span>
                     <span>Vol 24h: {vol}</span>
                   </div>
+
+                  {creatorScore != null && (
+  <div className="token-card-score">
+    Creator score: {creatorScore}
+  </div>
+)}
 
                   <div className="token-card-source">
                     <span className="token-card-source-pill">
@@ -658,6 +696,10 @@ export default function HomePage() {
         }
 
         const isTooltipVisible = hoveredRowKey === rowKey;
+
+        const creatorFid = (token as any).farcaster_fid as number | null | undefined;
+const creatorScore =
+  creatorFid != null ? creatorScores[creatorFid] : undefined;
 
         return (
           <Link
@@ -751,6 +793,13 @@ export default function HomePage() {
                                 <FarcasterFallbackIcon size={20} />
                               )}
                             </a>
+
+                            {creatorScore != null && (
+  <div className="h-card-score-row">
+    <span className="h-card-stats-label">Creator score</span>
+    <span className="h-card-stats-value">{creatorScore}</span>
+  </div>
+)}
 
                             {isTooltipVisible && profile && (
                               <div className="desktop-farcaster-tooltip">
