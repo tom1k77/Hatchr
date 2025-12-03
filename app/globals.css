@@ -1619,3 +1619,15 @@ body {
 .token-page-copy-btn:hover {
   background: #d1d5db;
 }
+
+.token-card-score,
+.h-card-score {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #4b5563;
+}
+
+.token-card-score strong,
+.h-card-score strong {
+  font-weight: 600;
+}
