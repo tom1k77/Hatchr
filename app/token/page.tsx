@@ -31,6 +31,21 @@ type TokenItem = {
   farcaster_fid?: number | null;
 };
 
+type FollowersBucket = {
+  fid: number;
+  username: string;
+  display_name?: string;
+  pfp_url?: string;
+};
+
+type FollowersResponse = {
+  creator_fid: number;
+  total: number;
+  ultraOg: FollowersBucket[];
+  og: FollowersBucket[];
+  others: FollowersBucket[];
+};
+
 type TokensResponse = {
   count: number;
   items: TokenItem[];
@@ -172,6 +187,21 @@ const baseScanUrl: string | undefined = fullAddress
     };
   }, [normalizedAddress, status]);
 
+  // Грузим OG-фолловеров создателя
+const creatorFid = (token as any)?.farcaster_fid as
+  | number
+  | null
+  | undefined;
+
+useEffect(() => {
+  if (!creatorFid) return;
+
+  fetch(`/api/token-followers?fid=${creatorFid}`)
+    .then((r) => r.json())
+    .then((data) => setFollowers(data))
+    .catch(() => {});
+}, [creatorFid]);
+
   const { time, date } = useMemo(
     () => formatCreated(token?.first_seen_at ?? null),
     [token?.first_seen_at]
@@ -183,6 +213,10 @@ const baseScanUrl: string | undefined = fullAddress
   const liq = formatNumber(token?.liquidity_usd);
 
   const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
+
+  const [followers, setFollowers] = useState<FollowersResponse | null>(
+  null
+);
 
   // ===== RENDER =====
 
