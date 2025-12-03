@@ -24,6 +24,7 @@ type TokenItem = {
   instagram_url?: string | null;
   tiktok_url?: string | null;
   image_url?: string | null;
+  farcaster_fid?: number | null;
 };
 
 type TokensResponse = {
