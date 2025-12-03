@@ -29,10 +29,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const baseUrl = `https://api.neynar.com/v2/farcaster/followers?fid=${fid}&limit=200`;
+    // ЯВНО указываем тип строки
+    const baseUrl: string =
+      `https://api.neynar.com/v2/farcaster/followers?fid=${fid}&limit=200`;
 
+    // ЯВНО указываем тип курсора
     let cursor: string | null = null;
-    const headers = {
+
+    const headers: Record<string, string> = {
       "x-api-key": NEYNAR_API_KEY,
       "x-neynar-experimental": "true",
     };
@@ -41,7 +45,8 @@ export async function GET(req: NextRequest) {
 
     // простая пагинация, ограничим условно ~1000 фолловеров
     while (true) {
-      const url = cursor ? `${baseUrl}&cursor=${cursor}` : baseUrl;
+      // И здесь тоже задаём тип
+      const url: string = cursor ? `${baseUrl}&cursor=${cursor}` : baseUrl;
 
       const resp = await fetch(url, {
         headers,
@@ -53,9 +58,9 @@ export async function GET(req: NextRequest) {
         break;
       }
 
-      const json = await resp.json();
+      const json: any = await resp.json();
 
-      const list = (json.users || []).map((item: any) => {
+      const list: Follower[] = (json.users || []).map((item: any) => {
         const u = item.user || item.app || item;
         return {
           fid: u.fid,
@@ -68,7 +73,7 @@ export async function GET(req: NextRequest) {
       followers.push(...list);
 
       if (!json.next?.cursor) break;
-      cursor = json.next.cursor;
+      cursor = json.next.cursor as string;
 
       if (followers.length >= 1000) break;
     }
