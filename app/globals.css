@@ -1085,7 +1085,7 @@ body {
 }
 
 .token-page-back {
-  font-size: 12px;
+  font-size: 14px;
   color: #6b7280;
   text-decoration: none;
 }
@@ -1570,4 +1570,52 @@ body {
 
 .token-detail-copy-btn:hover {
   background: #eef2f7;
+}
+
+.token-page-address-row {
+  margin-top: 8px;
+}
+
+.token-page-address-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.token-page-address-link {
+  display: inline-block;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: #111827;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 768px) {
+  .token-page-address-link {
+    font-size: 13px;
+  }
+}
+
+.token-page-copy-btn {
+  border: none;
+  background: #e5e7eb;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  color: #374151;
+}
+
+.token-page-copy-btn:hover {
+  background: #d1d5db;
 }
