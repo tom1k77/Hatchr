@@ -94,6 +94,20 @@ function TokenPageInner() {
     "idle" | "invalid" | "not-found" | "ok" | "error"
   >("idle");
 
+  // полный адрес токена
+const fullAddress = token?.token_address ?? "";
+
+// обрезанный адрес для отображения
+const shortAddress =
+  fullAddress && fullAddress.length > 8
+    ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
+    : fullAddress;
+
+// ссылка на Basescan
+const baseScanUrl: string | null = fullAddress
+  ? `https://basescan.org/token/${fullAddress}`
+  : null;
+
   // проверка адреса
   useEffect(() => {
     if (!normalizedAddress) {
