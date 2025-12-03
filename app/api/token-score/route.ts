@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const url = `https://api.neynar.com/v2/farcaster/user/bulk?fids=${fid}`;
+    const url = `https://api.neynar.com/v2/farcaster/user?fid=${fid}`;
 
     const resp = await fetch(url, {
       headers: {
@@ -33,29 +33,23 @@ export async function GET(req: NextRequest) {
     });
 
     if (!resp.ok) {
-      console.error("Neynar score error", resp.status);
+      console.error("Neynar error", resp.status);
       return NextResponse.json(
-        { error: "Neynar error", status: resp.status },
+        { error: "Failed to fetch Neynar" },
         { status: 500 }
       );
     }
 
     const json = await resp.json();
 
-    const rawUser = Array.isArray(json.users)
-      ? json.users[0]?.user ?? json.users[0]
-      : json.user;
-
-    let score: unknown =
-      rawUser?.score ?? rawUser?.experimental?.neynar_user_score ?? 0;
-
-    if (typeof score !== "number") {
-      score = 0;
-    }
+    const score =
+      json?.user?.score ??
+      json?.user?.experimental?.neynar_user_score ??
+      0;
 
     return NextResponse.json({
-      fid: Number(fid),
-      score,
+      fid,
+      score: typeof score === "number" ? score : 0,
     });
   } catch (e) {
     console.error("token-score error", e);
