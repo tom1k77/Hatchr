@@ -158,33 +158,36 @@ export default function TokenPage() {
 
   // ---- Neynar score по username ----
   useEffect(() => {
-    if (!farcasterUsername) return;
+  if (!farcasterUsername) return;
 
-    async function loadScore() {
-      try {
-        setScoreLoading(true);
-        setCreatorScore(null);
+  // локальная переменная уже точно string
+  const username = farcasterUsername;
 
-        const res = await fetch(
-          `/api/token-score?username=${encodeURIComponent(farcasterUsername)}`
-        );
-        if (!res.ok) {
-          console.warn("token-score error", res.status);
-          return;
-        }
-        const json = await res.json();
-        if (typeof json.score === "number") {
-          setCreatorScore(json.score);
-        }
-      } catch (e) {
-        console.error("token-score fetch failed", e);
-      } finally {
-        setScoreLoading(false);
+  async function loadScore(u: string) {
+    try {
+      setScoreLoading(true);
+      setCreatorScore(null);
+
+      const res = await fetch(
+        `/api/token-score?username=${encodeURIComponent(u)}`
+      );
+      if (!res.ok) {
+        console.warn("token-score error", res.status);
+        return;
       }
+      const json = await res.json();
+      if (typeof json.score === "number") {
+        setCreatorScore(json.score);
+      }
+    } catch (e) {
+      console.error("token-score fetch failed", e);
+    } finally {
+      setScoreLoading(false);
     }
+  }
 
-    loadScore();
-  }, [farcasterUsername]);
+  loadScore(username);
+}, [farcasterUsername]);
 
   // ---- Followers по fid ----
   useEffect(() => {
