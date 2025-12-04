@@ -25,7 +25,7 @@ type TokenItem = {
   tiktok_url?: string | null;
   image_url?: string | null;
 
-  // FID создателя токена (из Clanker/Zora)
+  // FID создателя токена (может пригодиться позже, но сейчас не используем)
   farcaster_fid?: number | null;
 };
 
@@ -189,10 +189,10 @@ export default function HomePage() {
   const [visibleFeed, setVisibleFeed] = useState(RIGHT_PAGE_SIZE);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // кеш Neynar-скоров создателей: fid -> score
-  const [creatorScores, setCreatorScores] = useState<
-  Record<string, number>
->({});
+  // кеш Neynar-скоров создателей: username -> score
+  const [creatorScores, setCreatorScores] = useState<Record<string, number>>(
+    {}
+  );
 
   // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
@@ -258,30 +258,29 @@ export default function HomePage() {
   }, [sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
   // Загружаем Neynar score для создателей по Farcaster username
-useEffect(() => {
-  const loadedUsers = new Set<string>(Object.keys(creatorScores));
+  useEffect(() => {
+    const loadedUsers = new Set<string>(Object.keys(creatorScores));
 
-  tokens.forEach((t) => {
-    const username = extractFarcasterUsername(t.farcaster_url || undefined);
-    if (!username) return;
-    if (loadedUsers.has(username)) return;
+    tokens.forEach((t) => {
+      const username = extractFarcasterUsername(t.farcaster_url || undefined);
+      if (!username) return;
+      if (loadedUsers.has(username)) return;
 
-    fetch(`/api/token-score?username=${encodeURIComponent(username)}`)
-      .then((r) => r.json())
-      .then((json) => {
-        console.log("token-score response", username, json); // лог проверочный
-        if (typeof json.score === "number") {
-          setCreatorScores((prev) => ({
-            ...prev,
-            [username]: json.score,
-          }));
-        }
-      })
-      .catch((e) => {
-        console.error("token-score fetch error", username, e);
-      });
-  });
-}, [tokens, creatorScores]);
+      fetch(`/api/token-score?username=${encodeURIComponent(username)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((json) => {
+          if (json && typeof json.score === "number") {
+            setCreatorScores((prev) => ({
+              ...prev,
+              [username]: json.score,
+            }));
+          }
+        })
+        .catch((e) => {
+          console.error("token-score fetch error", username, e);
+        });
+    });
+  }, [tokens, creatorScores]);
 
   const filteredTokens = useMemo(() => {
     const base = tokens.filter((t) => {
@@ -545,9 +544,11 @@ useEffect(() => {
                     const symbol = token.symbol || "";
                     const name = token.name || symbol || "New token";
                     const username = extractFarcasterUsername(
-                    token.farcaster_url || undefined
+                      token.farcaster_url || undefined
                     );
-                    const creatorScore = username ? creatorScores[username] : undefined;
+                    const creatorScore = username
+                      ? creatorScores[username]
+                      : undefined;
                     const mcap = formatNumber(token.market_cap_usd);
                     const vol = formatNumber(token.volume_24h_usd);
 
@@ -556,12 +557,6 @@ useEffect(() => {
 
                     const sourceLabel =
                       token.source === "clanker" ? "Clanker" : "Zora";
-
-                    const creatorFid = token.farcaster_fid;
-                    const creatorScore =
-                      creatorFid != null
-                        ? creatorScores[creatorFid]
-                        : undefined;
 
                     return (
                       <Link
@@ -610,11 +605,11 @@ useEffect(() => {
                                 <span>Vol 24h: {vol}</span>
                               </div>
 
-                              {creatorFid && (
-  <div className="token-card-score">
-    Creator score: {creatorScore ?? "…"}
-  </div>
-)}
+                              {username && (
+                                <div className="token-card-score">
+                                  Creator score: {creatorScore ?? "…"}
+                                </div>
+                              )}
 
                               <div className="token-card-source">
                                 <span className="token-card-source-pill">
@@ -659,9 +654,11 @@ useEffect(() => {
                       token.source === "clanker" ? "Clanker" : "Zora";
 
                     const username = extractFarcasterUsername(
-                    token.farcaster_url || undefined
+                      token.farcaster_url || undefined
                     );
-                    const creatorScore = username ? creatorScores[username] : undefined;
+                    const creatorScore = username
+                      ? creatorScores[username]
+                      : undefined;
                     const profile = username ? profiles[username] : undefined;
 
                     const mcap = formatNumber(token.market_cap_usd);
@@ -712,12 +709,6 @@ useEffect(() => {
                     }
 
                     const isTooltipVisible = hoveredRowKey === rowKey;
-
-                    const creatorFid = token.farcaster_fid;
-                    const creatorScore =
-                      creatorFid != null
-                        ? creatorScores[creatorFid]
-                        : undefined;
 
                     return (
                       <Link
@@ -836,14 +827,14 @@ useEffect(() => {
                                           )}
                                         </a>
 
-                                        {creatorFid && (
-  <div className="h-card-score-row">
-    <span className="h-card-stats-label">Creator score</span>
-    <span className="h-card-stats-value">
-      {creatorScore ?? "…"}
-    </span>
-  </div>
-)}
+                                        <div className="h-card-score-row">
+                                          <span className="h-card-stats-label">
+                                            Creator score
+                                          </span>
+                                          <span className="h-card-stats-value">
+                                            {creatorScore ?? "…"}
+                                          </span>
+                                        </div>
 
                                         {isTooltipVisible && profile && (
                                           <div className="desktop-farcaster-tooltip">
