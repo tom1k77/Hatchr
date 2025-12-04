@@ -12,8 +12,8 @@ export interface Token {
   image_url?: string | null;
 
   // socials (ТОКЕНА)
-  farcaster_url?: string; // ТОЛЬКО создатель, а не то, что вписали в метадату
-  farcaster_fid?: number | null;
+  farcaster_url?: string;          // ТОЛЬКО создатель, а не то, что вписали в метадату
+  farcaster_fid?: number | null;   // FID создателя
   website_url?: string;
   x_url?: string;
   telegram_url?: string;
@@ -219,7 +219,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
       // ------ картинка из Clanker ------
       const rawImage: string | null =
-        (t.img_url as string | undefined) ||                 // главное поле
+        (t.img_url as string | undefined) || // главное поле
         (t.image_url as string | undefined) ||
         (t.imageUrl as string | undefined) ||
         (t.image as string | undefined) ||
@@ -232,7 +232,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         null;
 
       const image_url = normalizeImageUrl(rawImage);
-      
+
       // --- 1. Определяем создателя (Farcaster) ТОЛЬКО по user/fid ---
       let fid: number | string | undefined;
       if (Array.isArray(t.fids) && t.fids.length > 0) {
@@ -254,7 +254,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
           : "";
 
       let farcasterUrl: string | undefined;
-
       if (username) {
         // создатель по хендлу
         farcasterUrl = `https://farcaster.xyz/${username}`;
@@ -263,7 +262,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         farcasterUrl = `https://farcaster.xyz/profiles/${fid}`;
       }
 
-            // нормализуем FID в число
+      // нормализуем FID в число
       let farcaster_fid_raw: number | null = null;
       if (typeof fid === "number" && Number.isFinite(fid)) {
         farcaster_fid_raw = fid;
@@ -335,21 +334,25 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         t.created_at || t.deployed_at || t.last_indexed || undefined;
 
       const token: Token = {
-  token_address: addr,
-  name,
-  symbol,
-  source: "clanker",
-  source_url: `${CLANKER_FRONT}/clanker/${addr}`,
-  image_url,          // ← ДОБАВЛЕНО ПРАВИЛЬНО
-  first_seen_at: firstSeen,
-  farcaster_url: farcasterUrl,
-  website_url,
-  x_url,
-  telegram_url,
-  instagram_url,
-  tiktok_url,
-  farcaster_fid: farcaster_fid_raw,
-};
+        token_address: addr,
+        name,
+        symbol,
+        source: "clanker",
+        source_url: `${CLANKER_FRONT}/clanker/${addr}`,
+        image_url,
+        first_seen_at: firstSeen,
+
+        // creator
+        farcaster_url: farcasterUrl,
+        farcaster_fid: farcaster_fid_raw,
+
+        // socials
+        website_url,
+        x_url,
+        telegram_url,
+        instagram_url,
+        tiktok_url,
+      };
 
       if (isBlockedCreator(token.farcaster_url)) return null;
 
@@ -364,6 +367,8 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     return now - ts <= WINDOW_MS;
   });
 }
+
+// ======================= ZORA =======================
 
 export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
@@ -380,8 +385,8 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
   let cursor: string | undefined = undefined;
 
   // можно чуть увеличить покрытие
-  const PAGE_SIZE = 50;  // можно 75, если захочешь
-  const MAX_PAGES = 20;  // было 10
+  const PAGE_SIZE = 50; // можно 75, если захочешь
+  const MAX_PAGES = 20; // было 10
 
   for (let i = 0; i < MAX_PAGES; i++) {
     const params: Record<string, string> = {
