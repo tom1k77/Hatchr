@@ -190,9 +190,9 @@ export default function HomePage() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // кеш Neynar-скоров создателей: fid -> score
-  const [creatorScores, setCreatorScores] = useState<Record<number, number>>(
-    {}
-  );
+  const [creatorScores, setCreatorScores] = useState<
+  Record<string, number>
+>({});
 
   // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
@@ -257,46 +257,31 @@ export default function HomePage() {
     setVisibleFeed(RIGHT_PAGE_SIZE);
   }, [sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
-  // Загружаем Neynar score для создателей с FID
-  useEffect(() => {
-    // набираем уникальные fid из текущего списка токенов
-    const fids = Array.from(
-      new Set(
-        tokens
-          .map((t) => t.farcaster_fid)
-          .filter((fid): fid is number => typeof fid === "number" && fid > 0)
-      )
-    );
+  // Загружаем Neynar score для создателей по Farcaster username
+useEffect(() => {
+  const loadedUsers = new Set<string>(Object.keys(creatorScores));
 
-    // отфильтровываем тех, для кого скоры уже есть
-    const fidsToFetch = fids.filter(
-      (fid) => creatorScores[fid] === undefined
-    );
-    if (!fidsToFetch.length) return;
+  tokens.forEach((t) => {
+    const username = extractFarcasterUsername(t.farcaster_url || undefined);
+    if (!username) return;
+    if (loadedUsers.has(username)) return;
 
-    fidsToFetch.forEach((fid) => {
-      fetch(`/api/token-score?fid=${fid}`)
-        .then((r) => {
-          if (!r.ok) {
-            console.error("token-score error status", fid, r.status);
-            return null;
-          }
-          return r.json();
-        })
-        .then((json) => {
-          if (!json) return;
-          if (typeof json.score === "number") {
-            setCreatorScores((prev) => ({
-              ...prev,
-              [fid]: json.score,
-            }));
-          }
-        })
-        .catch((e) => {
-          console.error("token-score fetch failed for fid", fid, e);
-        });
-    });
-  }, [tokens, creatorScores]);
+    fetch(`/api/token-score?username=${encodeURIComponent(username)}`)
+      .then((r) => r.json())
+      .then((json) => {
+        console.log("token-score response", username, json); // лог проверочный
+        if (typeof json.score === "number") {
+          setCreatorScores((prev) => ({
+            ...prev,
+            [username]: json.score,
+          }));
+        }
+      })
+      .catch((e) => {
+        console.error("token-score fetch error", username, e);
+      });
+  });
+}, [tokens, creatorScores]);
 
   const filteredTokens = useMemo(() => {
     const base = tokens.filter((t) => {
@@ -560,8 +545,9 @@ export default function HomePage() {
                     const symbol = token.symbol || "";
                     const name = token.name || symbol || "New token";
                     const username = extractFarcasterUsername(
-                      token.farcaster_url || undefined
+                    token.farcaster_url || undefined
                     );
+                    const creatorScore = username ? creatorScores[username] : undefined;
                     const mcap = formatNumber(token.market_cap_usd);
                     const vol = formatNumber(token.volume_24h_usd);
 
@@ -673,8 +659,9 @@ export default function HomePage() {
                       token.source === "clanker" ? "Clanker" : "Zora";
 
                     const username = extractFarcasterUsername(
-                      token.farcaster_url || undefined
+                    token.farcaster_url || undefined
                     );
+                    const creatorScore = username ? creatorScores[username] : undefined;
                     const profile = username ? profiles[username] : undefined;
 
                     const mcap = formatNumber(token.market_cap_usd);
