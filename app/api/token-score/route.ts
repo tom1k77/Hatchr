@@ -16,10 +16,7 @@ export async function GET(req: NextRequest) {
     const fid = searchParams.get("fid");
 
     if (!fid) {
-      return NextResponse.json(
-        { error: "Missing fid" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing fid" }, { status: 400 });
     }
 
     const url = `https://api.neynar.com/v2/farcaster/user?fid=${fid}`;
@@ -35,7 +32,7 @@ export async function GET(req: NextRequest) {
     if (!resp.ok) {
       console.error("Neynar error", resp.status);
       return NextResponse.json(
-        { error: "Failed to fetch Neynar" },
+        { error: "Failed Neynar" },
         { status: 500 }
       );
     }
