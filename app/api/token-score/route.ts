@@ -13,13 +13,18 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const fid = searchParams.get("fid");
+    const username = searchParams.get("username");
 
-    if (!fid) {
-      return NextResponse.json({ error: "Missing fid" }, { status: 400 });
+    if (!username) {
+      return NextResponse.json(
+        { error: "Missing username" },
+        { status: 400 }
+      );
     }
 
-    const url = `https://api.neynar.com/v2/farcaster/user?fid=${fid}`;
+    const url = `https://api.neynar.com/v2/farcaster/user?username=${encodeURIComponent(
+      username
+    )}`;
 
     const resp = await fetch(url, {
       headers: {
@@ -45,7 +50,7 @@ export async function GET(req: NextRequest) {
       0;
 
     return NextResponse.json({
-      fid,
+      username,
       score: typeof score === "number" ? score : 0,
     });
   } catch (e) {
