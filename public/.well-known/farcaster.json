@@ -1,0 +1,16 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "Hatchr",
+    "subtitle": "Analytics layer for Base",
+    "description": "Discover new Base tokens live.",
+    "iconUrl": "https://hatchr.vercel.app/logo.png",
+    "homeUrl": "https://hatchr.vercel.app",
+    "primaryCategory": "social"
+  }
+}
