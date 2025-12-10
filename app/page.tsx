@@ -1,8 +1,9 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 
 type TokenItem = {
   token_address: string;
@@ -107,24 +108,29 @@ function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
 }
 
 export default function TokenPage() {
-  const searchParams = useSearchParams();
-  const addressParam = (searchParams.get("address") || "").toLowerCase();
+  // address читаем из location.search на клиенте
+  const [addressParam, setAddressParam] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const addr = params.get("address");
+    setAddressParam(addr ? addr.toLowerCase() : "");
+  }, []);
 
   const [token, setToken] = useState<TokenItem | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Hatchr / Neynar creator score
   const [creatorScore, setCreatorScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
 
-  // Followers
   const [followersInfo, setFollowersInfo] = useState<FollowersResponse | null>(
     null
   );
   const [followersLoading, setFollowersLoading] = useState(false);
 
-  // ---- загрузка токена ----
+  // загрузка токена
   useEffect(() => {
     if (!addressParam) return;
 
@@ -156,10 +162,9 @@ export default function TokenPage() {
     [token]
   );
 
-  // ---- Neynar score по username ----
+  // Neynar score
   useEffect(() => {
     if (!farcasterUsername) return;
-
     const username = farcasterUsername;
 
     async function loadScore(u: string) {
@@ -188,7 +193,7 @@ export default function TokenPage() {
     loadScore(username);
   }, [farcasterUsername]);
 
-  // ---- Followers по fid ----
+  // followers по fid
   useEffect(() => {
     const fid = token?.farcaster_fid;
     if (!fid) return;
@@ -206,15 +211,11 @@ export default function TokenPage() {
           return;
         }
         const json: FollowersResponse = await res.json();
-        if (!cancelled) {
-          setFollowersInfo(json);
-        }
+        if (!cancelled) setFollowersInfo(json);
       } catch (e) {
         console.error("token-followers fetch failed", e);
       } finally {
-        if (!cancelled) {
-          setFollowersLoading(false);
-        }
+        if (!cancelled) setFollowersLoading(false);
       }
     }
 
@@ -225,6 +226,18 @@ export default function TokenPage() {
     };
   }, [token?.farcaster_fid]);
 
+  // address ещё не считали
+  if (addressParam === null) {
+    return (
+      <div className="hatchr-root">
+        <main className="hatchr-shell">
+          <p>Loading…</p>
+        </main>
+      </div>
+    );
+  }
+
+  // параметр отсутствует
   if (!addressParam) {
     return (
       <div className="hatchr-root">
