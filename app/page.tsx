@@ -158,63 +158,71 @@ export default function TokenPage() {
 
   // ---- Neynar score по username ----
   useEffect(() => {
-  if (!farcasterUsername) return;
+    if (!farcasterUsername) return;
 
-  // локальная переменная уже точно string
-  const username = farcasterUsername;
+    const username = farcasterUsername;
 
-  async function loadScore(u: string) {
-    try {
-      setScoreLoading(true);
-      setCreatorScore(null);
+    async function loadScore(u: string) {
+      try {
+        setScoreLoading(true);
+        setCreatorScore(null);
 
-      const res = await fetch(
-        `/api/token-score?username=${encodeURIComponent(u)}`
-      );
-      if (!res.ok) {
-        console.warn("token-score error", res.status);
-        return;
+        const res = await fetch(
+          `/api/token-score?username=${encodeURIComponent(u)}`
+        );
+        if (!res.ok) {
+          console.warn("token-score error", res.status);
+          return;
+        }
+        const json = await res.json();
+        if (typeof json.score === "number") {
+          setCreatorScore(json.score);
+        }
+      } catch (e) {
+        console.error("token-score fetch failed", e);
+      } finally {
+        setScoreLoading(false);
       }
-      const json = await res.json();
-      if (typeof json.score === "number") {
-        setCreatorScore(json.score);
-      }
-    } catch (e) {
-      console.error("token-score fetch failed", e);
-    } finally {
-      setScoreLoading(false);
     }
-  }
 
-  loadScore(username);
-}, [farcasterUsername]);
+    loadScore(username);
+  }, [farcasterUsername]);
 
   // ---- Followers по fid ----
   useEffect(() => {
-    if (!token?.farcaster_fid) return;
+    const fid = token?.farcaster_fid;
+    if (!fid) return;
 
-    async function loadFollowers() {
+    let cancelled = false;
+
+    async function loadFollowers(currentFid: number) {
       try {
         setFollowersLoading(true);
         setFollowersInfo(null);
 
-        const res = await fetch(
-          `/api/token-followers?fid=${token.farcaster_fid}`
-        );
+        const res = await fetch(`/api/token-followers?fid=${currentFid}`);
         if (!res.ok) {
           console.warn("token-followers error", res.status);
           return;
         }
         const json: FollowersResponse = await res.json();
-        setFollowersInfo(json);
+        if (!cancelled) {
+          setFollowersInfo(json);
+        }
       } catch (e) {
         console.error("token-followers fetch failed", e);
       } finally {
-        setFollowersLoading(false);
+        if (!cancelled) {
+          setFollowersLoading(false);
+        }
       }
     }
 
-    loadFollowers();
+    loadFollowers(fid);
+
+    return () => {
+      cancelled = true;
+    };
   }, [token?.farcaster_fid]);
 
   if (!addressParam) {
