@@ -1,16 +1,19 @@
+// app/frame/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-// тип токена, такой же как в твоём API
 type TokenItem = {
   token_address: string;
   name: string;
   symbol: string;
   source: string;
   source_url: string;
-  first_seen_at: string;
+  first_seen_at: string | null;
+
   price_usd: number | null;
+  market_cap_usd: number | null;
   liquidity_usd: number | null;
   volume_24h_usd: number | null;
+
   farcaster_url?: string | null;
 };
 
@@ -19,109 +22,75 @@ type TokensResponse = {
   items: TokenItem[];
 };
 
-const SITE_URL = "https://nextjs-boilerplate-liart-eta-7lpgqo4h3o.vercel.app"; 
-// ↑ тут поставь финальный домен Hatchr, когда будет
+// ТВОЙ домен. Если потом будешь менять — правишь только тут.
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://hatchr.vercel.app";
 
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const indexFromButton: number | undefined =
-    body?.untrustedData?.buttonIndex; // 1,2,...
+// компактное форматирование USD под фрейм
+function formatUsd(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (value === 0) return "—";
+  const abs = Math.abs(value);
+  if (abs < 1) return value.toFixed(6);
+  if (abs < 10) return value.toFixed(4);
+  if (abs < 1_000) return value.toFixed(2);
+  if (abs < 1_000_000) return (value / 1_000).toFixed(1) + "K";
+  return (value / 1_000_000).toFixed(1) + "M";
+}
 
-  // читаем текущий index из state (если есть)
-  const prevIndex =
-    typeof body?.untrustedData?.state === "string"
-      ? Number(body.untrustedData.state)
-      : 0;
-
-  let index = prevIndex;
-  if (indexFromButton === 2) {
-    // кнопка "Next"
-    index = prevIndex + 1;
-  }
-
-  // тянем токены с твоего API
-  const tokensRes = await fetch(`${SITE_URL}/api/tokens`, {
-    cache: "no-store",
-  });
-  const tokensJson: TokensResponse = await tokensRes.json();
-  const items = tokensJson.items || [];
-
-  if (!items.length) {
-    return frameResponse({
-      title: "Hatchr – no tokens yet",
-      text: "Нет новых токенов за последний час.",
-      image: `${SITE_URL}/api/frame-image?msg=${encodeURIComponent(
-        "No tokens yet"
-      )}`,
-      state: "0",
+async function fetchTokens(): Promise<TokenItem[]> {
+  try {
+    const res = await fetch(`${SITE_URL}/api/tokens`, {
+      cache: "no-store",
     });
+    if (!res.ok) {
+      console.error("Frame /api/tokens error:", res.status);
+      return [];
+    }
+    const json: TokensResponse = await res.json();
+    return Array.isArray(json.items) ? json.items : [];
+  } catch (e) {
+    console.error("Frame /api/tokens fetch failed:", e);
+    return [];
   }
-
-  // по кругу, чтобы не выходить за длину массива
-  const safeIndex = ((index % items.length) + items.length) % items.length;
-  const token = items[safeIndex];
-
-  const title = "Hatchr – new Base tokens";
-  const text = `${token.name || token.symbol} (${token.symbol || ""})`;
-  const state = String(safeIndex);
-
-  // простая картинка через твой API (пока заглушка)
-  const imageUrl = `${SITE_URL}/api/frame-image?name=${encodeURIComponent(
-    token.name || token.symbol
-  )}&symbol=${encodeURIComponent(token.symbol || "")}`;
-
-  return frameResponse({
-    title,
-    text,
-    image: imageUrl,
-    state,
-  });
 }
 
-// GET — чтобы Farcaster мог дернуть первый фрейм как обычную страницу
-export async function GET() {
-  const imageUrl = `${SITE_URL}/api/frame-image?msg=${encodeURIComponent(
-    "Hatchr – new Base tokens"
-  )}`;
-
-  return frameResponse({
-    title: "Hatchr – new Base tokens",
-    text: "Tap to browse new Base tokens.",
-    image: imageUrl,
-    state: "0",
-  });
-}
-
-// helper: собираем ответ в формате Farcaster frame
-function frameResponse(opts: {
+function buildFrameResponse(opts: {
   title: string;
   text: string;
-  image: string;
   state: string;
+  image?: string;
+  hasNext?: boolean;
 }) {
-  const { title, text, image, state } = opts;
+  const { title, text, state, image, hasNext } = opts;
 
-  const frame = {
+  const frame: any = {
     version: "vNext",
     title,
-    image,
+    image:
+      image ??
+      // простой вариант — логотип Hatchr
+      `${SITE_URL}/hatchr-logo.png`,
+    imageAspectRatio: "1.91:1",
+    text,
+    post_url: `${SITE_URL}/frame`,
+    state,
     buttons: [
       {
         label: "Open Hatchr",
         action: "link",
         target: SITE_URL,
       },
-      {
-        label: "Next token",
-      },
     ],
-    post_url: `${SITE_URL}/frame`,
-    state,
-    imageAspectRatio: "1.91:1",
-    text,
   };
 
-  // Farcaster читает из headers + body (HTML/JSON не важно)
+  // если есть что листать — добавляем кнопку Next
+  if (hasNext) {
+    frame.buttons.push({
+      label: "Next token",
+    });
+  }
+
   return new NextResponse(JSON.stringify(frame), {
     status: 200,
     headers: {
@@ -129,5 +98,87 @@ function frameResponse(opts: {
       "Cache-Control": "no-store",
       "Access-Control-Allow-Origin": "*",
     },
+  });
+}
+
+// Первый фрейм (когда просто вставили ссылку)
+export async function GET(_req: NextRequest) {
+  const tokens = await fetchTokens();
+  const first = tokens[0];
+
+  if (!first) {
+    return buildFrameResponse({
+      title: "Hatchr — Base token radar",
+      text: "No fresh Base tokens right now. Open Hatchr for the full feed.",
+      state: "0",
+      hasNext: false,
+    });
+  }
+
+  const symbol = first.symbol || "";
+  const name = first.name || symbol || "New token";
+
+  const text = `${symbol || name} · MC ${formatUsd(
+    first.market_cap_usd
+  )} · Vol 24h ${formatUsd(first.volume_24h_usd)}`;
+
+  return buildFrameResponse({
+    title: "Hatchr — new Base tokens",
+    text,
+    state: "0",
+    hasNext: tokens.length > 1,
+  });
+}
+
+// Обработка нажатий в фрейме (Next token)
+export async function POST(req: NextRequest) {
+  let body: any = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
+  const untrusted = body?.untrustedData || {};
+  const buttonIndex: number | undefined = untrusted.buttonIndex;
+  const prevStateStr: string = typeof untrusted.state === "string"
+    ? untrusted.state
+    : "0";
+
+  let currentIndex = Number(prevStateStr);
+  if (!Number.isFinite(currentIndex)) currentIndex = 0;
+
+  // если нажали 2-ю кнопку — листаем дальше
+  if (buttonIndex === 2) {
+    currentIndex += 1;
+  }
+
+  const tokens = await fetchTokens();
+  if (!tokens.length) {
+    return buildFrameResponse({
+      title: "Hatchr — Base token radar",
+      text: "No fresh Base tokens right now. Open Hatchr for the full feed.",
+      state: "0",
+      hasNext: false,
+    });
+  }
+
+  // безопасный индекс по кругу
+  const safeIndex =
+    ((currentIndex % tokens.length) + tokens.length) % tokens.length;
+
+  const token = tokens[safeIndex];
+  const symbol = token.symbol || "";
+  const name = token.name || symbol || "New token";
+
+  const text = `${symbol || name} · MC ${formatUsd(
+    token.market_cap_usd
+  )} · Vol 24h ${formatUsd(token.volume_24h_usd)}`;
+
+  return buildFrameResponse({
+    title: "Hatchr — new Base tokens",
+    text,
+    state: String(safeIndex),
+    hasNext: tokens.length > 1,
   });
 }
