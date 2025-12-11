@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 // запретить статическую генерацию этой страницы
@@ -99,7 +99,6 @@ function extractFarcasterUsername(url?: string | null): string | null {
 
 function TokenPageInner() {
   const searchParams = useSearchParams();
-  const router = useRouter();
 
   const rawAddress = searchParams.get("address") || "";
   const normalizedAddress = rawAddress.trim().toLowerCase();
@@ -110,19 +109,24 @@ function TokenPageInner() {
     "idle" | "invalid" | "not-found" | "ok" | "error"
   >("idle");
 
+  const [followers, setFollowers] = useState<FollowersResponse | null>(null);
+
+  const [creatorScore, setCreatorScore] = useState<number | null>(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
+
   // полный адрес токена
-const fullAddress = token?.token_address ?? "";
+  const fullAddress = token?.token_address ?? "";
 
-// обрезанный адрес для отображения
-const shortAddress =
-  fullAddress && fullAddress.length > 8
-    ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
-    : fullAddress;
+  // обрезанный адрес для отображения
+  const shortAddress =
+    fullAddress && fullAddress.length > 8
+      ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
+      : fullAddress;
 
-// ссылка на Basescan
-const baseScanUrl: string | undefined = fullAddress
-  ? `https://basescan.org/token/${fullAddress}`
-  : undefined;
+  // ссылка на Basescan
+  const baseScanUrl: string | undefined = fullAddress
+    ? `https://basescan.org/token/${fullAddress}`
+    : undefined;
 
   // проверка адреса
   useEffect(() => {
@@ -188,19 +192,51 @@ const baseScanUrl: string | undefined = fullAddress
   }, [normalizedAddress, status]);
 
   // Грузим OG-фолловеров создателя
-const creatorFid = (token as any)?.farcaster_fid as
-  | number
-  | null
-  | undefined;
+  const creatorFid = (token as any)?.farcaster_fid as number | null | undefined;
 
-useEffect(() => {
-  if (!creatorFid) return;
+  useEffect(() => {
+    if (!creatorFid) return;
 
-  fetch(`/api/token-followers?fid=${creatorFid}`)
-    .then((r) => r.json())
-    .then((data) => setFollowers(data))
-    .catch(() => {});
-}, [creatorFid]);
+    fetch(`/api/token-followers?fid=${creatorFid}`)
+      .then((r) => r.json())
+      .then((data) => setFollowers(data))
+      .catch(() => {});
+  }, [creatorFid]);
+
+  const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
+
+  // Грузим Hatchr / Neynar creator score по username
+  useEffect(() => {
+    if (!farcasterHandle) return;
+
+    let cancelled = false;
+
+    async function loadScore() {
+      try {
+        setScoreLoading(true);
+        setCreatorScore(null);
+
+        const res = await fetch(
+          `/api/token-score?username=${encodeURIComponent(farcasterHandle)}`
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!cancelled && typeof json.score === "number") {
+          setCreatorScore(json.score);
+        }
+      } catch {
+        // тихо игнорируем
+      } finally {
+        if (!cancelled) setScoreLoading(false);
+      }
+    }
+
+    loadScore();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [farcasterHandle]);
 
   const { time, date } = useMemo(
     () => formatCreated(token?.first_seen_at ?? null),
@@ -212,22 +248,16 @@ useEffect(() => {
   const price = formatNumber(token?.price_usd);
   const liq = formatNumber(token?.liquidity_usd);
 
-  const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
-
-  const [followers, setFollowers] = useState<FollowersResponse | null>(
-  null
-);
-
   // ===== RENDER =====
 
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
         <div className="token-page-header">
-          <h1 className="token-page-title">Token</h1>
           <Link href="/" className="token-page-back">
             ← Back to Hatchr
           </Link>
+          <h1 className="token-page-title">Token</h1>
         </div>
 
         {!normalizedAddress || status === "invalid" ? (
@@ -245,7 +275,7 @@ useEffect(() => {
           <div className="token-page-card">
             <p>Failed to load token data. Try again in a minute.</p>
           </div>
-                ) : status === "not-found" || !token ? (
+        ) : status === "not-found" || !token ? (
           <div className="token-page-card">
             <p>Token not found.</p>
           </div>
@@ -294,30 +324,32 @@ useEffect(() => {
                   </div>
 
                   <div className="token-page-address-row">
-  <span className="token-page-label">Address</span>
-  <div className="token-page-address-wrap">
-    <a
-      href={baseScanUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="token-page-address-link"
-      title={fullAddress}
-    >
-      {shortAddress}
-    </a>
+                    <span className="token-page-label">Address</span>
+                    <div className="token-page-address-wrap">
+                      <a
+                        href={baseScanUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="token-page-address-link"
+                        title={fullAddress}
+                      >
+                        {shortAddress}
+                      </a>
 
-    {fullAddress && (
-      <button
-        type="button"
-        className="token-page-copy-btn"
-        onClick={() => navigator.clipboard?.writeText(fullAddress)}
-        title="Copy address"
-      >
-        ⧉
-      </button>
-    )}
-  </div>
-</div>
+                      {fullAddress && (
+                        <button
+                          type="button"
+                          className="token-page-copy-btn"
+                          onClick={() =>
+                            navigator.clipboard?.writeText(fullAddress)
+                          }
+                          title="Copy address"
+                        >
+                          ⧉
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -355,7 +387,7 @@ useEffect(() => {
               )}
             </section>
 
-            {/* правая часть — социальные ссылки */}
+            {/* правая часть — социальные ссылки + Hatchr score */}
             <aside className="token-page-card token-page-side">
               <h2 className="token-page-side-title">Socials</h2>
               <ul className="token-page-social-list">
@@ -444,6 +476,49 @@ useEffect(() => {
                   )}
                 </li>
               </ul>
+
+              {/* Hatchr creator score + followers breakdown */}
+              {farcasterHandle && (
+                <div className="token-page-score-card">
+                  <div className="token-page-score-header">
+                    <span className="token-page-label">
+                      Hatchr creator score
+                    </span>
+                    <span className="token-page-score-handle">
+                      @{farcasterHandle}
+                    </span>
+                  </div>
+                  <div className="token-page-score-value">
+                    {scoreLoading
+                      ? "…"
+                      : creatorScore != null
+                      ? creatorScore
+                      : "No data"}
+                  </div>
+                  <div className="token-page-score-caption">
+                    v1 — Neynar creator score + OG followers breakdown.
+                  </div>
+
+                  {followers && (
+                    <div className="token-page-followers-block">
+                      <div>
+                        Total:{" "}
+                        <strong>
+                          {followers.total.toLocaleString()}
+                        </strong>
+                      </div>
+                      <div>
+                        Ultra-OG (&lt;1000 FID):{" "}
+                        <strong>{followers.ultraOg.length}</strong>
+                      </div>
+                      <div>
+                        OG (1000–9999):{" "}
+                        <strong>{followers.og.length}</strong>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </aside>
           </div>
         )}
@@ -461,10 +536,10 @@ export default function TokenPage() {
         <div className="hatchr-root">
           <main className="hatchr-shell">
             <div className="token-page-header">
-              <h1 className="token-page-title">Token</h1>
               <Link href="/" className="token-page-back">
                 ← Back to Hatchr
               </Link>
+              <h1 className="token-page-title">Token</h1>
             </div>
             <div className="token-page-card">
               <p>Loading token…</p>
