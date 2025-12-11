@@ -1,8 +1,7 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-
 import { useEffect, useMemo, useState } from "react";
+import { useIsMobile } from "./hooks/useIsMobile";
 import Link from "next/link";
 
 type TokenItem = {
@@ -19,34 +18,33 @@ type TokenItem = {
   volume_24h_usd: number | null;
 
   farcaster_url?: string | null;
-  farcaster_fid?: number | null;
-  website_url?: string | null;
   x_url?: string | null;
   telegram_url?: string | null;
+  website_url?: string | null;
   instagram_url?: string | null;
   tiktok_url?: string | null;
   image_url?: string | null;
+  farcaster_fid?: number | null;
 };
 
-type TokenResponse = {
-  token: TokenItem | null;
+type TokensResponse = {
+  count: number;
+  items: TokenItem[];
 };
 
-type FollowersResponse = {
-  creator_fid: number;
-  total: number;
-  ultraOg: Follower[];
-  og: Follower[];
-  others: Follower[];
-};
-
-type Follower = {
-  fid: number;
+type FarcasterProfile = {
   username: string;
-  display_name?: string;
-  pfp_url?: string;
+  display_name: string;
+  pfp_url: string | null;
+  follower_count: number;
+  following_count: number;
 };
 
+const REFRESH_INTERVAL_MS = 30_000;
+const LEFT_PAGE_SIZE = 9;
+const RIGHT_PAGE_SIZE = 7;
+
+// ---- форматирование чисел ----
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
   if (value === 0) return "—";
@@ -79,6 +77,25 @@ function formatCreated(
   return { time, date };
 }
 
+function formatTimeAgo(dateString: string | null | undefined): string {
+  if (!dateString) return "";
+  const created = new Date(dateString).getTime();
+  if (Number.isNaN(created)) return "";
+
+  const diffMs = Date.now() - created;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec}s ago`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+
+  const diffD = Math.floor(diffH / 24);
+  return `${diffD}d ago`;
+}
+
 function extractFarcasterUsername(url?: string | null): string | null {
   if (!url) return null;
   try {
@@ -91,6 +108,44 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+function extractXUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    return parts[0];
+  } catch {
+    return null;
+  }
+}
+
+function extractInstagramUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    return parts[0];
+  } catch {
+    return null;
+  }
+}
+
+function extractTiktokUsername(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (!parts.length) return null;
+    const last = parts[parts.length - 1];
+    return last.startsWith("@") ? last.slice(1) : last;
+  } catch {
+    return null;
+  }
+}
+
+// fallback-аватар Farcaster: используем /public/farcaster-logo.png
 function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
   return (
     <img
@@ -107,831 +162,841 @@ function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
   );
 }
 
-/**
- * Лендовая страница, когда нет ?address=
- */
-function Landing() {
-  return (
-    <div className="hatchr-root">
-      <main className="hatchr-shell">
-        <h1
-          style={{
-            fontSize: 22,
-            fontWeight: 600,
-            marginBottom: 16,
-          }}
-        >
-          Hatchr — Base token radar
-        </h1>
-
-        <p
-          style={{
-            fontSize: 14,
-            color: "#6b7280",
-            marginBottom: 12,
-          }}
-        >
-          This view is a detailed token card. Open it with a token address in
-          the URL to see full metrics, socials and Hatchr creator score.
-        </p>
-
-        <p
-          style={{
-            fontSize: 13,
-            color: "#6b7280",
-            marginBottom: 4,
-          }}
-        >
-          Example:
-        </p>
-
-        <code
-          style={{
-            display: "inline-block",
-            padding: "8px 10px",
-            borderRadius: 8,
-            background: "#111827",
-            color: "white",
-            fontSize: 12,
-          }}
-        >
-          https://hatchr.vercel.app?address=0x1234…abcd
-        </code>
-
-        <p
-          style={{
-            fontSize: 12,
-            color: "#9ca3af",
-            marginTop: 12,
-          }}
-        >
-          Later we can plug this into the main Hatchr feed / Farcaster Mini App,
-          so users land here directly from curated token lists.
-        </p>
-      </main>
-    </div>
+export default function HomePage() {
+  const isMobile = useIsMobile();
+  const [tokens, setTokens] = useState<TokenItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
+    "all"
   );
-}
-
-export default function TokenPage() {
-  // address читаем из location.search на клиенте
-  const [addressParam, setAddressParam] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const addr = params.get("address");
-    setAddressParam(addr ? addr.toLowerCase() : "");
-  }, []);
-
-  const [token, setToken] = useState<TokenItem | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [minVolume, setMinVolume] = useState<number>(0);
+  const [hideEmpty, setHideEmpty] = useState<boolean>(false);
+  const [hideZeroMarket, setHideZeroMarket] = useState<boolean>(false);
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const [creatorScore, setCreatorScore] = useState<number | null>(null);
-  const [scoreLoading, setScoreLoading] = useState(false);
-
-  const [followersInfo, setFollowersInfo] = useState<FollowersResponse | null>(
-    null
+  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>(
+    {}
   );
-  const [followersLoading, setFollowersLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState<
+    Record<string, boolean>
+  >({});
 
-  // загрузка токена
-  useEffect(() => {
-    if (!addressParam) return;
+  const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
+  const [visibleRows, setVisibleRows] = useState(LEFT_PAGE_SIZE);
+  const [visibleFeed, setVisibleFeed] = useState(RIGHT_PAGE_SIZE);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-    async function loadToken() {
-      try {
-        setLoading(true);
-        setError(null);
+  const [creatorScores, setCreatorScores] = useState<
+  Record<number, number>
+>({});
 
-        const res = await fetch(`/api/token?address=${addressParam}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`Token API error: ${res.status}`);
+  // ---------- загрузка токенов + кэш цифр ----------
+  async function loadTokens() {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        const data: TokenResponse = await res.json();
-        setToken(data.token ?? null);
-      } catch (e) {
-        console.error(e);
-        setError("Failed to load token");
-      } finally {
-        setLoading(false);
-      }
-    }
+      const res = await fetch("/api/tokens", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Tokens API error: ${res.status}`);
 
-    loadToken();
-  }, [addressParam]);
+      const data: TokensResponse = await res.json();
 
-  const farcasterUsername = useMemo(
-    () => extractFarcasterUsername(token?.farcaster_url ?? null),
-    [token]
-  );
-
-  // Neynar score
-  useEffect(() => {
-    if (!farcasterUsername) return;
-    const username = farcasterUsername;
-
-    async function loadScore(u: string) {
-      try {
-        setScoreLoading(true);
-        setCreatorScore(null);
-
-        const res = await fetch(
-          `/api/token-score?username=${encodeURIComponent(u)}`
+      setTokens((prev) => {
+        const prevMap = new Map(
+          prev.map((t) => [t.token_address.toLowerCase(), t])
         );
-        if (!res.ok) {
-          console.warn("token-score error", res.status);
-          return;
-        }
-        const json = await res.json();
-        if (typeof json.score === "number") {
-          setCreatorScore(json.score);
-        }
-      } catch (e) {
-        console.error("token-score fetch failed", e);
-      } finally {
-        setScoreLoading(false);
-      }
+
+        const merged = data.items.map((t) => {
+          const key = t.token_address.toLowerCase();
+          const old = prevMap.get(key);
+
+          if (!old) return t;
+
+          const keepNumber = (field: keyof TokenItem): number | null => {
+            const newVal = t[field] as unknown as number | null;
+            const oldVal = old[field] as unknown as number | null;
+
+            if (newVal == null || !Number.isFinite(newVal) || newVal === 0) {
+              return oldVal ?? null;
+            }
+            return newVal;
+          };
+
+          return {
+            ...t,
+            market_cap_usd: keepNumber("market_cap_usd"),
+            liquidity_usd: keepNumber("liquidity_usd"),
+            volume_24h_usd: keepNumber("volume_24h_usd"),
+            price_usd: keepNumber("price_usd"),
+          };
+        });
+
+        return merged;
+      });
+    } catch (e) {
+      console.error(e);
+      setError("Не удалось загрузить токены. Попробуй обновить страницу позже.");
+    } finally {
+      setIsLoading(false);
     }
+  }
 
-    loadScore(username);
-  }, [farcasterUsername]);
-
-  // followers по fid
   useEffect(() => {
-    const fid = token?.farcaster_fid;
-    if (!fid) return;
+    loadTokens();
+    const id = setInterval(loadTokens, REFRESH_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, []);
 
-    let cancelled = false;
+  // при смене фильтров — сбрасываем пагинацию
+  useEffect(() => {
+    setVisibleRows(LEFT_PAGE_SIZE);
+    setVisibleFeed(RIGHT_PAGE_SIZE);
+  }, [sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
-    async function loadFollowers(currentFid: number) {
-      try {
-        setFollowersLoading(true);
-        setFollowersInfo(null);
+  const filteredTokens = useMemo(() => {
+    const base = tokens.filter((t) => {
+      if (sourceFilter !== "all" && t.source !== sourceFilter) return false;
 
-        const res = await fetch(`/api/token-followers?fid=${currentFid}`);
-        if (!res.ok) {
-          console.warn("token-followers error", res.status);
-          return;
-        }
-        const json: FollowersResponse = await res.json();
-        if (!cancelled) setFollowersInfo(json);
-      } catch (e) {
-        console.error("token-followers fetch failed", e);
-      } finally {
-        if (!cancelled) setFollowersLoading(false);
+      if (minVolume > 0) {
+        const vol = t.volume_24h_usd ?? 0;
+        if (vol < minVolume) return false;
       }
+
+      if (hideZeroMarket) {
+        const hasCap = (t.market_cap_usd ?? 0) > 0;
+        const hasVol = (t.volume_24h_usd ?? 0) > 0;
+        if (!hasCap && !hasVol) return false;
+      }
+
+      if (search.trim()) {
+        const s = search.trim().toLowerCase();
+        const name = (t.name || "").toLowerCase();
+        const symbol = (t.symbol || "").toLowerCase();
+        const addr = (t.token_address || "").toLowerCase();
+        if (!name.includes(s) && !symbol.includes(s) && !addr.includes(s)) {
+          return false;
+        }
+      }
+
+      if (hideEmpty) {
+        const hasCap = (t.market_cap_usd ?? 0) > 0;
+        const hasVol = (t.volume_24h_usd ?? 0) > 0;
+        const hasSocial =
+          !!t.farcaster_url ||
+          !!t.x_url ||
+          !!t.instagram_url ||
+          !!t.tiktok_url ||
+          !!t.telegram_url ||
+          !!t.website_url;
+
+        if (!hasCap && !hasVol && !hasSocial) return false;
+      }
+
+      return true;
+    });
+
+    const sorted = [...base].sort((a, b) => {
+      const ta = new Date(a.first_seen_at || 0).getTime();
+      const tb = new Date(b.first_seen_at || 0).getTime();
+      return tb - ta;
+    });
+
+    return sorted;
+  }, [tokens, sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
+
+  const visibleTokens = useMemo(
+    () => filteredTokens.slice(0, visibleRows),
+    [filteredTokens, visibleRows]
+  );
+
+  // Загружаем Neynar score для создателей с FID
+useEffect(() => {
+  // локальный сет загруженных fid, чтобы не дёргать API по 100 раз
+  const loadedFids = new Set<number>(Object.keys(creatorScores).map(Number));
+
+  tokens.forEach((t) => {
+    const fid = (t as any).farcaster_fid as number | null | undefined;
+    if (!fid) return;
+    if (loadedFids.has(fid)) return;
+
+    fetch(`/api/token-score?fid=${fid}`)
+      .then((r) => r.json())
+      .then((json) => {
+        if (typeof json.score === "number") {
+          setCreatorScores((prev) => ({
+            ...prev,
+            [fid]: json.score,
+          }));
+        }
+      })
+      .catch(() => {});
+  });
+}, [tokens, creatorScores]);
+
+  // все торгуемые токены для live feed
+  const tradedTokensAll = useMemo(() => {
+    const nonZero = filteredTokens.filter(
+      (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
+    );
+
+    const sorted = [...nonZero].sort((a, b) => {
+      const volA = a.volume_24h_usd ?? 0;
+      const volB = b.volume_24h_usd ?? 0;
+
+      if (volB !== volA) return volB - volA;
+
+      const timeA = new Date(a.first_seen_at || "").getTime();
+      const timeB = new Date(b.first_seen_at || "").getTime();
+      return timeB - timeA;
+    });
+
+    return sorted;
+  }, [filteredTokens]);
+
+  const tradedTokensVisible = useMemo(
+    () => tradedTokensAll.slice(0, visibleFeed),
+    [tradedTokensAll, visibleFeed]
+  );
+
+  async function ensureProfile(username: string) {
+    if (!username) return;
+    if (profiles[username] || profileLoading[username]) return;
+
+    setProfileLoading((prev) => ({ ...prev, [username]: true }));
+    try {
+      const res = await fetch(
+        `/api/farcaster-profile?username=${encodeURIComponent(username)}`
+      );
+      if (!res.ok) return;
+      const data: FarcasterProfile = await res.json();
+      setProfiles((prev) => ({ ...prev, [username]: data }));
+    } catch (e) {
+      console.error("Profile fetch failed for", username, e);
+    } finally {
+      setProfileLoading((prev) => ({ ...prev, [username]: false }));
     }
-
-    loadFollowers(fid);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token?.farcaster_fid]);
-
-  // address ещё не считали
-  if (addressParam === null) {
-    return (
-      <div className="hatchr-root">
-        <main className="hatchr-shell">
-          <p>Loading…</p>
-        </main>
-      </div>
-    );
   }
 
-  // параметр отсутствует — показываем лендинг
-  if (!addressParam) {
-    return <Landing />;
+  function handleCopyAddress(address: string) {
+    if (!address) return;
+    const key = address.toLowerCase();
+    navigator.clipboard
+      ?.writeText(address)
+      .then(() => {
+        setCopiedKey(key);
+        setTimeout(
+          () => setCopiedKey((prev) => (prev === key ? null : prev)),
+          1000
+        );
+      })
+      .catch(() => {});
   }
 
-  if (loading && !token) {
-    return (
-      <div className="hatchr-root">
-        <main className="hatchr-shell">
-          <p>Loading token…</p>
-        </main>
-      </div>
-    );
+  function handleLoadMore() {
+    setVisibleRows((prev) => prev + LEFT_PAGE_SIZE);
+    setVisibleFeed((prev) => prev + RIGHT_PAGE_SIZE);
   }
-
-  if (!token) {
-    return (
-      <div className="hatchr-root">
-        <main className="hatchr-shell">
-          <Link
-            href="/"
-            className="hatchr-nav-pill"
-            style={{ marginBottom: 16 }}
-          >
-            ← Back to Hatchr
-          </Link>
-          <p>Token not found</p>
-        </main>
-      </div>
-    );
-  }
-
-  const { time, date } = formatCreated(token.first_seen_at);
-  const symbol = token.symbol || "";
-  const name = token.name || symbol || "New token";
-  const sourceLabel = token.source === "clanker" ? "Clanker" : "Zora";
-
-  const mcap = formatNumber(token.market_cap_usd);
-  const vol = formatNumber(token.volume_24h_usd);
-  const liq = formatNumber(token.liquidity_usd);
-  const price = formatNumber(token.price_usd);
-
-  const fullAddress = token.token_address || "";
-  const shortAddress =
-    fullAddress.length > 8
-      ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
-      : fullAddress;
-
-  const ultraOgTop = followersInfo?.ultraOg.slice(0, 8) ?? [];
-  const ogTop = followersInfo?.og.slice(0, 12) ?? [];
 
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginBottom: 24,
-          }}
-        >
-          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Token</h1>
-          <Link href="/" className="hatchr-nav-pill">
-            ← Back to Hatchr
-          </Link>
+        {/* top bar */}
+        <div className="hatchr-topbar">
+          <div className="hatchr-brand">
+            <div className="hatchr-brand-logo-circle">
+              <img
+                src="/hatchr-logo.png"
+                alt="Hatchr"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                  const parent = e.currentTarget.parentElement;
+                  if (
+                    parent &&
+                    !parent.querySelector(".hatchr-brand-logo-letter")
+                  ) {
+                    const span = document.createElement("span");
+                    span.className = "hatchr-brand-logo-letter";
+                    span.textContent = "H";
+                    parent.appendChild(span);
+                  }
+                }}
+              />
+            </div>
+            <div className="hatchr-brand-title">
+              <span className="hatchr-brand-title-main">Hatchr</span>
+              <span className="hatchr-brand-title-sub">
+                Analytics layer for Base.
+                Discover new tokens on Base live.
+              </span>
+            </div>
+          </div>
+
+          <nav className="hatchr-nav">
+            <span className="hatchr-nav-pill primary">New tokens</span>
+            <span className="hatchr-nav-pill">Creators</span>
+            <span className="hatchr-nav-pill">Trending</span>
+            <span className="hatchr-nav-pill">API (soon)</span>
+          </nav>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1.4fr)",
-            gap: 24,
-          }}
-        >
-          {/* ЛЕВАЯ КАРТОЧКА */}
-          <section
-            style={{
-              background: "#f9fafb",
-              borderRadius: 24,
-              padding: 24,
-              border: "1px solid #e5e7eb",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap: 16,
-                alignItems: "center",
-                marginBottom: 24,
-              }}
-            >
-              <div
-                style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 24,
-                  background: "#111827",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  overflow: "hidden",
-                  flexShrink: 0,
-                }}
-              >
-                {token.image_url ? (
-                  <img
-                    src={token.image_url}
-                    alt={name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      color: "white",
-                      fontSize: 28,
-                      fontWeight: 600,
-                    }}
+        <div className="hatchr-main-grid">
+          {/* левая колонка */}
+          <section>
+            {/* фильтры */}
+            <section className="hatchr-filters">
+              <div className="hatchr-filters-left">
+                <label className="hatchr-label">
+                  Source:
+                  <select
+                    value={sourceFilter}
+                    onChange={(e) =>
+                      setSourceFilter(
+                        e.target.value as "all" | "clanker" | "zora"
+                      )
+                    }
+                    className="hatchr-select"
                   >
-                    {(symbol || name).trim().charAt(0).toUpperCase() || "₿"}
-                  </span>
-                )}
-              </div>
+                    <option value="all">All</option>
+                    <option value="clanker">Clanker</option>
+                    <option value="zora">Zora</option>
+                  </select>
+                </label>
 
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 18, fontWeight: 600 }}>{name}</span>
-                  {symbol && symbol !== name && (
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: "#6b7280",
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {symbol}
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      padding: "2px 8px",
-                      fontSize: 11,
-                      borderRadius: 999,
-                      background: "#e0f2fe",
-                      color: "#0369a1",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {sourceLabel}
-                  </span>
-                </div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-                  Created: {time} · {date}
-                </div>
-                <div
+                <label className="hatchr-label">
+                  Min Volume (USD):
+                  <input
+                    type="number"
+                    value={minVolume}
+                    onChange={(e) =>
+                      setMinVolume(Number(e.target.value) || 0)
+                    }
+                    className="hatchr-input-number"
+                    style={{ width: 80 }}
+                  />
+                </label>
+
+                <label
+                  className="hatchr-label"
                   style={{
-                    fontSize: 12,
-                    color: "#6b7280",
-                    display: "flex",
+                    display: "inline-flex",
                     alignItems: "center",
                     gap: 6,
-                    marginTop: 4,
+                    fontSize: 12,
                   }}
                 >
-                  Address{" "}
-                  <span style={{ fontWeight: 500 }} title={fullAddress}>
-                    {shortAddress}
-                  </span>
+                  <input
+                    type="checkbox"
+                    checked={hideEmpty}
+                    onChange={(e) => setHideEmpty(e.target.checked)}
+                    style={{ margin: 0 }}
+                  />
+                  Hide empty
+                </label>
+
+                <label
+                  className="hatchr-label"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 12,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={hideZeroMarket}
+                    onChange={(e) => setHideZeroMarket(e.target.checked)}
+                    style={{ margin: 0 }}
+                  />
+                  Hide 0 mcap/vol
+                </label>
+              </div>
+
+              <div className="hatchr-filters-search">
+                <input
+                  type="text"
+                  placeholder="Search name / symbol / address"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="hatchr-search"
+                />
+              </div>
+            </section>
+
+            {error && <div className="hatchr-error">{error}</div>}
+
+            {/* ====== MOBILE: карточки в один столбец ====== */}
+            {isMobile && (
+  <div className="token-card-list">
+    {visibleTokens.length === 0 ? (
+      <div className="hatchr-table-empty">
+        {isLoading
+          ? "Loading Base mints…"
+          : "Nothing here yet. Try again in a minute."}
+      </div>
+    ) : (
+      visibleTokens.map((token) => {
+        const { time, date } = formatCreated(token.first_seen_at);
+        const symbol = token.symbol || "";
+        const name = token.name || symbol || "New token";
+        const username = extractFarcasterUsername(
+          token.farcaster_url || undefined
+        );
+        const mcap = formatNumber(token.market_cap_usd);
+        const vol = formatNumber(token.volume_24h_usd);
+
+        const firstLetter =
+          (symbol || name).trim().charAt(0).toUpperCase() || "₿";
+
+        const sourceLabel =
+          token.source === "clanker" ? "Clanker" : "Zora";
+
+        const creatorFid = (token as any).farcaster_fid as number | null | undefined;
+const creatorScore =
+  creatorFid != null ? creatorScores[creatorFid] : undefined;
+
+        return (
+          <Link
+  key={token.token_address}
+  href={`/token?address=${token.token_address.toLowerCase()}`}
+  className="token-card-link"
+>
+            <div className="token-card">
+              <div className="token-card-top">
+                <div className="token-card-avatar">
+                  {token.image_url ? (
+                    <img
+                      src={token.image_url}
+                      alt={name}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: "16px",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <span>{firstLetter}</span>
+                  )}
+                </div>
+
+                <div className="token-card-main">
+                  <div className="token-card-header">
+                    <div className="token-card-title">
+                      <span className="token-card-name">{name}</span>
+                      {symbol && symbol !== name && (
+                        <span className="token-card-symbol">
+                          &nbsp;{symbol}
+                        </span>
+                      )}
+                    </div>
+                    <div className="token-card-time">
+                      {time} · {date}
+                    </div>
+                  </div>
+
+                  <div className="token-card-stats">
+                    <span>MC: {mcap}</span>
+                    <span>Vol 24h: {vol}</span>
+                  </div>
+
+                  {creatorScore != null && (
+  <div className="token-card-score">
+    Creator score: {creatorScore}
+  </div>
+)}
+
+                  <div className="token-card-source">
+                    <span className="token-card-source-pill">
+                      {sourceLabel}
+                    </span>
+                    {username && (
+                      <>
+                        <span style={{ margin: "0 4px" }}>·</span>
+                        <span className="token-card-creator">
+                          @{username}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
+          </Link>
+        );
+      })
+    )}
+  </div>
+)}
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 16,
-              }}
-            >
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: 16,
-                  padding: 16,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    color: "#9ca3af",
-                    marginBottom: 4,
-                  }}
-                >
-                  Price
+            {/* ====== DESKTOP: карточки как на скетче ====== */}
+{!isMobile && (
+  <div className="desktop-card-grid">
+    {visibleTokens.length === 0 ? (
+      <div className="hatchr-table-empty">
+        {isLoading
+          ? "Loading Base mints…"
+          : "Nothing here yet. Try again in a minute."}
+      </div>
+    ) : (
+      visibleTokens.map((token) => {
+        const rowKey = `${token.source}-${token.token_address}`;
+        const { time, date } = formatCreated(token.first_seen_at);
+
+        const symbol = token.symbol || "";
+        const name = token.name || symbol || "New token";
+        const sourceLabel =
+          token.source === "clanker" ? "Clanker" : "Zora";
+
+        const username = extractFarcasterUsername(
+          token.farcaster_url || undefined
+        );
+        const profile = username ? profiles[username] : undefined;
+
+        const mcap = formatNumber(token.market_cap_usd);
+        const vol = formatNumber(token.volume_24h_usd);
+
+        const fullAddress = token.token_address || "";
+        const shortAddress =
+          fullAddress.length > 8
+            ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
+            : fullAddress;
+
+        const copyKey = fullAddress.toLowerCase();
+        const isCopied = copiedKey === copyKey;
+
+        const xUsername = extractXUsername(token.x_url || undefined);
+        const igUsername = extractInstagramUsername(
+          token.instagram_url || undefined
+        );
+        const ttUsername = extractTiktokUsername(
+          token.tiktok_url || undefined
+        );
+
+        let secondarySocial: { url: string; label: string } | null = null;
+
+        if (!username) {
+          if (token.x_url) {
+            secondarySocial = {
+              url: token.x_url,
+              label: xUsername ? `@${xUsername}` : "X",
+            };
+          } else if (token.instagram_url) {
+            secondarySocial = {
+              url: token.instagram_url,
+              label: igUsername ? `@${igUsername}` : "Instagram",
+            };
+          } else if (token.tiktok_url) {
+            secondarySocial = {
+              url: token.tiktok_url,
+              label: ttUsername ? `@${ttUsername}` : "TikTok",
+            };
+          }
+        }
+
+        const isTooltipVisible = hoveredRowKey === rowKey;
+
+        const creatorFid = (token as any).farcaster_fid as number | null | undefined;
+const creatorScore =
+  creatorFid != null ? creatorScores[creatorFid] : undefined;
+
+        return (
+          <Link
+  key={rowKey}
+  href={`/token?address=${token.token_address.toLowerCase()}`}
+  className="no-underline"
+>
+            <div className="h-card">
+              {/* ВЕРХ КАРТОЧКИ: две колонки */}
+              <div className="h-card-main">
+                {/* ЛЕВАЯ КОЛОНКА: картинка + Address/Source/Socials */}
+                <div className="h-card-left">
+                  <div className="h-card-avatar">
+                    {token.image_url ? (
+                      <img src={token.image_url} alt={name} />
+                    ) : (
+                      <span>
+                        {(symbol || name).trim().charAt(0).toUpperCase() || "₿"}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="h-card-left-meta">
+                    {/* Time */}
+                    <div className="h-card-row">
+                      <span className="h-card-row-label">Time</span>
+                      <span className="h-card-row-value h-card-row-value-time">
+                        {time} · {date}
+                      </span>
+                    </div>
+
+                    {/* Address */}
+                    <div className="h-card-row">
+                      <span className="h-card-row-label">Address</span>
+                      <span className="h-card-row-value h-card-row-value-address">
+                        <span title={fullAddress} style={{ marginRight: 6 }}>
+                          {shortAddress || "—"}
+                        </span>
+                        {fullAddress && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault(); // чтобы не триггерить переход по ссылке
+                              handleCopyAddress(fullAddress);
+                            }}
+                            className="copy-btn"
+                            title="Copy address"
+                          >
+                            {isCopied ? "✓" : "⧉"}
+                          </button>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Source */}
+                    <div className="h-card-row">
+                      <span className="h-card-row-label">Source</span>
+                      <span className="h-card-row-value">{sourceLabel}</span>
+                    </div>
+
+                    {/* Socials */}
+                    <div className="h-card-row">
+                      <span className="h-card-row-label">Socials</span>
+                      <span className="h-card-row-value">
+                        {username ? (
+                          <div
+                            className="desktop-social-wrap"
+                            onMouseEnter={() => {
+                              setHoveredRowKey(rowKey);
+                              ensureProfile(username);
+                            }}
+                            onMouseLeave={() => setHoveredRowKey(null)}
+                          >
+                            <a
+                              href={`https://warpcast.com/${username}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="desktop-farcaster-pill"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <span>@{username}</span>
+                              {profile?.pfp_url ? (
+                                <img
+                                  src={profile.pfp_url}
+                                  alt={profile.display_name || username}
+                                  onError={(e) => {
+                                    e.currentTarget.src = "/farcaster-logo.png";
+                                  }}
+                                />
+                              ) : (
+                                <FarcasterFallbackIcon size={20} />
+                              )}
+                            </a>
+
+                            {creatorScore != null && (
+  <div className="h-card-score-row">
+    <span className="h-card-stats-label">Creator score</span>
+    <span className="h-card-stats-value">{creatorScore}</span>
+  </div>
+)}
+
+                            {isTooltipVisible && profile && (
+                              <div className="desktop-farcaster-tooltip">
+                                <div className="tooltip-header">
+                                  {profile.pfp_url ? (
+                                    <img
+                                      src={profile.pfp_url}
+                                      alt={profile.display_name || username}
+                                      onError={(e) => {
+                                        e.currentTarget.src =
+                                          "/farcaster-logo.png";
+                                      }}
+                                    />
+                                  ) : (
+                                    <FarcasterFallbackIcon size={30} />
+                                  )}
+                                  <div>
+                                    <div className="tooltip-name">
+                                      {profile.display_name ||
+                                        profile.username}
+                                    </div>
+                                    <div className="tooltip-handle">
+                                      @{profile.username}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="tooltip-stats">
+                                  <span>
+                                    <strong>
+                                      {profile.follower_count}
+                                    </strong>{" "}
+                                    followers
+                                  </span>
+                                  <span>
+                                    <strong>
+                                      {profile.following_count}
+                                    </strong>{" "}
+                                    following
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : secondarySocial ? (
+                          <a
+                            href={secondarySocial.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="desktop-secondary-pill"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {secondarySocial.label}
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>${price}</div>
+
+                {/* ПРАВАЯ КОЛОНКА: name/ticker + MC/Vol */}
+                <div className="h-card-right">
+                  <div className="h-card-title">
+                    <span className="h-card-name">{name}</span>
+                    {symbol && symbol !== name && (
+                      <span className="h-card-symbol">{symbol}</span>
+                    )}
+                  </div>
+
+                  <div className="h-card-stats">
+                    <div>
+                      <div className="h-card-stats-label">MC</div>
+                      <div className="h-card-stats-value">{mcap}</div>
+                    </div>
+                    <div>
+                      <div className="h-card-stats-label">Vol 24h</div>
+                      <div className="h-card-stats-value">{vol}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: 16,
-                  padding: 16,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    color: "#9ca3af",
-                    marginBottom: 4,
-                  }}
-                >
-                  Market cap
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>${mcap}</div>
-              </div>
-
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: 16,
-                  padding: 16,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    color: "#9ca3af",
-                    marginBottom: 4,
-                  }}
-                >
-                  Liquidity
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>${liq}</div>
-              </div>
-
-              <div
-                style={{
-                  background: "white",
-                  borderRadius: 16,
-                  padding: 16,
-                  border: "1px solid #e5e7eb",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    color: "#9ca3af",
-                    marginBottom: 4,
-                  }}
-                >
-                  Vol 24h
-                </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>${vol}</div>
-              </div>
-            </div>
-
-            {token.source_url && (
-              <div style={{ marginTop: 24 }}>
+              {/* НИЗ КАРТОЧКИ: кнопка по центру */}
+              {token.source_url && (
                 <a
                   href={token.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "10px 18px",
-                    borderRadius: 999,
-                    background: "#2563eb",
-                    color: "white",
-                    fontSize: 13,
-                    fontWeight: 500,
-                    textDecoration: "none",
-                  }}
+                  className="h-card-button"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   View on {sourceLabel}
                 </a>
+              )}
+            </div>
+          </Link>
+        );
+      })
+    )}
+  </div>
+)}
+            {/* Load more – и для мобилы, и для десктопа */}
+            {filteredTokens.length > visibleRows && (
+              <div style={{ marginTop: 10, textAlign: "center" }}>
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: 12,
+                    borderRadius: 999,
+                    border: "1px solid #d1d5db",
+                    background: "#f9fafb",
+                    cursor: "pointer",
+                  }}
+                >
+                  Load more
+                </button>
               </div>
             )}
           </section>
 
-          {/* ПРАВЫЙ БЛОК: Socials + Hatchr score + Followers */}
-          <section
-            style={{
-              background: "#f9fafb",
-              borderRadius: 24,
-              padding: 24,
-              border: "1px solid #e5e7eb",
-              display: "flex",
-              flexDirection: "column",
-              gap: 20,
-            }}
-          >
-            {/* Socials */}
-            <div>
-              <h2
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  marginBottom: 12,
-                }}
-              >
-                Socials
-              </h2>
-
-              <div
-                style={{
-                  display: "grid",
-                  rowGap: 8,
-                  fontSize: 13,
-                }}
-              >
-                <div>
-                  <span style={{ color: "#6b7280" }}>Farcaster</span>{" "}
-                  {farcasterUsername ? (
-                    <a
-                      href={`https://warpcast.com/${farcasterUsername}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      @{farcasterUsername}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-                <div>
-                  <span style={{ color: "#6b7280" }}>Website</span>{" "}
-                  {token.website_url ? (
-                    <a
-                      href={token.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      {token.website_url.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-                <div>
-                  <span style={{ color: "#6b7280" }}>X</span>{" "}
-                  {token.x_url ? (
-                    <a
-                      href={token.x_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      {token.x_url.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-                <div>
-                  <span style={{ color: "#6b7280" }}>Telegram</span>{" "}
-                  {token.telegram_url ? (
-                    <a
-                      href={token.telegram_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      {token.telegram_url.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-                <div>
-                  <span style={{ color: "#6b7280" }}>Instagram</span>{" "}
-                  {token.instagram_url ? (
-                    <a
-                      href={token.instagram_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      {token.instagram_url.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-                <div>
-                  <span style={{ color: "#6b7280" }}>TikTok</span>{" "}
-                  {token.tiktok_url ? (
-                    <a
-                      href={token.tiktok_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: "#2563eb", textDecoration: "none" }}
-                    >
-                      {token.tiktok_url.replace(/^https?:\/\//, "")}
-                    </a>
-                  ) : (
-                    "—"
-                  )}
-                </div>
-              </div>
+          {/* правая колонка — live traded feed */}
+          <aside className="hatchr-feed">
+            <div className="hatchr-feed-title">
+              <span>Live traded feed</span>
+              <span className="hatchr-feed-badge">non-zero markets</span>
             </div>
-
-            {/* Hatchr / Neynar creator score */}
-            <div
-              style={{
-                background: "white",
-                borderRadius: 16,
-                border: "1px solid #e5e7eb",
-                padding: 16,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  Hatchr creator score
-                </span>
-                {farcasterUsername && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 12,
-                      color: "#6b7280",
-                    }}
-                  >
-                    <FarcasterFallbackIcon size={20} />
-                    <span>@{farcasterUsername}</span>
-                  </div>
-                )}
-              </div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>
-                {scoreLoading
-                  ? "…"
-                  : creatorScore != null
-                  ? creatorScore
-                  : "No data"}
-              </div>
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 11,
-                  color: "#9ca3af",
-                }}
-              >
-                v1 — Hatchr creator score (Neynar score + followers & profile
-                stats).
-              </div>
-            </div>
-
-            {/* Followers breakdown */}
-            <div
-              style={{
-                background: "white",
-                borderRadius: 16,
-                border: "1px solid #e5e7eb",
-                padding: 16,
-                flex: 1,
-                minHeight: 0,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  Creator followers
-                </span>
-                {followersLoading && (
-                  <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                    loading…
+            <ul className="hatchr-feed-list">
+              {tradedTokensVisible.length === 0 && (
+                <li className="hatchr-feed-item">
+                  <span className="hatchr-feed-sub">
+                    Waiting for the first trades on fresh tokens…
                   </span>
-                )}
-              </div>
-
-              {followersInfo ? (
-                <>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 12,
-                      fontSize: 12,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <span>
-                      Total:{" "}
-                      <strong>{followersInfo.total.toLocaleString()}</strong>
-                    </span>
-                    <span>
-                      Ultra-OG (&lt;1000 FID):{" "}
-                      <strong>{followersInfo.ultraOg.length}</strong>
-                    </span>
-                    <span>
-                      OG (1000–9999):{" "}
-                      <strong>{followersInfo.og.length}</strong>
-                    </span>
-                  </div>
-
-                  {ultraOgTop.length > 0 && (
-                    <div style={{ marginBottom: 10 }}>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          textTransform: "uppercase",
-                          color: "#9ca3af",
-                          marginBottom: 4,
-                        }}
-                      >
-                        Ultra-OG handles (&lt;1000 fid)
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                          fontSize: 12,
-                        }}
-                      >
-                        {ultraOgTop.map((f) => (
-                          <a
-                            key={f.fid}
-                            href={`https://warpcast.com/${f.username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 999,
-                              border: "1px solid #e5e7eb",
-                              textDecoration: "none",
-                              color: "#111827",
-                              background: "#f9fafb",
-                            }}
-                          >
-                            @{f.username}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {ogTop.length > 0 && (
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          textTransform: "uppercase",
-                          color: "#9ca3af",
-                          marginBottom: 4,
-                        }}
-                      >
-                        OG handles (1000–9999 fid)
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                          fontSize: 12,
-                        }}
-                      >
-                        {ogTop.map((f) => (
-                          <a
-                            key={f.fid}
-                            href={`https://warpcast.com/${f.username}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: 999,
-                              border: "1px solid #e5e7eb",
-                              textDecoration: "none",
-                              color: "#111827",
-                              background: "#f9fafb",
-                            }}
-                          >
-                            @{f.username}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {ultraOgTop.length === 0 && ogTop.length === 0 && (
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>
-                      No OG followers in top lists yet.
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {followersLoading
-                    ? "Loading followers…"
-                    : "No followers data yet."}
-                </div>
+                  <span className="hatchr-feed-sub">
+                    Soon: Base-wide stats &amp; creator leaderboards.
+                  </span>
+                </li>
               )}
-            </div>
-          </section>
+
+              {tradedTokensVisible.map((t) => {
+                const username = extractFarcasterUsername(
+                  t.farcaster_url || undefined
+                );
+
+                return (
+                  <li
+                    key={t.token_address + (t.first_seen_at || "")}
+                    className="hatchr-feed-item"
+                  >
+                    <div className="hatchr-feed-main">
+                      <a
+                        href={t.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="token"
+                        style={{
+                          textDecoration: "none",
+                          color: "#111827",
+                        }}
+                      >
+                        {t.symbol || t.name || "New token"}
+                      </a>
+                      <span className="meta">
+                        {formatTimeAgo(t.first_seen_at)}
+                      </span>
+                    </div>
+                    <div className="hatchr-feed-sub">
+                      🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
+                      {t.name || "Unnamed"}
+                    </div>
+                    <div className="hatchr-feed-sub">
+                      MC: {formatNumber(t.market_cap_usd)} · Vol 24h:{" "}
+                      {formatNumber(t.volume_24h_usd)}
+                    </div>
+                    {username && (
+                      <div className="hatchr-feed-sub">
+                        by{" "}
+                        <a
+                          href={`https://warpcast.com/${username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            color: "#4f46e5",
+                            textDecoration: "none",
+                          }}
+                        >
+                          @{username}
+                        </a>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </aside>
         </div>
       </main>
     </div>
