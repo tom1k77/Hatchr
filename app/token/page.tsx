@@ -110,7 +110,7 @@ function TokenPageInner() {
 
   const [followers, setFollowers] = useState<FollowersResponse | null>(null);
 
-  // 🟩 Оставили только одно объявление score-переменных
+  // Hatchr / Neynar creator score
   const [creatorScore, setCreatorScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
 
@@ -205,7 +205,7 @@ function TokenPageInner() {
   // Хэндл создателя
   const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
 
-  // Hatchr / Neynar creator score
+  // Neynar score
   useEffect(() => {
     if (!farcasterHandle) return;
 
@@ -361,97 +361,8 @@ function TokenPageInner() {
                 </div>
               </div>
 
-              {token.source_url && (
-                <div className="token-page-actions">
-                  <a
-                    href={token.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-primary-btn"
-                  >
-                    View on {token.source === "clanker" ? "Clanker" : "Zora"}
-                  </a>
-                </div>
-              )}
-            </section>
-
-            {/* правая часть — социальные ссылки */}
-            <aside className="token-page-card token-page-side">
-              <h2 className="token-page-side-title">Socials</h2>
-              <ul className="token-page-social-list">
-                <li>
-                  <span className="token-page-label">Farcaster</span>
-                  {farcasterHandle ? (
-                    <a
-                      href={`https://warpcast.com/${farcasterHandle}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      @{farcasterHandle}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-
-                <li>
-                  <span className="token-page-label">Website</span>
-                  {token.website_url ? (
-                    <a href={token.website_url} target="_blank" rel="noopener noreferrer">
-                      {token.website_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-
-                <li>
-                  <span className="token-page-label">X</span>
-                  {token.x_url ? (
-                    <a href={token.x_url} target="_blank" rel="noopener noreferrer">
-                      {token.x_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-
-                <li>
-                  <span className="token-page-label">Telegram</span>
-                  {token.telegram_url ? (
-                    <a href={token.telegram_url} target="_blank" rel="noopener noreferrer">
-                      {token.telegram_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-
-                <li>
-                  <span className="token-page-label">Instagram</span>
-                  {token.instagram_url ? (
-                    <a href={token.instagram_url} target="_blank" rel="noopener noreferrer">
-                      {token.instagram_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-
-                <li>
-                  <span className="token-page-label">TikTok</span>
-                  {token.tiktok_url ? (
-                    <a href={token.tiktok_url} target="_blank" rel="noopener noreferrer">
-                      {token.tiktok_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-              </ul>
-
-              {/* Hatchr score */}
-              {farcasterHandle && (
+              {/* Hatchr creator score ПОД СТАТАМИ, но ТОЛЬКО если есть реальные данные */}
+              {farcasterHandle && (creatorScore != null || followers) && (
                 <div className="token-page-score-card">
                   <div className="token-page-score-header">
                     <span className="token-page-label">Hatchr creator score</span>
@@ -472,17 +383,101 @@ function TokenPageInner() {
                         Total: <strong>{followers.total.toLocaleString()}</strong>
                       </div>
                       <div>
-                        Ultra-OG (&lt;1000 FID):
-                        <strong> {followers.ultraOg.length}</strong>
+                        Ultra-OG (&lt;1000 FID):{" "}
+                        <strong>{followers.ultraOg.length}</strong>
                       </div>
                       <div>
-                        OG (1000–9999):
-                        <strong> {followers.og.length}</strong>
+                        OG (1000–9999):{" "}
+                        <strong>{followers.og.length}</strong>
                       </div>
                     </div>
                   )}
                 </div>
               )}
+
+              {token.source_url && (
+                <div className="token-page-actions">
+                  <a
+                    href={token.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="token-page-primary-btn"
+                  >
+                    View on {token.source === "clanker" ? "Clanker" : "Zora"}
+                  </a>
+                </div>
+              )}
+            </section>
+
+            {/* правая часть — только социальные ссылки */}
+            <aside className="token-page-card token-page-side">
+              <h2 className="token-page-side-title">Socials</h2>
+              <ul className="token-page-social-list">
+                <li>
+                  <span className="token-page-label">Farcaster</span>
+                  {farcasterHandle ? (
+                    <a
+                      href={`https://warpcast.com/${farcasterHandle}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      @{farcasterHandle}
+                    </a>
+                  ) : (
+                    <span className="token-page-muted">—</span>
+                  )}
+                </li>
+                <li>
+                  <span className="token-page-label">Website</span>
+                  {token.website_url ? (
+                    <a href={token.website_url} target="_blank" rel="noopener noreferrer">
+                      {token.website_url}
+                    </a>
+                  ) : (
+                    <span className="token-page-muted">—</span>
+                  )}
+                </li>
+                <li>
+                  <span className="token-page-label">X</span>
+                  {token.x_url ? (
+                    <a href={token.x_url} target="_blank" rel="noopener noreferrer">
+                      {token.x_url}
+                    </a>
+                  ) : (
+                    <span className="token-page-muted">—</span>
+                  )}
+                </li>
+                <li>
+                  <span className="token-page-label">Telegram</span>
+                  {token.telegram_url ? (
+                    <a href={token.telegram_url} target="_blank" rel="noopener noreferrer">
+                      {token.telegram_url}
+                    </a>
+                  ) : (
+                    <span className="token-page-muted">—</span>
+                  )}
+                </li>
+                <li>
+                  <span className="token-page-label">Instagram</span>
+                  {token.instagram_url ? (
+                    <a href={token.instagram_url} target="_blank" rel="noopener noreferrer">
+                      {token.instagram_url}
+                    </a>
+                  ) : (
+                    <span className="token-page-muted">—</span>
+                  )}
+                </li>
+                <li>
+                  <span className="token-page-label">TikTok</span>
+                  {token.tiktok_url ? (
+                    <a href={token.tiktok_url} target="_blank" rel="noopener noreferrer">
+                      {token.tiktok_url}
+                    </a>
+                  ) : (
+                    <span className="token-page-muted">—</span>
+                  )}
+                </li>
+              </ul>
             </aside>
           </div>
         )}
