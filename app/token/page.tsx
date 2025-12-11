@@ -203,40 +203,46 @@ function TokenPageInner() {
       .catch(() => {});
   }, [creatorFid]);
 
-  const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
+  // Хэндл создателя
+const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
 
-  // Грузим Hatchr / Neynar creator score по username
-  useEffect(() => {
-    if (!farcasterHandle) return;
+// Hatchr / Neynar creator score для карточки токена
+const [creatorScore, setCreatorScore] = useState<number | null>(null);
+const [scoreLoading, setScoreLoading] = useState(false);
 
-    let cancelled = false;
+useEffect(() => {
+  // если хэндла нет — ничего не делаем
+  if (!farcasterHandle) return;
 
-    async function loadScore() {
-      try {
-        setScoreLoading(true);
-        setCreatorScore(null);
+  let cancelled = false;
 
-        const res = await fetch(
-          `/api/token-score?username=${encodeURIComponent(farcasterHandle)}`
-        );
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!cancelled && typeof json.score === "number") {
-          setCreatorScore(json.score);
-        }
-      } catch {
-        // тихо игнорируем
-      } finally {
-        if (!cancelled) setScoreLoading(false);
+  async function loadScore(username: string) {
+    try {
+      setScoreLoading(true);
+      setCreatorScore(null);
+
+      const res = await fetch(
+        `/api/token-score?username=${encodeURIComponent(username)}`
+      );
+      if (!res.ok) return;
+
+      const json = await res.json();
+      if (!cancelled && typeof json.score === "number") {
+        setCreatorScore(json.score);
       }
+    } catch (e) {
+      console.error("token-score on token page failed", e);
+    } finally {
+      if (!cancelled) setScoreLoading(false);
     }
+  }
 
-    loadScore();
+  loadScore(farcasterHandle);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [farcasterHandle]);
+  return () => {
+    cancelled = true;
+  };
+}, [farcasterHandle]);
 
   const { time, date } = useMemo(
     () => formatCreated(token?.first_seen_at ?? null),
