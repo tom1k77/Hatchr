@@ -23,16 +23,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    let url: string;
-    if (fidParam) {
-      url = `https://api.neynar.com/v2/farcaster/user?fid=${encodeURIComponent(
-        fidParam
-      )}`;
-    } else {
-      url = `https://api.neynar.com/v2/farcaster/user?username=${encodeURIComponent(
-        usernameParam as string
-      )}`;
-    }
+    // Можно звать либо по fid, либо по username — что есть, то и используем
+    const qs = fidParam
+      ? `fid=${encodeURIComponent(fidParam)}`
+      : `username=${encodeURIComponent(usernameParam as string)}`;
+
+    const url = `https://api.neynar.com/v2/farcaster/user?${qs}`;
 
     const resp = await fetch(url, {
       headers: {
@@ -43,32 +39,44 @@ export async function GET(req: NextRequest) {
     });
 
     if (!resp.ok) {
-      console.error("Neynar error", resp.status);
+      console.error("Neynar user error", resp.status);
       return NextResponse.json(
-        { error: "Failed Neynar" },
+        { error: `Failed Neynar: ${resp.status}` },
         { status: 500 }
       );
     }
 
-    const json = await resp.json();
-    const user = json?.user;
+    const json: any = await resp.json();
 
-    const rawScore =
-      user?.score ??
-      user?.experimental?.neynar_user_score ??
-      0;
+    // Подстраховка: разные возможные места, где Neynar может положить score
+    const u = json.user || json.result?.user || json;
 
-    const score = typeof rawScore === "number" ? rawScore : 0;
+    const candidates = [
+      u?.score,
+      u?.neynar_user_score,
+      u?.experimental?.neynar_user_score,
+      u?.experimental?.user_score,
+    ];
 
+    let score: number | null = null;
+    for (const c of candidates) {
+      if (typeof c === "number" && Number.isFinite(c)) {
+        score = c;
+        break;
+      }
+    }
+
+    // Если Neynar вообще не вернул скор — оставляем null,
+    // на фронте это показывается как "No data"
     return NextResponse.json({
-      fid: user?.fid ?? (fidParam ? Number(fidParam) : undefined),
-      username: user?.username ?? usernameParam ?? null,
+      fid: fidParam ? Number(fidParam) : u?.fid ?? null,
+      username: u?.username ?? usernameParam ?? null,
       score,
     });
   } catch (e) {
-    console.error("token-score error", e);
+    console.error("token-score route error", e);
     return NextResponse.json(
-      { error: "Internal error" },
+      { error: "Internal error in token-score" },
       { status: 500 }
     );
   }
