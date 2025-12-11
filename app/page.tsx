@@ -702,14 +702,14 @@ export default function TokenPage() {
                   : "No data"}
               </div>
               <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 11,
-                  color: "#9ca3af",
-                }}
-              >
-                v1 — Neynar creator score. Followers breakdown below.
-              </div>
+  style={{
+    marginTop: 4,
+    fontSize: 11,
+    color: "#9ca3af",
+  }}
+>
+  v1 — Hatchr creator score (Neynar score + followers & profile stats).
+</div>
             </div>
 
             {/* Followers breakdown */}
