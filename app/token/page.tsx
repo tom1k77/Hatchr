@@ -88,8 +88,7 @@ function extractFarcasterUsername(url?: string | null): string | null {
   try {
     const u = new URL(url);
     const parts = u.pathname.split("/").filter(Boolean);
-    if (!parts.length) return null;
-    return parts[parts.length - 1];
+    return parts.length ? parts[parts.length - 1] : null;
   } catch {
     return null;
   }
@@ -111,6 +110,7 @@ function TokenPageInner() {
 
   const [followers, setFollowers] = useState<FollowersResponse | null>(null);
 
+  // 🟩 Оставили только одно объявление score-переменных
   const [creatorScore, setCreatorScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
 
@@ -124,7 +124,7 @@ function TokenPageInner() {
       : fullAddress;
 
   // ссылка на Basescan
-  const baseScanUrl: string | undefined = fullAddress
+  const baseScanUrl = fullAddress
     ? `https://basescan.org/token/${fullAddress}`
     : undefined;
 
@@ -163,9 +163,8 @@ function TokenPageInner() {
 
         const data: TokensResponse = await res.json();
         const found =
-          data.items.find(
-            (t) => t.token_address.toLowerCase() === normalizedAddress
-          ) || null;
+          data.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) ||
+          null;
 
         if (cancelled) return;
 
@@ -192,7 +191,7 @@ function TokenPageInner() {
   }, [normalizedAddress, status]);
 
   // Грузим OG-фолловеров создателя
-  const creatorFid = (token as any)?.farcaster_fid as number | null | undefined;
+  const creatorFid = token?.farcaster_fid ?? null;
 
   useEffect(() => {
     if (!creatorFid) return;
@@ -204,45 +203,41 @@ function TokenPageInner() {
   }, [creatorFid]);
 
   // Хэндл создателя
-const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
+  const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
 
-// Hatchr / Neynar creator score для карточки токена
-const [creatorScore, setCreatorScore] = useState<number | null>(null);
-const [scoreLoading, setScoreLoading] = useState(false);
+  // Hatchr / Neynar creator score
+  useEffect(() => {
+    if (!farcasterHandle) return;
 
-useEffect(() => {
-  // если хэндла нет — ничего не делаем
-  if (!farcasterHandle) return;
+    let cancelled = false;
 
-  let cancelled = false;
+    async function loadScore(username: string) {
+      try {
+        setScoreLoading(true);
+        setCreatorScore(null);
 
-  async function loadScore(username: string) {
-    try {
-      setScoreLoading(true);
-      setCreatorScore(null);
+        const res = await fetch(
+          `/api/token-score?username=${encodeURIComponent(username)}`
+        );
+        if (!res.ok) return;
 
-      const res = await fetch(
-        `/api/token-score?username=${encodeURIComponent(username)}`
-      );
-      if (!res.ok) return;
-
-      const json = await res.json();
-      if (!cancelled && typeof json.score === "number") {
-        setCreatorScore(json.score);
+        const json = await res.json();
+        if (!cancelled && typeof json.score === "number") {
+          setCreatorScore(json.score);
+        }
+      } catch (e) {
+        console.error("token-score on token page failed", e);
+      } finally {
+        if (!cancelled) setScoreLoading(false);
       }
-    } catch (e) {
-      console.error("token-score on token page failed", e);
-    } finally {
-      if (!cancelled) setScoreLoading(false);
     }
-  }
 
-  loadScore(farcasterHandle);
+    loadScore(farcasterHandle);
 
-  return () => {
-    cancelled = true;
-  };
-}, [farcasterHandle]);
+    return () => {
+      cancelled = true;
+    };
+  }, [farcasterHandle]);
 
   const { time, date } = useMemo(
     () => formatCreated(token?.first_seen_at ?? null),
@@ -260,11 +255,11 @@ useEffect(() => {
     <div className="hatchr-root">
       <main className="hatchr-shell">
         <div className="token-page-header">
-  <Link href="/" className="token-page-back">
-    ← Back to Hatchr
-  </Link>
-  <h1 className="token-page-title">Token</h1>
-</div>
+          <Link href="/" className="token-page-back">
+            ← Back to Hatchr
+          </Link>
+          <h1 className="token-page-title">Token</h1>
+        </div>
 
         {!normalizedAddress || status === "invalid" ? (
           <div className="token-page-card">
@@ -292,17 +287,9 @@ useEffect(() => {
               <div className="token-page-main-header">
                 <div className="token-page-avatar">
                   {token.image_url ? (
-                    <img
-                      src={token.image_url}
-                      alt={token.name || token.symbol}
-                    />
+                    <img src={token.image_url} alt={token.name || token.symbol} />
                   ) : (
-                    <span>
-                      {(token.symbol || token.name || "T")
-                        .trim()
-                        .charAt(0)
-                        .toUpperCase()}
-                    </span>
+                    <span>{(token.symbol || token.name || "T").charAt(0).toUpperCase()}</span>
                   )}
                 </div>
 
@@ -312,9 +299,7 @@ useEffect(() => {
                       {token.name || token.symbol || "New token"}
                     </span>
                     {token.symbol && token.symbol !== token.name && (
-                      <span className="token-page-symbol">
-                        {token.symbol}
-                      </span>
+                      <span className="token-page-symbol">{token.symbol}</span>
                     )}
                     <span className="token-page-source-pill">
                       {token.source === "clanker" ? "Clanker" : "Zora"}
@@ -346,9 +331,7 @@ useEffect(() => {
                         <button
                           type="button"
                           className="token-page-copy-btn"
-                          onClick={() =>
-                            navigator.clipboard?.writeText(fullAddress)
-                          }
+                          onClick={() => navigator.clipboard?.writeText(fullAddress)}
                           title="Copy address"
                         >
                           ⧉
@@ -386,14 +369,13 @@ useEffect(() => {
                     rel="noopener noreferrer"
                     className="token-page-primary-btn"
                   >
-                    View on{" "}
-                    {token.source === "clanker" ? "Clanker" : "Zora"}
+                    View on {token.source === "clanker" ? "Clanker" : "Zora"}
                   </a>
                 </div>
               )}
             </section>
 
-            {/* правая часть — социальные ссылки + Hatchr score */}
+            {/* правая часть — социальные ссылки */}
             <aside className="token-page-card token-page-side">
               <h2 className="token-page-side-title">Socials</h2>
               <ul className="token-page-social-list">
@@ -411,70 +393,55 @@ useEffect(() => {
                     <span className="token-page-muted">—</span>
                   )}
                 </li>
+
                 <li>
                   <span className="token-page-label">Website</span>
                   {token.website_url ? (
-                    <a
-                      href={token.website_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href={token.website_url} target="_blank" rel="noopener noreferrer">
                       {token.website_url}
                     </a>
                   ) : (
                     <span className="token-page-muted">—</span>
                   )}
                 </li>
+
                 <li>
                   <span className="token-page-label">X</span>
                   {token.x_url ? (
-                    <a
-                      href={token.x_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href={token.x_url} target="_blank" rel="noopener noreferrer">
                       {token.x_url}
                     </a>
                   ) : (
                     <span className="token-page-muted">—</span>
                   )}
                 </li>
+
                 <li>
                   <span className="token-page-label">Telegram</span>
                   {token.telegram_url ? (
-                    <a
-                      href={token.telegram_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href={token.telegram_url} target="_blank" rel="noopener noreferrer">
                       {token.telegram_url}
                     </a>
                   ) : (
                     <span className="token-page-muted">—</span>
                   )}
                 </li>
+
                 <li>
                   <span className="token-page-label">Instagram</span>
                   {token.instagram_url ? (
-                    <a
-                      href={token.instagram_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href={token.instagram_url} target="_blank" rel="noopener noreferrer">
                       {token.instagram_url}
                     </a>
                   ) : (
                     <span className="token-page-muted">—</span>
                   )}
                 </li>
+
                 <li>
                   <span className="token-page-label">TikTok</span>
                   {token.tiktok_url ? (
-                    <a
-                      href={token.tiktok_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
+                    <a href={token.tiktok_url} target="_blank" rel="noopener noreferrer">
                       {token.tiktok_url}
                     </a>
                   ) : (
@@ -483,24 +450,18 @@ useEffect(() => {
                 </li>
               </ul>
 
-              {/* Hatchr creator score + followers breakdown */}
+              {/* Hatchr score */}
               {farcasterHandle && (
                 <div className="token-page-score-card">
                   <div className="token-page-score-header">
-                    <span className="token-page-label">
-                      Hatchr creator score
-                    </span>
-                    <span className="token-page-score-handle">
-                      @{farcasterHandle}
-                    </span>
+                    <span className="token-page-label">Hatchr creator score</span>
+                    <span className="token-page-score-handle">@{farcasterHandle}</span>
                   </div>
+
                   <div className="token-page-score-value">
-                    {scoreLoading
-                      ? "…"
-                      : creatorScore != null
-                      ? creatorScore
-                      : "No data"}
+                    {scoreLoading ? "…" : creatorScore ?? "No data"}
                   </div>
+
                   <div className="token-page-score-caption">
                     v1 — Neynar creator score + OG followers breakdown.
                   </div>
@@ -508,18 +469,15 @@ useEffect(() => {
                   {followers && (
                     <div className="token-page-followers-block">
                       <div>
-                        Total:{" "}
-                        <strong>
-                          {followers.total.toLocaleString()}
-                        </strong>
+                        Total: <strong>{followers.total.toLocaleString()}</strong>
                       </div>
                       <div>
-                        Ultra-OG (&lt;1000 FID):{" "}
-                        <strong>{followers.ultraOg.length}</strong>
+                        Ultra-OG (&lt;1000 FID):
+                        <strong> {followers.ultraOg.length}</strong>
                       </div>
                       <div>
-                        OG (1000–9999):{" "}
-                        <strong>{followers.og.length}</strong>
+                        OG (1000–9999):
+                        <strong> {followers.og.length}</strong>
                       </div>
                     </div>
                   )}
