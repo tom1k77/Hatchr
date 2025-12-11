@@ -260,11 +260,11 @@ useEffect(() => {
     <div className="hatchr-root">
       <main className="hatchr-shell">
         <div className="token-page-header">
-          <Link href="/" className="token-page-back">
-            ← Back to Hatchr
-          </Link>
-          <h1 className="token-page-title">Token</h1>
-        </div>
+  <Link href="/" className="token-page-back">
+    ← Back to Hatchr
+  </Link>
+  <h1 className="token-page-title">Token</h1>
+</div>
 
         {!normalizedAddress || status === "invalid" ? (
           <div className="token-page-card">
