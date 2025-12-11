@@ -207,37 +207,35 @@ function TokenPageInner() {
 
   // Neynar score
   useEffect(() => {
-    if (!farcasterHandle) return;
+  if (!creatorFid) return;
 
-    let cancelled = false;
+  let cancelled = false;
 
-    async function loadScore(username: string) {
-      try {
-        setScoreLoading(true);
-        setCreatorScore(null);
+  async function loadScore(fid: number) {
+    try {
+      setScoreLoading(true);
+      setCreatorScore(null);
 
-        const res = await fetch(
-          `/api/token-score?username=${encodeURIComponent(username)}`
-        );
-        if (!res.ok) return;
+      const res = await fetch(`/api/token-score?fid=${fid}`);
+      if (!res.ok) return;
 
-        const json = await res.json();
-        if (!cancelled && typeof json.score === "number") {
-          setCreatorScore(json.score);
-        }
-      } catch (e) {
-        console.error("token-score on token page failed", e);
-      } finally {
-        if (!cancelled) setScoreLoading(false);
+      const json = await res.json();
+      if (!cancelled && typeof json.score === "number") {
+        setCreatorScore(json.score);
       }
+    } catch (e) {
+      console.error("token-score on token page failed", e);
+    } finally {
+      if (!cancelled) setScoreLoading(false);
     }
+  }
 
-    loadScore(farcasterHandle);
+  loadScore(creatorFid);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [farcasterHandle]);
+  return () => {
+    cancelled = true;
+  };
+}, [creatorFid]);
 
   const { time, date } = useMemo(
     () => formatCreated(token?.first_seen_at ?? null),
@@ -476,6 +474,18 @@ function TokenPageInner() {
                   ) : (
                     <span className="token-page-muted">—</span>
                   )}
+                  {creatorFid && (
+  <li>
+    <span className="token-page-label">Neynar score</span>
+    <span>
+      {scoreLoading
+        ? "…"
+        : creatorScore != null
+        ? creatorScore.toFixed(2)
+        : "No data"}
+    </span>
+  </li>
+)}
                 </li>
               </ul>
             </aside>
