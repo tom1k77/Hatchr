@@ -107,6 +107,72 @@ function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
   );
 }
 
+/**
+ * Лендовая страница, когда нет ?address=
+ */
+function Landing() {
+  return (
+    <div className="hatchr-root">
+      <main className="hatchr-shell">
+        <h1
+          style={{
+            fontSize: 22,
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          Hatchr — Base token radar
+        </h1>
+
+        <p
+          style={{
+            fontSize: 14,
+            color: "#6b7280",
+            marginBottom: 12,
+          }}
+        >
+          This view is a detailed token card. Open it with a token address in
+          the URL to see full metrics, socials and Hatchr creator score.
+        </p>
+
+        <p
+          style={{
+            fontSize: 13,
+            color: "#6b7280",
+            marginBottom: 4,
+          }}
+        >
+          Example:
+        </p>
+
+        <code
+          style={{
+            display: "inline-block",
+            padding: "8px 10px",
+            borderRadius: 8,
+            background: "#111827",
+            color: "white",
+            fontSize: 12,
+          }}
+        >
+          https://hatchr.vercel.app?address=0x1234…abcd
+        </code>
+
+        <p
+          style={{
+            fontSize: 12,
+            color: "#9ca3af",
+            marginTop: 12,
+          }}
+        >
+          Later we can plug this into the main Hatchr feed / Farcaster Mini App,
+          so users land here directly from curated token lists.
+        </p>
+      </main>
+    </div>
+  );
+}
+
 export default function TokenPage() {
   // address читаем из location.search на клиенте
   const [addressParam, setAddressParam] = useState<string | null>(null);
@@ -237,15 +303,9 @@ export default function TokenPage() {
     );
   }
 
-  // параметр отсутствует
+  // параметр отсутствует — показываем лендинг
   if (!addressParam) {
-    return (
-      <div className="hatchr-root">
-        <main className="hatchr-shell">
-          <p>Missing address</p>
-        </main>
-      </div>
-    );
+    return <Landing />;
   }
 
   if (loading && !token) {
@@ -262,7 +322,11 @@ export default function TokenPage() {
     return (
       <div className="hatchr-root">
         <main className="hatchr-shell">
-          <Link href="/" className="hatchr-nav-pill" style={{ marginBottom: 16 }}>
+          <Link
+            href="/"
+            className="hatchr-nav-pill"
+            style={{ marginBottom: 16 }}
+          >
             ← Back to Hatchr
           </Link>
           <p>Token not found</p>
@@ -436,9 +500,7 @@ export default function TokenPage() {
                 >
                   Price
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>
-                  ${price}
-                </div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>${price}</div>
               </div>
 
               <div
@@ -702,14 +764,15 @@ export default function TokenPage() {
                   : "No data"}
               </div>
               <div
-  style={{
-    marginTop: 4,
-    fontSize: 11,
-    color: "#9ca3af",
-  }}
->
-  v1 — Hatchr creator score (Neynar score + followers & profile stats).
-</div>
+                style={{
+                  marginTop: 4,
+                  fontSize: 11,
+                  color: "#9ca3af",
+                }}
+              >
+                v1 — Hatchr creator score (Neynar score + followers & profile
+                stats).
+              </div>
             </div>
 
             {/* Followers breakdown */}
