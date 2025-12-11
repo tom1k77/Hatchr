@@ -14,25 +14,24 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const fidParam = searchParams.get("fid");
-    const usernameParam = searchParams.get("username");
 
-    if (!fidParam && !usernameParam) {
+    if (!fidParam) {
       return NextResponse.json(
-        { error: "Missing fid or username" },
+        { error: "Missing fid" },
         { status: 400 }
       );
     }
 
-    // Формируем bulk-запрос
-    const qs = fidParam
-      ? `fids[]=${encodeURIComponent(fidParam)}`
-      : `usernames[]=${encodeURIComponent(usernameParam!)}`;
-
-    const url = `https://api.neynar.com/v2/farcaster/user/bulk?${qs}`;
+    // Берём инфу о пользователе по FID (bulk, но с одним fid)
+    const url = `https://api.neynar.com/v2/farcaster/user/bulk?fids=${encodeURIComponent(
+      fidParam
+    )}`;
 
     const resp = await fetch(url, {
       headers: {
-        "api_key": NEYNAR_API_KEY,
+        // Neynar принимает api_key в заголовке; на всякий добавим и x-api-key
+        api_key: NEYNAR_API_KEY,
+        "x-api-key": NEYNAR_API_KEY,
       },
       cache: "no-store",
     });
@@ -47,20 +46,39 @@ export async function GET(req: NextRequest) {
 
     const json: any = await resp.json();
 
-    const user = json.users?.[0];
+    // Находим юзера в разных возможных форматах ответа
+    const user =
+      json.user ||
+      json.result?.user ||
+      (Array.isArray(json.users) ? json.users[0] : null) ||
+      json;
+
     if (!user) {
       return NextResponse.json(
-        { error: "User not found in Neynar bulk" },
+        { error: "User not found in Neynar response" },
         { status: 404 }
       );
     }
 
+    const candidates = [
+      user.score,
+      user.neynar_user_score,
+      user.experimental?.neynar_user_score,
+      user.experimental?.user_score,
+    ];
+
+    let score: number | null = null;
+    for (const c of candidates) {
+      if (typeof c === "number" && Number.isFinite(c)) {
+        score = c;
+        break;
+      }
+    }
+
     return NextResponse.json({
-      fid: user.fid,
-      username: user.username,
-      creator_score: user.creator_score ?? null,
-      engagement_score: user.engagement_score ?? null,
-      follower_count: user.follower_count ?? null,
+      fid: Number(fidParam),
+      username: user.username ?? null,
+      score,
     });
   } catch (e) {
     console.error("token-score route error", e);
