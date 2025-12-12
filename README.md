@@ -1,130 +1,152 @@
-Hatchr — Lightpaper / Builder Documentation (MVP)
+> ⚠️ This document describes the MVP state of Hatchr.  
+> The platform is under active development.
 
-1. Overview
+# Hatchr — Lightpaper / Builder Documentation (MVP)
 
-Hatchr is a Base-native token discovery and signal platform designed to help users identify promising tokens early by combining onchain data and social signals.
+Hatchr is a **Base-native token discovery and signal platform** designed to help users identify promising tokens early by combining onchain data and social signals.
 
-Core idea:
+> **Core idea:**  
+> Too many tokens, too little signal. Hatchr aggregates, scores, and surfaces what matters — early.
 
-Too many tokens, too little signal. Hatchr aggregates, scores, and surfaces what matters — early.
+**Target users**
+- Base traders  
+- Early token hunters  
+- Builders tracking ecosystem momentum  
 
-Target users:
-	•	Base traders
-	•	Early token hunters
-	•	Builders tracking ecosystem momentum
+---
 
+## 1. Problem
 
-2. Problem
-	•	Hundreds of tokens launch daily on Base (Zora, Clanker, etc).
-	•	Information is fragmented across:
-   - launchpads
-   - explorers
-	 - X
-	 - Farcaster
-	•	Traders miss early opportunities or react too late.
-	•	No unified signal layer focused specifically on Base.
+Hundreds of tokens launch daily on Base (Zora, Clanker, direct deploys).
 
+Information is fragmented across:
+- Launchpads
+- Explorers
+- Social platforms:
+  - X 
+  - Farcaster
 
-3. Solution
+As a result:
+- Traders miss early opportunities or react too late
+- Signals appear first in social, not dashboards
+- There is no unified **Base-focused signal layer**
+
+---
+
+## 2. Solution
 
 Hatchr provides:
-	•	Unified token feed (Zora + Clanker → expanding to full Base ecosystem)
-	•	Hatchr Score — a composite metric combining:
-	 - liquidity & price data
-	 - social credibility
-	 - activity & momentum
-	•	Token cards with real-time insights
-	•	Future: alerts, social news, trading access
 
+- **Unified token feed**
+  - Zora
+  - Clanker
+  - Expanding to the full Base ecosystem
+- **Hatchr Score**
+  - Liquidity & price data
+  - Social credibility
+  - Activity & momentum
+- **Token cards**
+  - Real-time insights
+  - Key metrics and links
 
-4. Current MVP (What’s live)
+**Planned:** alerts, social news, and direct trading access.
 
-✅ Aggregation of tokens from:
-	•	Zora
-	•	Clanker
+---
 
-✅ Hatchr Score (v1):
-	•	Activity
-	•	Social presence (Neynar-based signals)
+## 3. Current MVP (What’s Live)
 
-✅ Token pages:
-	•	Price
-	•	Liquidity
-	•	Basic analytics
-	•	External links
+✅ **Token aggregation**
+- Zora
+- Clanker
 
-✅ Live demo:
-	•	URL: https://hatchr.vercel.app
+✅ **Hatchr Score (v1)**
+- Activity signals
+- Social presence (Neynar-based)
 
+✅ **Token pages**
+- Price
+- Liquidity
+- Basic analytics
+- External links
 
-5. Hatchr Score (High-level)
+🔗 **Live demo:**  
+https://hatchr.vercel.app
 
-Hatchr Score is designed to surface early momentum without rewarding spam.
+---
 
-Inputs (MVP):
-	•	Liquidity depth
-	•	Price behavior
-	•	Social activity (Farcaster / Neynar)
-	•	Account quality signals
+## 4. Hatchr Score (High-level)
 
-The score is intentionally simple at MVP stage and will evolve as more data sources are added.
+Hatchr Score is designed to surface **early momentum without rewarding spam**.
 
+**Inputs (MVP):**
+- Liquidity depth
+- Price behavior
+- Social activity (Farcaster / Neynar)
+- Account quality signals
 
-6. Roadmap (Grant Scope)
+The score is intentionally simple at the MVP stage and will evolve as more data sources are added.
 
-Phase 1 — Token Universe Expansion
-	•	Index major Base launchpads
-	•	Include direct contract deployments
-	•	Add “reputation tokens” (established Base projects)
+---
 
-Phase 2 — Social Signals Layer
-	•	X mentions:
-	 - contract address
-	 - ticker
-	•	Trusted account whitelist
-	•	News surfaced directly on token pages
+## 5. Roadmap (Grant Scope)
 
-Phase 3 — Distribution
-	•	Farcaster mini app
-	•	Base App integration
+### Phase 1 — Token Universe Expansion
+- Index major Base launchpads
+- Include direct contract deployments
+- Add “reputation tokens” (established Base projects)
 
-Phase 4 — Alerts & Notifications
-	•	New high-score token alerts
-	•	Sudden social momentum alerts
-	•	Bullish news alerts
+### Phase 2 — Social Signals Layer
+- X mentions:
+  - Contract address
+  - Ticker
+- Trusted account whitelist
+- Social news surfaced on token pages
 
+### Phase 3 — Distribution
+- Farcaster mini app
+- Base App integration
 
-7. Why Base
-	•	Hatchr is Base-only by design
-	•	Built to strengthen:
-   - token discovery
-	 - trading activity
-	 - ecosystem visibility
-	•	Direct value for Base users, traders, and builders
+### Phase 4 — Alerts & Notifications
+- New high-score token alerts
+- Sudden social momentum alerts
+- Bullish news alerts
 
-Hatchr acts as an information layer that helps Base users move faster and with more confidence.
+---
 
+## 6. Why Base
 
-8. Open & Extensible
-	•	Public frontend
-	•	Clear roadmap toward:
-   - APIs
-	 - integrations
-	 - ecosystem tooling
+- Hatchr is **Base-only by design**
+- Built to strengthen:
+  - Token discovery
+  - Trading activity
+  - Ecosystem visibility
 
-Future potential:
-	•	Public Hatchr Score API
-	•	Partner integrations with Base-native apps
-	•	Community-curated signals
+Hatchr acts as an **information layer** that helps Base users move faster and with more confidence.
 
+---
 
-9. Grant Usage
+## 7. Open & Extensible
+
+- Public frontend
+- Clear roadmap toward:
+  - APIs
+  - Integrations
+  - Ecosystem tooling
+
+**Future potential**
+- Public Hatchr Score API
+- Partner integrations with Base-native apps
+- Community-curated signals
+
+---
+
+## 8. Grant Usage
 
 Funds will be used for:
-	•	Backend development
-	•	Indexing infrastructure
-	•	Social signal processing
-	•	Alert & notification systems
+- Backend development
+- Indexing infrastructure
+- Social signal processing
+- Alert & notification systems
 
-Outcome:
+**Outcome:**  
 A stronger, more informative Base ecosystem with better signal discovery.
