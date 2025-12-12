@@ -108,6 +108,10 @@ function TokenPageInner() {
   const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
+  const [followersQuality, setFollowersQuality] = useState<number | null>(null);
+  const [followersAnalytics, setFollowersAnalytics] = useState<any>(null);
+  const [tokenMentions, setTokenMentions] = useState<any>(null);
+  const [hatchrScore, setHatchrScore] = useState<number | null>(null);
 
   const fullAddress = token?.token_address ?? "";
   const shortAddress =
@@ -138,7 +142,9 @@ function TokenPageInner() {
       try {
         setIsLoading(true);
 
-        const res = await fetch("/api/tokens", { cache: "no-store" });
+        const res = await fetch(`/api/token-score?${qs}&address=${encodeURIComponent(normalizedAddress)}`, {
+  cache: "no-store",
+});
         if (!res.ok) {
           console.error("Tokens API error:", res.status);
           if (!cancelled) setStatus("error");
@@ -208,6 +214,23 @@ function TokenPageInner() {
 
         if (cancelled) return;
 
+        if (typeof json?.followers_quality === "number" && Number.isFinite(json.followers_quality)) {
+  setFollowersQuality(json.followers_quality);
+} else {
+  setFollowersQuality(null);
+}
+
+setFollowersAnalytics(json?.followers_analytics ?? null);
+setTokenMentions(json?.token_mentions ?? null);
+
+if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
+  setHatchrScore(json.hatchr_score);
+} else if (typeof json?.hatchr_score_v1 === "number" && Number.isFinite(json.hatchr_score_v1)) {
+  setHatchrScore(json.hatchr_score_v1);
+} else {
+  setHatchrScore(null);
+}
+
         if (typeof json?.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
           setCreatorNeynarScore(json.neynar_score);
         }
@@ -237,13 +260,7 @@ function TokenPageInner() {
   }, [token, creatorFidFromToken, farcasterHandle]);
 
   // ===== Hatchr score v1 (на базе Neynar) =====
-  const creator_score = creatorNeynarScore ?? 0;
-  const followers_quality = creatorNeynarScore != null ? creatorNeynarScore * followersNorm(followerCount) : 0;
-
-  const hatchr_score =
-    creatorNeynarScore == null
-      ? null
-      : round2(0.6 * creator_score + 0.4 * followers_quality);
+  const hatchr_score = hatchrScore != null ? round2(hatchrScore) : null;
 
   const identityFid = creatorFidFromToken ?? resolvedFid ?? null;
   const identityHandle = farcasterHandle ? `@${farcasterHandle}` : resolvedUsername ? `@${resolvedUsername}` : "—";
@@ -451,9 +468,19 @@ function TokenPageInner() {
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
                     creator_score: {creatorNeynarScore != null ? round2(creator_score) : "—"} ·
                     followers: {followerCount != null ? followerCount.toLocaleString() : "—"} ·
-                    followers_quality: {creatorNeynarScore != null ? round2(followers_quality) : "—"}
+                    followers_quality: {followersQuality != null ? round2(followersQuality) : "—"}
                   </div>
                 </div>
+                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+  mentions: {tokenMentions?.mentions_count ?? "—"} · authors: {tokenMentions?.unique_authors ?? "—"}
+</div>
+
+{followersAnalytics && (
+  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+    followers sample: {followersAnalytics.sample_size ?? "—"} · avg follower score:{" "}
+    {typeof followersAnalytics.avg_follower_score === "number" ? round2(followersAnalytics.avg_follower_score) : "—"}
+  </div>
+)}
 
                 <div style={{ minWidth: 240 }}>
                   <div className="token-page-label">Source identity</div>
