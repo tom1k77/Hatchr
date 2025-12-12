@@ -1,6 +1,10 @@
 // app/api/token-score/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
+// ✅ чтобы Next не кешировал этот API-роут и ты не видел "старый" JSON
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 
 function clamp(n: number, min = 0, max = 1) {
@@ -58,10 +62,18 @@ type FollowersQuality = {
   followers_quality: number | null;
 };
 
+const EMPTY_FQ: FollowersQuality = {
+  followers_sampled: 0,
+  scored_followers: 0,
+  avg_follower_score: null,
+  power_badge_ratio: null,
+  followers_quality: null,
+};
+
 async function fetchFollowersQuality(fid: number, limit = 50): Promise<FollowersQuality> {
-  // NOTE: можно поставить sort_type=algorithmic, но desc_chron тоже ок.
+  // ✅ ВАЖНО: endpoint у Neynar со слэшем: /followers/
   const url =
-    `https://api.neynar.com/v2/farcaster/followers?` +
+    `https://api.neynar.com/v2/farcaster/followers/?` +
     `fid=${encodeURIComponent(String(fid))}` +
     `&limit=${encodeURIComponent(String(limit))}` +
     `&sort_type=algorithmic`;
@@ -71,32 +83,23 @@ async function fetchFollowersQuality(fid: number, limit = 50): Promise<Followers
       "x-api-key": NEYNAR_API_KEY || "",
       "x-neynar-experimental": "true",
     },
-    // небольшой кеш, чтобы не упираться в rate limit (особенно на проде)
-    cache: "force-cache",
-    next: { revalidate: 15 * 60 }, // 15 минут
+    // ✅ лучше без force-cache, иначе легко поймать "не обновилось"
+    cache: "no-store",
   });
 
-  if (!resp.ok) {
-    return {
-      followers_sampled: 0,
-      scored_followers: 0,
-      avg_follower_score: null,
-      power_badge_ratio: null,
-      followers_quality: null,
-    };
-  }
+  if (!resp.ok) return EMPTY_FQ;
 
   const json: any = await resp.json();
   const rows: any[] = Array.isArray(json?.users) ? json.users : [];
+  const sampled = rows.length;
 
-  let sampled = rows.length;
   let scoredCount = 0;
   let scoreSum = 0;
-
   let powerBadgeCount = 0;
 
   for (const r of rows) {
-    const u = r?.user ?? r; // на всякий случай
+    // followers response: { object:"follower", user:{...} }
+    const u = r?.user ?? r;
     const s = pickNeynarScore(u);
 
     if (typeof s === "number" && Number.isFinite(s)) {
@@ -192,17 +195,10 @@ export async function GET(req: NextRequest) {
       (typeof user?.followers === "number" && Number.isFinite(user.followers) ? user.followers : null) ??
       null;
 
-    // ✅ NEW: followers quality (N = 50)
     const followersQuality =
       resolvedFid && Number.isFinite(resolvedFid)
         ? await fetchFollowersQuality(resolvedFid, 50)
-        : {
-            followers_sampled: 0,
-            scored_followers: 0,
-            avg_follower_score: null,
-            power_badge_ratio: null,
-            followers_quality: null,
-          };
+        : EMPTY_FQ;
 
     const followers_quality = followersQuality.followers_quality;
 
@@ -218,15 +214,17 @@ export async function GET(req: NextRequest) {
       fid: resolvedFid,
       username: resolvedUsername,
 
-      // ✅ scores
+      // ✅ BACK-COMPAT (чтобы твой текущий UI не показывал "—")
+      neynar_score: creator_score,
+      hatchr_score_v1: hatchr_score,
+
+      // ✅ NEW
       creator_score,
       followers_quality,
       hatchr_score,
 
-      // ✅ existing
       follower_count,
 
-      // ✅ social analytics slice (для UI)
       followers_analytics: {
         sample_size: followersQuality.followers_sampled,
         scored_followers: followersQuality.scored_followers,
