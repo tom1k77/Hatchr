@@ -142,9 +142,17 @@ function TokenPageInner() {
       try {
         setIsLoading(true);
 
-        const res = await fetch(`/api/token-score?${qs}&address=${encodeURIComponent(normalizedAddress)}`, {
-  cache: "no-store",
-});
+        const res = await fetch("/api/tokens", { cache: "no-store" });
+if (!res.ok) {
+  console.error("Tokens API error:", res.status);
+  if (!cancelled) setStatus("error");
+  return;
+}
+
+const data: TokensResponse = await res.json();
+const found =
+  data.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) || null;
+        
         if (!res.ok) {
           console.error("Tokens API error:", res.status);
           if (!cancelled) setStatus("error");
@@ -466,7 +474,7 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
                     creator(0.6) + followers_quality(0.4)
                   </div>
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                    creator_score: {creatorNeynarScore != null ? round2(creator_score) : "—"} ·
+                    creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} ·
                     followers: {followerCount != null ? followerCount.toLocaleString() : "—"} ·
                     followers_quality: {followersQuality != null ? round2(followersQuality) : "—"}
                   </div>
