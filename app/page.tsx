@@ -191,6 +191,8 @@ export default function HomePage() {
   Record<number, number>
 >({});
 
+  const [hatchrScores, setHatchrScores] = useState<Record<number, number>>({});
+
   // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
     try {
@@ -323,13 +325,20 @@ useEffect(() => {
     fetch(`/api/token-score?fid=${fid}`)
       .then((r) => r.json())
       .then((json) => {
-        if (typeof json.score === "number") {
-          setCreatorScores((prev) => ({
-            ...prev,
-            [fid]: json.score,
-          }));
-        }
-      })
+  // creator score (back-compat: neynar_score)
+  if (typeof json.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
+    setCreatorScores((prev) => ({ ...prev, [fid]: json.neynar_score }));
+  } else if (typeof json.creator_score === "number" && Number.isFinite(json.creator_score)) {
+    setCreatorScores((prev) => ({ ...prev, [fid]: json.creator_score }));
+  }
+
+  // hatchr score
+  if (typeof json.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
+    setHatchrScores((prev) => ({ ...prev, [fid]: json.hatchr_score }));
+  } else if (typeof json.hatchr_score_v1 === "number" && Number.isFinite(json.hatchr_score_v1)) {
+    setHatchrScores((prev) => ({ ...prev, [fid]: json.hatchr_score_v1 }));
+  }
+})
       .catch(() => {});
   });
 }, [tokens, creatorScores]);
@@ -730,6 +739,16 @@ const creatorScore =
                         {time} · {date}
                       </span>
                     </div>
+
+                    {/* Hatchr score (single line) */}
+{creatorFid != null && (
+  <div className="h-card-row">
+    <span className="h-card-row-label">Hatchr score</span>
+    <span className="h-card-row-value">
+      {typeof hatchrScores[creatorFid] === "number" ? hatchrScores[creatorFid].toFixed(2) : "—"}
+    </span>
+  </div>
+)}
 
                     {/* Address */}
                     <div className="h-card-row">
