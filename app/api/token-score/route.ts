@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 
-// маленький помощник: пробуем несколько URL по очереди
 async function fetchFirstOk(urls: string[]) {
   let lastStatus: number | null = null;
   let lastText: string | null = null;
@@ -12,7 +11,6 @@ async function fetchFirstOk(urls: string[]) {
     const resp = await fetch(url, {
       headers: {
         "x-api-key": NEYNAR_API_KEY || "",
-        // у Neynar некоторые поля/фичи реально сидят за experimental
         "x-neynar-experimental": "true",
       },
       cache: "no-store",
@@ -48,21 +46,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing fid or username" }, { status: 400 });
     }
 
-    // ВАЖНО: сначала пытаемся по FID — это самый стабильный идентификатор
     const fid = fidParam ? Number(fidParam) : null;
     const username = usernameParam ? String(usernameParam) : null;
 
     const urls: string[] = [];
 
     if (fid && Number.isFinite(fid)) {
-      // варианты, потому что у Neynar бывает несколько “правильных” путей в разных версиях
       urls.push(
         `https://api.neynar.com/v2/farcaster/user/bulk?fids=${encodeURIComponent(String(fid))}`,
-        `https://api.neynar.com/v2/farcaster/user?fid=${encodeURIComponent(String(fid))}`,
+        `https://api.neynar.com/v2/farcaster/user?fid=${encodeURIComponent(String(fid))}`
       );
     } else if (username) {
-      // если вдруг FID нет — пробуем по username
-      // (username сюда уже приходит без encode)
       urls.push(
         `https://api.neynar.com/v2/farcaster/user/by_username?username=${encodeURIComponent(username)}`,
         `https://api.neynar.com/v2/farcaster/user?username=${encodeURIComponent(username)}`
@@ -73,19 +67,11 @@ export async function GET(req: NextRequest) {
 
     if (!result.ok) {
       console.error("Neynar user error", result.status, result.body);
-      return NextResponse.json(
-        {
-          error: "Failed Neynar",
-          status: result.status,
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Failed Neynar", status: result.status }, { status: 500 });
     }
 
     const json: any = result.json;
 
-    // Нормализация: разные endpoints возвращают по-разному
-    // bulk обычно отдаёт users: []
     const user =
       json?.user ??
       json?.result?.user ??
@@ -93,7 +79,6 @@ export async function GET(req: NextRequest) {
       (Array.isArray(json?.result?.users) ? json.result.users[0] : null) ??
       json;
 
-    // Достаём neynar score из нескольких потенциальных мест
     const candidates = [
       user?.score,
       user?.neynar_user_score,
@@ -102,20 +87,33 @@ export async function GET(req: NextRequest) {
       user?.viewer_context?.neynar_user_score,
     ];
 
-    let score: number | null = null;
+    let neynar_score: number | null = null;
     for (const c of candidates) {
       if (typeof c === "number" && Number.isFinite(c)) {
-        score = c;
+        neynar_score = c;
         break;
       }
     }
 
+    const resolvedFid =
+      (typeof user?.fid === "number" && Number.isFinite(user.fid) ? user.fid : null) ??
+      (fid && Number.isFinite(fid) ? fid : null);
+
+    const resolvedUsername = user?.username ?? username ?? null;
+
+    const follower_count =
+      (typeof user?.follower_count === "number" && Number.isFinite(user.follower_count)
+        ? user.follower_count
+        : null) ??
+      (typeof user?.followers === "number" && Number.isFinite(user.followers) ? user.followers : null) ??
+      null;
+
     return NextResponse.json({
-      fid: fid ?? user?.fid ?? null,
-      username: user?.username ?? username ?? null,
-      neynar_score: score,
-      // на будущее: можно вернуть сырой user, но лучше не надо в проде
-      // debug_source: result.url,
+      fid: resolvedFid,
+      username: resolvedUsername,
+      neynar_score,
+      follower_count,
+      // debug_source: result.url, // включи на время отладки если надо
     });
   } catch (e) {
     console.error("token-score route error", e);
