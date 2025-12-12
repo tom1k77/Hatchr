@@ -1,7 +1,6 @@
 // app/api/token-score/route.ts
 import { NextRequest, NextResponse } from "next/server";
 
-// ✅ чтобы Next не кешировал этот API-роут и ты не видел "старый" JSON
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -20,7 +19,7 @@ function pickNeynarScore(obj: any): number | null {
     obj?.viewer_context?.neynar_user_score,
   ];
   for (const c of candidates) {
-    if (typeof c === "number" && Number.isFinite(c)) return c;
+    if (typeof c === "number" && Number.isFinite(c)) return clamp(c, 0, 1);
   }
   return null;
 }
@@ -71,7 +70,6 @@ const EMPTY_FQ: FollowersQuality = {
 };
 
 async function fetchFollowersQuality(fid: number, limit = 50): Promise<FollowersQuality> {
-  // ✅ ВАЖНО: endpoint у Neynar со слэшем: /followers/
   const url =
     `https://api.neynar.com/v2/farcaster/followers/?` +
     `fid=${encodeURIComponent(String(fid))}` +
@@ -83,7 +81,6 @@ async function fetchFollowersQuality(fid: number, limit = 50): Promise<Followers
       "x-api-key": NEYNAR_API_KEY || "",
       "x-neynar-experimental": "true",
     },
-    // ✅ лучше без force-cache, иначе легко поймать "не обновилось"
     cache: "no-store",
   });
 
@@ -98,7 +95,6 @@ async function fetchFollowersQuality(fid: number, limit = 50): Promise<Followers
   let powerBadgeCount = 0;
 
   for (const r of rows) {
-    // followers response: { object:"follower", user:{...} }
     const u = r?.user ?? r;
     const s = pickNeynarScore(u);
 
@@ -119,10 +115,9 @@ async function fetchFollowersQuality(fid: number, limit = 50): Promise<Followers
   const avg = scoredCount > 0 ? scoreSum / scoredCount : null;
   const pbRatio = sampled > 0 ? powerBadgeCount / sampled : null;
 
+  // пока оставим твою формулу
   const fq =
-    avg === null || pbRatio === null
-      ? null
-      : clamp(0.85 * avg + 0.15 * pbRatio, 0, 1);
+    avg === null || pbRatio === null ? null : clamp(0.85 * avg + 0.15 * pbRatio, 0, 1);
 
   return {
     followers_sampled: sampled,
@@ -130,6 +125,42 @@ async function fetchFollowersQuality(fid: number, limit = 50): Promise<Followers
     avg_follower_score: avg,
     power_badge_ratio: pbRatio,
     followers_quality: fq,
+  };
+}
+
+async function fetchTokenMentions(address: string) {
+  // Neynar: /v2/farcaster/cast/search/  + q=
+  const q = address.toLowerCase();
+
+  const url =
+    `https://api.neynar.com/v2/farcaster/cast/search/?` +
+    `q=${encodeURIComponent(q)}` +
+    `&mode=literal&limit=25&sort_type=desc_chron`;
+
+  const resp = await fetch(url, {
+    headers: {
+      "x-api-key": NEYNAR_API_KEY || "",
+      "x-neynar-experimental": "true",
+    },
+    cache: "no-store",
+  });
+
+  if (!resp.ok) {
+    return { mentions_count: 0, unique_authors: 0 };
+  }
+
+  const json: any = await resp.json();
+  const casts: any[] = Array.isArray(json?.result?.casts) ? json.result.casts : [];
+
+  const authors = new Set<number>();
+  for (const c of casts) {
+    const fid = c?.author?.fid;
+    if (typeof fid === "number" && Number.isFinite(fid)) authors.add(fid);
+  }
+
+  return {
+    mentions_count: casts.length,
+    unique_authors: authors.size,
   };
 }
 
@@ -142,6 +173,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const fidParam = searchParams.get("fid");
     const usernameParam = searchParams.get("username");
+    const addressParam = searchParams.get("address"); // ✅ NEW
 
     if (!fidParam && !usernameParam) {
       return NextResponse.json({ error: "Missing fid or username" }, { status: 400 });
@@ -202,19 +234,23 @@ export async function GET(req: NextRequest) {
 
     const followers_quality = followersQuality.followers_quality;
 
+    // ✅ hatchr_score: теперь отдаём готовый (0..1)
     const hatchr_score =
-      typeof creator_score === "number" &&
-      Number.isFinite(creator_score) &&
-      typeof followers_quality === "number" &&
-      Number.isFinite(followers_quality)
-        ? clamp(0.6 * clamp(creator_score, 0, 1) + 0.4 * clamp(followers_quality, 0, 1), 0, 1)
+      creator_score != null && followers_quality != null
+        ? clamp(0.6 * creator_score + 0.4 * followers_quality, 0, 1)
+        : null;
+
+    // ✅ mentions только если дали address
+    const token_mentions =
+      typeof addressParam === "string" && /^0x[0-9a-fA-F]{40}$/.test(addressParam.trim())
+        ? await fetchTokenMentions(addressParam.trim())
         : null;
 
     return NextResponse.json({
       fid: resolvedFid,
       username: resolvedUsername,
 
-      // ✅ BACK-COMPAT (чтобы твой текущий UI не показывал "—")
+      // ✅ BACK-COMPAT ДЛЯ ТВОЕГО ТЕКУЩЕГО UI
       neynar_score: creator_score,
       hatchr_score_v1: hatchr_score,
 
@@ -234,7 +270,7 @@ export async function GET(req: NextRequest) {
         sample_n: 50,
       },
 
-      // debug_source: result.url,
+      token_mentions,
     });
   } catch (e) {
     console.error("token-score route error", e);
