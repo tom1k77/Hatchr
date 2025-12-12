@@ -1,7 +1,7 @@
 > ⚠️ This document describes the MVP state of Hatchr.  
 > The platform is under active development.
 
-# Hatchr — Lightpaper / Builder Documentation (MVP)
+# Hatchr — Litepaper / Builder Documentation (MVP)
 
 Hatchr is a **Base-native token discovery and signal platform** designed to help users identify promising tokens early by combining onchain data and social signals.
 
