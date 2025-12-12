@@ -76,18 +76,6 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
-function clamp01(x: number) {
-  return Math.max(0, Math.min(1, x));
-}
-
-// followers proxy (временно): нормализуем логарифмом, чтобы не “перекачивать” гигантов
-function followersNorm(followerCount: number | null): number {
-  if (!followerCount || followerCount <= 0) return 0;
-  // log10(1) = 0, log10(10) = 1, log10(100k)=5
-  const v = Math.log10(followerCount + 1);
-  return clamp01(v / 5);
-}
-
 function round2(x: number) {
   return Math.round(x * 100) / 100;
 }
@@ -108,9 +96,12 @@ function TokenPageInner() {
   const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
+
+  // NEW social slices
   const [followersQuality, setFollowersQuality] = useState<number | null>(null);
   const [followersAnalytics, setFollowersAnalytics] = useState<any>(null);
   const [tokenMentions, setTokenMentions] = useState<any>(null);
+
   const [hatchrScore, setHatchrScore] = useState<number | null>(null);
 
   const fullAddress = token?.token_address ?? "";
@@ -132,44 +123,35 @@ function TokenPageInner() {
     setStatus("idle");
   }, [normalizedAddress]);
 
+  // ✅ 1) ЗАГРУЗКА ТОКЕНА (тут должен быть /api/tokens, а не /api/token-score)
   useEffect(() => {
     if (!normalizedAddress) return;
     if (status === "invalid") return;
 
     let cancelled = false;
 
-    async function load() {
+    async function loadToken() {
       try {
         setIsLoading(true);
 
         const res = await fetch("/api/tokens", { cache: "no-store" });
-if (!res.ok) {
-  console.error("Tokens API error:", res.status);
-  if (!cancelled) setStatus("error");
-  return;
-}
-
-const data: TokensResponse = await res.json();
-const found =
-  data.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) || null;
-        
         if (!res.ok) {
           console.error("Tokens API error:", res.status);
           if (!cancelled) setStatus("error");
           return;
         }
 
-        const data: TokensResponse = await res.json();
-        const found =
-          data.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) || null;
+        const tokensData: TokensResponse = await res.json();
+        const foundToken =
+          tokensData.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) || null;
 
         if (cancelled) return;
 
-        if (!found) {
+        if (!foundToken) {
           setToken(null);
           setStatus("not-found");
         } else {
-          setToken(found);
+          setToken(foundToken);
           setStatus("ok");
         }
       } catch (e) {
@@ -180,7 +162,7 @@ const found =
       }
     }
 
-    load();
+    loadToken();
     return () => {
       cancelled = true;
     };
@@ -196,7 +178,7 @@ const found =
   const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
   const creatorFidFromToken = token?.farcaster_fid ?? null;
 
-  // загрузка Neynar данных
+  // ✅ 2) ЗАГРУЗКА SCORE/ANALYTICS (здесь /api/token-score)
   useEffect(() => {
     if (!token) return;
     if (!creatorFidFromToken && !farcasterHandle) return;
@@ -206,54 +188,65 @@ const found =
     async function loadScore() {
       try {
         setScoreLoading(true);
+
+        // reset
         setCreatorNeynarScore(null);
         setResolvedFid(null);
         setResolvedUsername(null);
         setFollowerCount(null);
+        setFollowersQuality(null);
+        setFollowersAnalytics(null);
+        setTokenMentions(null);
+        setHatchrScore(null);
 
         const qs = creatorFidFromToken
           ? `fid=${encodeURIComponent(String(creatorFidFromToken))}`
           : `username=${encodeURIComponent(String(farcasterHandle))}`;
 
-        const res = await fetch(`/api/token-score?${qs}`, { cache: "no-store" });
+        // если твой /api/token-score уже умеет address (для mentions) — отправим его тоже
+        const addressQs = normalizedAddress ? `&address=${encodeURIComponent(normalizedAddress)}` : "";
+
+        const res = await fetch(`/api/token-score?${qs}${addressQs}`, { cache: "no-store" });
         if (!res.ok) return;
 
         const json = await res.json();
-
         if (cancelled) return;
 
-        if (typeof json?.followers_quality === "number" && Number.isFinite(json.followers_quality)) {
-  setFollowersQuality(json.followers_quality);
-} else {
-  setFollowersQuality(null);
-}
-
-setFollowersAnalytics(json?.followers_analytics ?? null);
-setTokenMentions(json?.token_mentions ?? null);
-
-if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
-  setHatchrScore(json.hatchr_score);
-} else if (typeof json?.hatchr_score_v1 === "number" && Number.isFinite(json.hatchr_score_v1)) {
-  setHatchrScore(json.hatchr_score_v1);
-} else {
-  setHatchrScore(null);
-}
-
+        // scores
         if (typeof json?.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
           setCreatorNeynarScore(json.neynar_score);
+        } else if (typeof json?.creator_score === "number" && Number.isFinite(json.creator_score)) {
+          // на всякий случай
+          setCreatorNeynarScore(json.creator_score);
         }
 
+        if (typeof json?.followers_quality === "number" && Number.isFinite(json.followers_quality)) {
+          setFollowersQuality(json.followers_quality);
+        }
+
+        // hatchr score (new or fallback)
+        if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
+          setHatchrScore(json.hatchr_score);
+        } else if (typeof json?.hatchr_score_v1 === "number" && Number.isFinite(json.hatchr_score_v1)) {
+          setHatchrScore(json.hatchr_score_v1);
+        }
+
+        // identity
         if (typeof json?.fid === "number" && Number.isFinite(json.fid)) {
           setResolvedFid(json.fid);
         }
-
         if (typeof json?.username === "string" && json.username.length) {
           setResolvedUsername(json.username);
         }
 
+        // counts
         if (typeof json?.follower_count === "number" && Number.isFinite(json.follower_count)) {
           setFollowerCount(json.follower_count);
         }
+
+        // analytics slices
+        setFollowersAnalytics(json?.followers_analytics ?? null);
+        setTokenMentions(json?.token_mentions ?? null);
       } catch (e) {
         console.error("token-score on token page failed", e);
       } finally {
@@ -265,9 +258,8 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
     return () => {
       cancelled = true;
     };
-  }, [token, creatorFidFromToken, farcasterHandle]);
+  }, [token, creatorFidFromToken, farcasterHandle, normalizedAddress]);
 
-  // ===== Hatchr score v1 (на базе Neynar) =====
   const hatchr_score = hatchrScore != null ? round2(hatchrScore) : null;
 
   const identityFid = creatorFidFromToken ?? resolvedFid ?? null;
@@ -309,7 +301,7 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
                 <div className="token-page-main-header">
                   <div className="token-page-avatar">
                     {token.image_url ? (
-                      <img src={token.image_url} alt={token.name || token.symbol} />
+                      <img src={token.image_url} alt={token.name || token.symbol || "Token"} />
                     ) : (
                       <span>{(token.symbol || token.name || "T").trim().charAt(0).toUpperCase()}</span>
                     )}
@@ -321,9 +313,7 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
                       {token.symbol && token.symbol !== token.name && (
                         <span className="token-page-symbol">{token.symbol}</span>
                       )}
-                      <span className="token-page-source-pill">
-                        {token.source === "clanker" ? "Clanker" : "Zora"}
-                      </span>
+                      <span className="token-page-source-pill">{token.source === "clanker" ? "Clanker" : "Zora"}</span>
                     </div>
 
                     <div className="token-page-meta-row">
@@ -383,12 +373,7 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
 
                 {token.source_url && (
                   <div className="token-page-actions" style={{ marginTop: 10 }}>
-                    <a
-                      href={token.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="token-page-primary-btn"
-                    >
+                    <a href={token.source_url} target="_blank" rel="noopener noreferrer" className="token-page-primary-btn">
                       View on {token.source === "clanker" ? "Clanker" : "Zora"}
                     </a>
                   </div>
@@ -462,7 +447,7 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
               </aside>
             </div>
 
-            {/* Блок со скором — под карточками */}
+            {/* Score block */}
             <section className="token-page-card" style={{ marginTop: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div>
@@ -470,25 +455,32 @@ if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)
                   <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
                     {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
                   </div>
+
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
                     creator(0.6) + followers_quality(0.4)
                   </div>
+
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
                     creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} ·
                     followers: {followerCount != null ? followerCount.toLocaleString() : "—"} ·
                     followers_quality: {followersQuality != null ? round2(followersQuality) : "—"}
                   </div>
-                </div>
-                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-  mentions: {tokenMentions?.mentions_count ?? "—"} · authors: {tokenMentions?.unique_authors ?? "—"}
-</div>
 
-{followersAnalytics && (
-  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-    followers sample: {followersAnalytics.sample_size ?? "—"} · avg follower score:{" "}
-    {typeof followersAnalytics.avg_follower_score === "number" ? round2(followersAnalytics.avg_follower_score) : "—"}
-  </div>
-)}
+                  {/* mentions */}
+                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                    mentions: {tokenMentions?.mentions_count ?? "—"} · authors: {tokenMentions?.unique_authors ?? "—"}
+                  </div>
+
+                  {/* followers analytics */}
+                  {followersAnalytics && (
+                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+                      followers sample: {followersAnalytics.sample_size ?? "—"} · avg follower score:{" "}
+                      {typeof followersAnalytics.avg_follower_score === "number"
+                        ? round2(followersAnalytics.avg_follower_score)
+                        : "—"}
+                    </div>
+                  )}
+                </div>
 
                 <div style={{ minWidth: 240 }}>
                   <div className="token-page-label">Source identity</div>
