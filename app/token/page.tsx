@@ -4,10 +4,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-// запретить статическую генерацию этой страницы
 export const dynamic = "force-dynamic";
 
-// Тип токена — минимальный набор полей
 type TokenItem = {
   token_address: string;
   name: string;
@@ -31,27 +29,10 @@ type TokenItem = {
   farcaster_fid?: number | null;
 };
 
-type FollowersBucket = {
-  fid: number;
-  username: string;
-  display_name?: string;
-  pfp_url?: string;
-};
-
-type FollowersResponse = {
-  creator_fid: number;
-  total: number;
-  ultraOg: FollowersBucket[];
-  og: FollowersBucket[];
-  others: FollowersBucket[];
-};
-
 type TokensResponse = {
   count: number;
   items: TokenItem[];
 };
-
-// ===== форматтеры =====
 
 function formatNumber(value: number | null | undefined): string {
   if (value == null || Number.isNaN(value)) return "—";
@@ -88,13 +69,12 @@ function extractFarcasterUsername(url?: string | null): string | null {
   try {
     const u = new URL(url);
     const parts = u.pathname.split("/").filter(Boolean);
-    return parts.length ? parts[parts.length - 1] : null;
+    if (!parts.length) return null;
+    return parts[parts.length - 1];
   } catch {
     return null;
   }
 }
-
-// ===== ВНУТРЕННИЙ КОМПОНЕНТ (в нём все хуки) =====
 
 function TokenPageInner() {
   const searchParams = useSearchParams();
@@ -104,47 +84,34 @@ function TokenPageInner() {
 
   const [token, setToken] = useState<TokenItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState<
-    "idle" | "invalid" | "not-found" | "ok" | "error"
-  >("idle");
+  const [status, setStatus] = useState<"idle" | "invalid" | "not-found" | "ok" | "error">("idle");
 
-  const [followers, setFollowers] = useState<FollowersResponse | null>(null);
-
-  // Hatchr / Neynar creator score
-  const [creatorScore, setCreatorScore] = useState<number | null>(null);
+  // Neynar score (сырьё для будущего Hatchr score)
+  const [creatorNeynarScore, setCreatorNeynarScore] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
 
-  // полный адрес токена
+  // ===== token address UI =====
   const fullAddress = token?.token_address ?? "";
-
-  // обрезанный адрес для отображения
   const shortAddress =
-    fullAddress && fullAddress.length > 8
-      ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
-      : fullAddress;
+    fullAddress && fullAddress.length > 8 ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}` : fullAddress;
 
-  // ссылка на Basescan
-  const baseScanUrl = fullAddress
-    ? `https://basescan.org/token/${fullAddress}`
-    : undefined;
+  const baseScanUrl: string | undefined = fullAddress ? `https://basescan.org/token/${fullAddress}` : undefined;
 
-  // проверка адреса
+  // ===== validate address =====
   useEffect(() => {
     if (!normalizedAddress) {
       setStatus("invalid");
       return;
     }
-
     const isHex = /^0x[0-9a-fA-F]{40}$/.test(normalizedAddress);
     if (!isHex) {
       setStatus("invalid");
       return;
     }
-
     setStatus("idle");
   }, [normalizedAddress]);
 
-  // загрузка токена
+  // ===== load token =====
   useEffect(() => {
     if (!normalizedAddress) return;
     if (status === "invalid") return;
@@ -154,6 +121,7 @@ function TokenPageInner() {
     async function load() {
       try {
         setIsLoading(true);
+
         const res = await fetch("/api/tokens", { cache: "no-store" });
         if (!res.ok) {
           console.error("Tokens API error:", res.status);
@@ -163,8 +131,7 @@ function TokenPageInner() {
 
         const data: TokensResponse = await res.json();
         const found =
-          data.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) ||
-          null;
+          data.items.find((t) => t.token_address.toLowerCase() === normalizedAddress) || null;
 
         if (cancelled) return;
 
@@ -184,70 +151,60 @@ function TokenPageInner() {
     }
 
     load();
-
     return () => {
       cancelled = true;
     };
   }, [normalizedAddress, status]);
 
-  // Грузим OG-фолловеров создателя
-  const creatorFid = token?.farcaster_fid ?? null;
-
-  useEffect(() => {
-    if (!creatorFid) return;
-
-    fetch(`/api/token-followers?fid=${creatorFid}`)
-      .then((r) => r.json())
-      .then((data) => setFollowers(data))
-      .catch(() => {});
-  }, [creatorFid]);
-
-  // Хэндл создателя
-  const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
-
-  // Neynar score
-  useEffect(() => {
-  if (!creatorFid) return;
-
-  let cancelled = false;
-
-  async function loadScore(fid: number) {
-    try {
-      setScoreLoading(true);
-      setCreatorScore(null);
-
-      const res = await fetch(`/api/token-score?fid=${fid}`);
-      if (!res.ok) return;
-
-      const json = await res.json();
-      if (!cancelled && typeof json.score === "number") {
-        setCreatorScore(json.score);
-      }
-    } catch (e) {
-      console.error("token-score on token page failed", e);
-    } finally {
-      if (!cancelled) setScoreLoading(false);
-    }
-  }
-
-  loadScore(creatorFid);
-
-  return () => {
-    cancelled = true;
-  };
-}, [creatorFid]);
-
-  const { time, date } = useMemo(
-    () => formatCreated(token?.first_seen_at ?? null),
-    [token?.first_seen_at]
-  );
+  const { time, date } = useMemo(() => formatCreated(token?.first_seen_at ?? null), [token?.first_seen_at]);
 
   const mcap = formatNumber(token?.market_cap_usd);
   const vol = formatNumber(token?.volume_24h_usd);
   const price = formatNumber(token?.price_usd);
   const liq = formatNumber(token?.liquidity_usd);
 
-  // ===== RENDER =====
+  const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
+  const creatorFid = token?.farcaster_fid ?? null;
+
+  // ===== load Neynar score (ВАЖНО: сначала по fid) =====
+  useEffect(() => {
+    if (!token) return;
+
+    // если нет вообще никакого идентификатора — не дергаем
+    if (!creatorFid && !farcasterHandle) return;
+
+    let cancelled = false;
+
+    async function loadScore() {
+      try {
+        setScoreLoading(true);
+        setCreatorNeynarScore(null);
+
+        const qs = creatorFid
+          ? `fid=${encodeURIComponent(String(creatorFid))}`
+          : `username=${encodeURIComponent(String(farcasterHandle))}`;
+
+        const res = await fetch(`/api/token-score?${qs}`, { cache: "no-store" });
+        if (!res.ok) return;
+
+        const json = await res.json();
+        const s = json?.neynar_score;
+
+        if (!cancelled && typeof s === "number" && Number.isFinite(s)) {
+          setCreatorNeynarScore(s);
+        }
+      } catch (e) {
+        console.error("token-score on token page failed", e);
+      } finally {
+        if (!cancelled) setScoreLoading(false);
+      }
+    }
+
+    loadScore();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, creatorFid, farcasterHandle]);
 
   return (
     <div className="hatchr-root">
@@ -279,224 +236,202 @@ function TokenPageInner() {
             <p>Token not found.</p>
           </div>
         ) : (
-          <div className="token-page-layout">
-            {/* левая часть — основная инфа */}
-            <section className="token-page-card token-page-main">
-              <div className="token-page-main-header">
-                <div className="token-page-avatar">
-                  {token.image_url ? (
-                    <img src={token.image_url} alt={token.name || token.symbol} />
-                  ) : (
-                    <span>{(token.symbol || token.name || "T").charAt(0).toUpperCase()}</span>
-                  )}
-                </div>
-
-                <div className="token-page-title-block">
-                  <div className="token-page-name-row">
-                    <span className="token-page-name">
-                      {token.name || token.symbol || "New token"}
-                    </span>
-                    {token.symbol && token.symbol !== token.name && (
-                      <span className="token-page-symbol">{token.symbol}</span>
-                    )}
-                    <span className="token-page-source-pill">
-                      {token.source === "clanker" ? "Clanker" : "Zora"}
-                    </span>
-                  </div>
-
-                  <div className="token-page-meta-row">
-                    {time !== "—" && (
+          <>
+            <div className="token-page-layout">
+              {/* левая часть — основная инфа */}
+              <section className="token-page-card token-page-main">
+                <div className="token-page-main-header">
+                  <div className="token-page-avatar">
+                    {token.image_url ? (
+                      <img src={token.image_url} alt={token.name || token.symbol} />
+                    ) : (
                       <span>
-                        Created: <strong>{time}</strong> · {date}
+                        {(token.symbol || token.name || "T").trim().charAt(0).toUpperCase()}
                       </span>
                     )}
                   </div>
 
-                  <div className="token-page-address-row">
-                    <span className="token-page-label">Address</span>
-                    <div className="token-page-address-wrap">
-                      <a
-                        href={baseScanUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="token-page-address-link"
-                        title={fullAddress}
-                      >
-                        {shortAddress}
-                      </a>
+                  <div className="token-page-title-block">
+                    <div className="token-page-name-row">
+                      <span className="token-page-name">{token.name || token.symbol || "New token"}</span>
+                      {token.symbol && token.symbol !== token.name && (
+                        <span className="token-page-symbol">{token.symbol}</span>
+                      )}
+                      <span className="token-page-source-pill">
+                        {token.source === "clanker" ? "Clanker" : "Zora"}
+                      </span>
+                    </div>
 
-                      {fullAddress && (
-                        <button
-                          type="button"
-                          className="token-page-copy-btn"
-                          onClick={() => navigator.clipboard?.writeText(fullAddress)}
-                          title="Copy address"
-                        >
-                          ⧉
-                        </button>
+                    <div className="token-page-meta-row">
+                      {time !== "—" && (
+                        <span>
+                          Created: <strong>{time}</strong> · {date}
+                        </span>
                       )}
                     </div>
-                  </div>
-                </div>
-              </div>
 
-              <div className="token-page-stats-grid">
-                <div className="token-page-stat-tile">
-                  <div className="token-page-stat-label">Price</div>
-                  <div className="token-page-stat-value">${price}</div>
-                </div>
-                <div className="token-page-stat-tile">
-                  <div className="token-page-stat-label">Market cap</div>
-                  <div className="token-page-stat-value">${mcap}</div>
-                </div>
-                <div className="token-page-stat-tile">
-                  <div className="token-page-stat-label">Liquidity</div>
-                  <div className="token-page-stat-value">${liq}</div>
-                </div>
-                <div className="token-page-stat-tile">
-                  <div className="token-page-stat-label">Vol 24h</div>
-                  <div className="token-page-stat-value">${vol}</div>
-                </div>
-              </div>
+                    <div className="token-page-address-row">
+                      <span className="token-page-label">Address</span>
+                      <div className="token-page-address-wrap">
+                        <a
+                          href={baseScanUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="token-page-address-link"
+                          title={fullAddress}
+                        >
+                          {shortAddress}
+                        </a>
 
-              {/* Hatchr creator score ПОД СТАТАМИ, но ТОЛЬКО если есть реальные данные */}
-              {farcasterHandle && (creatorScore != null || followers) && (
-                <div className="token-page-score-card">
-                  <div className="token-page-score-header">
-                    <span className="token-page-label">Hatchr creator score</span>
-                    <span className="token-page-score-handle">@{farcasterHandle}</span>
-                  </div>
-
-                  <div className="token-page-score-value">
-                    {scoreLoading ? "…" : creatorScore ?? "No data"}
-                  </div>
-
-                  <div className="token-page-score-caption">
-                    v1 — Neynar creator score + OG followers breakdown.
-                  </div>
-
-                  {followers && (
-                    <div className="token-page-followers-block">
-                      <div>
-                        Total: <strong>{followers.total.toLocaleString()}</strong>
-                      </div>
-                      <div>
-                        Ultra-OG (&lt;1000 FID):{" "}
-                        <strong>{followers.ultraOg.length}</strong>
-                      </div>
-                      <div>
-                        OG (1000–9999):{" "}
-                        <strong>{followers.og.length}</strong>
+                        {fullAddress && (
+                          <button
+                            type="button"
+                            className="token-page-copy-btn"
+                            onClick={() => navigator.clipboard?.writeText(fullAddress)}
+                            title="Copy address"
+                          >
+                            ⧉
+                          </button>
+                        )}
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
-              )}
 
-              {token.source_url && (
-                <div className="token-page-actions">
-                  <a
-                    href={token.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="token-page-primary-btn"
-                  >
-                    View on {token.source === "clanker" ? "Clanker" : "Zora"}
-                  </a>
+                <div className="token-page-stats-grid">
+                  <div className="token-page-stat-tile">
+                    <div className="token-page-stat-label">Price</div>
+                    <div className="token-page-stat-value">${price}</div>
+                  </div>
+                  <div className="token-page-stat-tile">
+                    <div className="token-page-stat-label">Market cap</div>
+                    <div className="token-page-stat-value">${mcap}</div>
+                  </div>
+                  <div className="token-page-stat-tile">
+                    <div className="token-page-stat-label">Liquidity</div>
+                    <div className="token-page-stat-value">${liq}</div>
+                  </div>
+                  <div className="token-page-stat-tile">
+                    <div className="token-page-stat-label">Vol 24h</div>
+                    <div className="token-page-stat-value">${vol}</div>
+                  </div>
                 </div>
-              )}
-            </section>
 
-            {/* правая часть — только социальные ссылки */}
-            <aside className="token-page-card token-page-side">
-              <h2 className="token-page-side-title">Socials</h2>
-              <ul className="token-page-social-list">
-                <li>
-                  <span className="token-page-label">Farcaster</span>
-                  {farcasterHandle ? (
+                {token.source_url && (
+                  <div className="token-page-actions">
                     <a
-                      href={`https://warpcast.com/${farcasterHandle}`}
+                      href={token.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      className="token-page-primary-btn"
                     >
-                      @{farcasterHandle}
+                      View on {token.source === "clanker" ? "Clanker" : "Zora"}
                     </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-                <li>
-                  <span className="token-page-label">Website</span>
-                  {token.website_url ? (
-                    <a href={token.website_url} target="_blank" rel="noopener noreferrer">
-                      {token.website_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-                <li>
-                  <span className="token-page-label">X</span>
-                  {token.x_url ? (
-                    <a href={token.x_url} target="_blank" rel="noopener noreferrer">
-                      {token.x_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-                <li>
-                  <span className="token-page-label">Telegram</span>
-                  {token.telegram_url ? (
-                    <a href={token.telegram_url} target="_blank" rel="noopener noreferrer">
-                      {token.telegram_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-                <li>
-                  <span className="token-page-label">Instagram</span>
-                  {token.instagram_url ? (
-                    <a href={token.instagram_url} target="_blank" rel="noopener noreferrer">
-                      {token.instagram_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                </li>
-                <li>
-                  <span className="token-page-label">TikTok</span>
-                  {token.tiktok_url ? (
-                    <a href={token.tiktok_url} target="_blank" rel="noopener noreferrer">
-                      {token.tiktok_url}
-                    </a>
-                  ) : (
-                    <span className="token-page-muted">—</span>
-                  )}
-                  {creatorFid && (
-  <li>
-    <span className="token-page-label">Neynar score</span>
-    <span>
-      {scoreLoading
-        ? "…"
-        : creatorScore != null
-        ? creatorScore.toFixed(2)
-        : "No data"}
-    </span>
-  </li>
-)}
-                </li>
-              </ul>
-            </aside>
-          </div>
+                  </div>
+                )}
+              </section>
+
+              {/* правая часть — только Socials */}
+              <aside className="token-page-card token-page-side">
+                <h2 className="token-page-side-title">Socials</h2>
+                <ul className="token-page-social-list">
+                  <li>
+                    <span className="token-page-label">Farcaster</span>
+                    {farcasterHandle ? (
+                      <a
+                        href={`https://warpcast.com/${farcasterHandle}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        @{farcasterHandle}
+                      </a>
+                    ) : (
+                      <span className="token-page-muted">—</span>
+                    )}
+                  </li>
+                  <li>
+                    <span className="token-page-label">Website</span>
+                    {token.website_url ? (
+                      <a href={token.website_url} target="_blank" rel="noopener noreferrer">
+                        {token.website_url}
+                      </a>
+                    ) : (
+                      <span className="token-page-muted">—</span>
+                    )}
+                  </li>
+                  <li>
+                    <span className="token-page-label">X</span>
+                    {token.x_url ? (
+                      <a href={token.x_url} target="_blank" rel="noopener noreferrer">
+                        {token.x_url}
+                      </a>
+                    ) : (
+                      <span className="token-page-muted">—</span>
+                    )}
+                  </li>
+                  <li>
+                    <span className="token-page-label">Telegram</span>
+                    {token.telegram_url ? (
+                      <a href={token.telegram_url} target="_blank" rel="noopener noreferrer">
+                        {token.telegram_url}
+                      </a>
+                    ) : (
+                      <span className="token-page-muted">—</span>
+                    )}
+                  </li>
+                  <li>
+                    <span className="token-page-label">Instagram</span>
+                    {token.instagram_url ? (
+                      <a href={token.instagram_url} target="_blank" rel="noopener noreferrer">
+                        {token.instagram_url}
+                      </a>
+                    ) : (
+                      <span className="token-page-muted">—</span>
+                    )}
+                  </li>
+                  <li>
+                    <span className="token-page-label">TikTok</span>
+                    {token.tiktok_url ? (
+                      <a href={token.tiktok_url} target="_blank" rel="noopener noreferrer">
+                        {token.tiktok_url}
+                      </a>
+                    ) : (
+                      <span className="token-page-muted">—</span>
+                    )}
+                  </li>
+                </ul>
+              </aside>
+            </div>
+
+            {/* Отдельная компактная карточка под двумя окнами — без ломания layout */}
+            <section className="token-page-card" style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <div className="token-page-label">Creator trust (raw Neynar score)</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, marginTop: 6 }}>
+                    {scoreLoading ? "…" : creatorNeynarScore != null ? creatorNeynarScore : "—"}
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
+                    Это сырьё для Hatchr score (формулу добавим после того, как стабильно покажем данные).
+                  </div>
+                </div>
+
+                <div style={{ minWidth: 240 }}>
+                  <div className="token-page-label">Source identity</div>
+                  <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
+                    FID: <strong>{creatorFid ?? "—"}</strong>
+                    <br />
+                    Handle: <strong>{farcasterHandle ? `@${farcasterHandle}` : "—"}</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </>
         )}
       </main>
     </div>
   );
 }
-
-// ===== ВНЕШНИЙ КОМПОНЕНТ С SUSPENSE =====
 
 export default function TokenPage() {
   return (
