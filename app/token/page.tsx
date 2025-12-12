@@ -76,6 +76,22 @@ function extractFarcasterUsername(url?: string | null): string | null {
   }
 }
 
+function clamp01(x: number) {
+  return Math.max(0, Math.min(1, x));
+}
+
+// followers proxy (временно): нормализуем логарифмом, чтобы не “перекачивать” гигантов
+function followersNorm(followerCount: number | null): number {
+  if (!followerCount || followerCount <= 0) return 0;
+  // log10(1) = 0, log10(10) = 1, log10(100k)=5
+  const v = Math.log10(followerCount + 1);
+  return clamp01(v / 5);
+}
+
+function round2(x: number) {
+  return Math.round(x * 100) / 100;
+}
+
 function TokenPageInner() {
   const searchParams = useSearchParams();
 
@@ -86,18 +102,19 @@ function TokenPageInner() {
   const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<"idle" | "invalid" | "not-found" | "ok" | "error">("idle");
 
-  // Neynar score (сырьё для будущего Hatchr score)
+  // Neynar data
   const [creatorNeynarScore, setCreatorNeynarScore] = useState<number | null>(null);
+  const [resolvedFid, setResolvedFid] = useState<number | null>(null);
+  const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
+  const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
 
-  // ===== token address UI =====
   const fullAddress = token?.token_address ?? "";
   const shortAddress =
     fullAddress && fullAddress.length > 8 ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}` : fullAddress;
 
   const baseScanUrl: string | undefined = fullAddress ? `https://basescan.org/token/${fullAddress}` : undefined;
 
-  // ===== validate address =====
   useEffect(() => {
     if (!normalizedAddress) {
       setStatus("invalid");
@@ -111,7 +128,6 @@ function TokenPageInner() {
     setStatus("idle");
   }, [normalizedAddress]);
 
-  // ===== load token =====
   useEffect(() => {
     if (!normalizedAddress) return;
     if (status === "invalid") return;
@@ -164,14 +180,12 @@ function TokenPageInner() {
   const liq = formatNumber(token?.liquidity_usd);
 
   const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
-  const creatorFid = token?.farcaster_fid ?? null;
+  const creatorFidFromToken = token?.farcaster_fid ?? null;
 
-  // ===== load Neynar score (ВАЖНО: сначала по fid) =====
+  // загрузка Neynar данных
   useEffect(() => {
     if (!token) return;
-
-    // если нет вообще никакого идентификатора — не дергаем
-    if (!creatorFid && !farcasterHandle) return;
+    if (!creatorFidFromToken && !farcasterHandle) return;
 
     let cancelled = false;
 
@@ -179,19 +193,35 @@ function TokenPageInner() {
       try {
         setScoreLoading(true);
         setCreatorNeynarScore(null);
+        setResolvedFid(null);
+        setResolvedUsername(null);
+        setFollowerCount(null);
 
-        const qs = creatorFid
-          ? `fid=${encodeURIComponent(String(creatorFid))}`
+        const qs = creatorFidFromToken
+          ? `fid=${encodeURIComponent(String(creatorFidFromToken))}`
           : `username=${encodeURIComponent(String(farcasterHandle))}`;
 
         const res = await fetch(`/api/token-score?${qs}`, { cache: "no-store" });
         if (!res.ok) return;
 
         const json = await res.json();
-        const s = json?.neynar_score;
 
-        if (!cancelled && typeof s === "number" && Number.isFinite(s)) {
-          setCreatorNeynarScore(s);
+        if (cancelled) return;
+
+        if (typeof json?.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
+          setCreatorNeynarScore(json.neynar_score);
+        }
+
+        if (typeof json?.fid === "number" && Number.isFinite(json.fid)) {
+          setResolvedFid(json.fid);
+        }
+
+        if (typeof json?.username === "string" && json.username.length) {
+          setResolvedUsername(json.username);
+        }
+
+        if (typeof json?.follower_count === "number" && Number.isFinite(json.follower_count)) {
+          setFollowerCount(json.follower_count);
         }
       } catch (e) {
         console.error("token-score on token page failed", e);
@@ -204,7 +234,19 @@ function TokenPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [token, creatorFid, farcasterHandle]);
+  }, [token, creatorFidFromToken, farcasterHandle]);
+
+  // ===== Hatchr score v1 (на базе Neynar) =====
+  const creator_score = creatorNeynarScore ?? 0;
+  const followers_quality = creatorNeynarScore != null ? creatorNeynarScore * followersNorm(followerCount) : 0;
+
+  const hatchr_score =
+    creatorNeynarScore == null
+      ? null
+      : round2(0.6 * creator_score + 0.4 * followers_quality);
+
+  const identityFid = creatorFidFromToken ?? resolvedFid ?? null;
+  const identityHandle = farcasterHandle ? `@${farcasterHandle}` : resolvedUsername ? `@${resolvedUsername}` : "—";
 
   return (
     <div className="hatchr-root">
@@ -238,16 +280,13 @@ function TokenPageInner() {
         ) : (
           <>
             <div className="token-page-layout">
-              {/* левая часть — основная инфа */}
               <section className="token-page-card token-page-main">
                 <div className="token-page-main-header">
                   <div className="token-page-avatar">
                     {token.image_url ? (
                       <img src={token.image_url} alt={token.name || token.symbol} />
                     ) : (
-                      <span>
-                        {(token.symbol || token.name || "T").trim().charAt(0).toUpperCase()}
-                      </span>
+                      <span>{(token.symbol || token.name || "T").trim().charAt(0).toUpperCase()}</span>
                     )}
                   </div>
 
@@ -318,7 +357,7 @@ function TokenPageInner() {
                 </div>
 
                 {token.source_url && (
-                  <div className="token-page-actions">
+                  <div className="token-page-actions" style={{ marginTop: 10 }}>
                     <a
                       href={token.source_url}
                       target="_blank"
@@ -331,18 +370,13 @@ function TokenPageInner() {
                 )}
               </section>
 
-              {/* правая часть — только Socials */}
               <aside className="token-page-card token-page-side">
                 <h2 className="token-page-side-title">Socials</h2>
                 <ul className="token-page-social-list">
                   <li>
                     <span className="token-page-label">Farcaster</span>
                     {farcasterHandle ? (
-                      <a
-                        href={`https://warpcast.com/${farcasterHandle}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
+                      <a href={`https://warpcast.com/${farcasterHandle}`} target="_blank" rel="noopener noreferrer">
                         @{farcasterHandle}
                       </a>
                     ) : (
@@ -403,25 +437,30 @@ function TokenPageInner() {
               </aside>
             </div>
 
-            {/* Отдельная компактная карточка под двумя окнами — без ломания layout */}
+            {/* Блок со скором — под карточками */}
             <section className="token-page-card" style={{ marginTop: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                 <div>
-                  <div className="token-page-label">Creator trust (raw Neynar score)</div>
-                  <div style={{ fontSize: 28, fontWeight: 700, marginTop: 6 }}>
-                    {scoreLoading ? "…" : creatorNeynarScore != null ? creatorNeynarScore : "—"}
+                  <div className="token-page-label">Hatchr score (v1)</div>
+                  <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
+                    {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
                   </div>
-                  <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                    Это сырьё для Hatchr score (формулу добавим после того, как стабильно покажем данные).
+                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                    creator(0.6) + followers_quality(0.4)
+                  </div>
+                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
+                    creator_score: {creatorNeynarScore != null ? round2(creator_score) : "—"} ·
+                    followers: {followerCount != null ? followerCount.toLocaleString() : "—"} ·
+                    followers_quality: {creatorNeynarScore != null ? round2(followers_quality) : "—"}
                   </div>
                 </div>
 
                 <div style={{ minWidth: 240 }}>
                   <div className="token-page-label">Source identity</div>
                   <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
-                    FID: <strong>{creatorFid ?? "—"}</strong>
+                    FID: <strong>{identityFid ?? "—"}</strong>
                     <br />
-                    Handle: <strong>{farcasterHandle ? `@${farcasterHandle}` : "—"}</strong>
+                    Handle: <strong>{identityHandle}</strong>
                   </div>
                 </div>
               </div>
