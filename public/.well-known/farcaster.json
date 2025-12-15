@@ -1,28 +1,33 @@
 {
-  "accountAssociation": {
-    "header": "eyJmaWQiOjI2NzM0MCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweDIwNmZFOTI3NEU3OTJlYzRFNTYwNmUyNmIyRmU5OUFCODZGNTk1ZDQifQ",
-    "payload": "eyJkb21haW4iOiJoYXRjaHIudmVyY2VsLmFwcCJ9",
-    "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEHzYbhJiH0R3uyjFNJZxkrH-R9eXwTgJZC22S_P5PR7DWbuQMb8U0L2ZqEpgF7FoYhtD4YZpaH32H9EVCzIrg7AGwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-  },
-  "miniapp": {
-    "version": "1",
+  "frame": {
     "name": "Hatchr",
+    "version": "1",
+    "iconUrl": "https://hatchr.vercel.app/hatchr-icon.png",
     "homeUrl": "https://hatchr.vercel.app",
-    "iconUrl": "https://hatchr.vercel.app/hatchr-logo.png",
-    "splashImageUrl": "https://hatchr.vercel.app/hatchr-logo.png",
-    "splashBackgroundColor": "#000000",
-    "subtitle": "Analytics layer for Base",
-    "description": "Discover new Base tokens live with smart social signals.",
-    "screenshotUrls": [
-      "https://hatchr.vercel.app/hatchr-logo.png"
-    ],
+    "imageUrl": "https://hatchr.vercel.app/branding/Hatchr-PreviewImage.PNG",
+    "buttonTitle": "Open Hatchr",
+    "splashImageUrl": "https://hatchr.vercel.app/branding/Hatchr-splash.PNG",
+    "splashBackgroundColor": "#0F172A",
+    "webhookUrl": "https://hatchr.vercel.app/api/webhook",
     "primaryCategory": "finance",
-    "tags": ["base", "tokens", "analytics"],
-    "heroImageUrl": "https://hatchr.vercel.app/hatchr-logo.png",
-    "tagline": "Find fresh Base tokens before they trend.",
-    "ogTitle": "Hatchr — Base token radar",
-    "ogDescription": "Live feed of new Base tokens with social signals and Hatchr scores.",
-    "ogImageUrl": "https://hatchr.vercel.app/hatchr-logo.png",
-    "noindex": true
+    "subtitle": "Discover new Base tokens before they move",
+    "description": "Hatchr is a Base token discovery app. Track newly launched tokens and explore social and onchain context around their creators.",
+    "screenshotUrls": [
+      "https://hatchr.vercel.app/branding/Hatchr-screenshot-1.png",
+      "https://hatchr.vercel.app/branding/Hatchr-screenshot-2.png",
+      "https://hatchr.vercel.app/branding/Hatchr-screenshot-3.png"
+    ],
+    "heroImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
+    "tags": [],
+    "tagline": "Discover new tokens early",
+    "ogTitle": "Hatchr - Discover new tokens",
+    "ogDescription": "Hatchr helps you discover new tokens on Base using onchain data and creator social signals.",
+    "ogImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
+    "castShareUrl": "https://warpcast.com/~/compose?text=Discover%20new%20Base%20tokens%20early%20with%20@hatchr"
+  },
+  "accountAssociation": {
+    "header": "eyJmaWQiOjI2NzM0MCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweENmM0ExQjdhZkJEQzVDMjM3N0QxOURjOUM3ZDZCMjg2NDA2M2U0ZEIifQ",
+    "payload": "eyJkb21haW4iOiJoYXRjaHIudmVyY2VsLmFwcCJ9",
+    "signature": "0Ac/F4xQHZQsHhyFqao6HhUsZgni3W6KFImq0lmiRtdWzEQ7wANRLjufZ/WB4v/zBRmtyhPRo3R2j361KgMgWRw="
   }
 }
