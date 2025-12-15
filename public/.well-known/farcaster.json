@@ -1,4 +1,30 @@
 {
+  "miniapp": {
+    "name": "Hatchr",
+    "version": "1",
+    "iconUrl": "https://hatchr.vercel.app/hatchr-icon-512.PNG",
+    "homeUrl": "https://hatchr.vercel.app",
+    "imageUrl": "https://hatchr.vercel.app/branding/Hatchr-PreviewImage.PNG",
+    "buttonTitle": "Open Hatchr",
+    "splashImageUrl": "https://hatchr.vercel.app/branding/Hatchr-splash.PNG",
+    "splashBackgroundColor": "#0F172A",
+    "webhookUrl": "https://hatchr.vercel.app/api/webhook",
+    "primaryCategory": "finance",
+    "subtitle": "Discover Base tokens early",
+    "description": "Hatchr is a Base token discovery app. Track newly launched tokens and explore social and onchain context around their creators.",
+    "screenshotUrls": [
+      "https://hatchr.vercel.app/branding/Hatchr-screenshot-1.png",
+      "https://hatchr.vercel.app/branding/Hatchr-screenshot-2.png",
+      "https://hatchr.vercel.app/branding/Hatchr-screenshot-3.png"
+    ],
+    "heroImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
+    "tags": ["farcaster", "token", "onchain", "analytics"],
+    "tagline": "Discover new tokens early",
+    "ogTitle": "Hatchr - Discover new tokens",
+    "ogDescription": "Hatchr helps you discover new tokens on Base using onchain data and creator social signals.",
+    "ogImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
+    "castShareUrl": "https://hatchr.vercel.app"
+  },
   "frame": {
     "name": "Hatchr",
     "version": "1",
@@ -18,12 +44,7 @@
       "https://hatchr.vercel.app/branding/Hatchr-screenshot-3.png"
     ],
     "heroImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
-    "tags": [
-      "farcaster",
-      "token",
-      "onchain",
-      "analitycs"
-    ],
+    "tags": ["farcaster", "token", "onchain", "analytics"],
     "tagline": "Discover new tokens early",
     "ogTitle": "Hatchr - Discover new tokens",
     "ogDescription": "Hatchr helps you discover new tokens on Base using onchain data and creator social signals.",
