@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@farcaster/miniapp-sdk": "^0.2.1",
     "@vercel/analytics": "^1.6.1",
     "next": "16.0.7",
     "pg": "^8.11.3",
