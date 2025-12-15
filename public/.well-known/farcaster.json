@@ -18,7 +18,12 @@
       "https://hatchr.vercel.app/branding/Hatchr-screenshot-3.png"
     ],
     "heroImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
-    "tags": [],
+    "tags": [
+      "farcaster",
+      "token",
+      "onchain",
+      "analitycs"
+    ],
     "tagline": "Discover new tokens early",
     "ogTitle": "Hatchr - Discover new tokens",
     "ogDescription": "Hatchr helps you discover new tokens on Base using onchain data and creator social signals.",
