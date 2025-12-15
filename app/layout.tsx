@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   description: "Base-native token discovery & signal platform",
 };
 
+// ✅ FIXED: добавлено action.name (обязательное поле для Embed Valid)
 const MINIAPP_EMBED = JSON.stringify({
   version: "1",
   imageUrl: "https://hatchr.vercel.app/branding/Hatchr-PreviewImage.PNG",
@@ -27,6 +28,7 @@ const MINIAPP_EMBED = JSON.stringify({
     title: "Open Hatchr",
     action: {
       type: "launch_miniapp",
+      name: "Hatchr", // 👈 КРИТИЧЕСКОЕ ПОЛЕ
       url: "https://hatchr.vercel.app",
     },
   },
@@ -40,9 +42,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Base App */}
         <meta name="base:app_id" content="69397bfe8a7c4e55fec73d03" />
 
-        {/* Farcaster Mini App embed (so links become an "Open" card in casts) */}
+        {/* Farcaster Mini App embed */}
         <meta name="fc:miniapp" content={MINIAPP_EMBED} />
         {/* Backward compatibility */}
         <meta name="fc:frame" content={MINIAPP_EMBED} />
