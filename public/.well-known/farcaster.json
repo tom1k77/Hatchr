@@ -10,7 +10,7 @@
     "splashBackgroundColor": "#0F172A",
     "webhookUrl": "https://hatchr.vercel.app/api/webhook",
     "primaryCategory": "finance",
-    "subtitle": "Discover new Base tokens before they move",
+    "subtitle": "Discover Base tokens early",
     "description": "Hatchr is a Base token discovery app. Track newly launched tokens and explore social and onchain context around their creators.",
     "screenshotUrls": [
       "https://hatchr.vercel.app/branding/Hatchr-screenshot-1.png",
@@ -28,7 +28,7 @@
     "ogTitle": "Hatchr - Discover new tokens",
     "ogDescription": "Hatchr helps you discover new tokens on Base using onchain data and creator social signals.",
     "ogImageUrl": "https://hatchr.vercel.app/branding/Hatchr-HeroImage.PNG",
-    "castShareUrl": "https://warpcast.com/~/compose?text=Discover%20new%20Base%20tokens%20early%20with%20@hatchr"
+    "castShareUrl": "https://hatchr.vercel.app"
   },
   "accountAssociation": {
     "header": "eyJmaWQiOjI2NzM0MCwidHlwZSI6ImF1dGgiLCJrZXkiOiIweENmM0ExQjdhZkJEQzVDMjM3N0QxOURjOUM3ZDZCMjg2NDA2M2U0ZEIifQ",
