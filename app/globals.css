@@ -208,9 +208,20 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+
+  /* FIX */
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
+
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 500;
+}
+
+.hatchr-feed-title > * {
+  min-width: 0;
 }
 
 .hatchr-feed-badge {
@@ -219,6 +230,10 @@ body {
   border-radius: 999px;
   background: #dcfce7;
   color: #166534;
+
+  /* FIX */
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .hatchr-feed-list {
