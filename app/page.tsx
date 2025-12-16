@@ -445,7 +445,6 @@ useEffect(() => {
             <span className="hatchr-nav-pill primary">New tokens</span>
             <span className="hatchr-nav-pill">Trending</span>
             <span className="hatchr-nav-pill">Social signals</span>
-            <span className="hatchr-nav-pill">API (soon)</span>
           </nav>
         </div>
 
