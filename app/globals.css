@@ -1646,3 +1646,28 @@ body {
 .h-card-score strong {
   font-weight: 600;
 }
+
+/* Anti-horizontal-shift on mobile */
+@media (max-width: 768px) {
+  .hatchr-main-grid > aside {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    align-self: stretch;
+    justify-self: stretch;
+  }
+
+  .hatchr-feed {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Safety net: prevent any element from creating horizontal scroll */
+html, body {
+  overflow-x: hidden;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
