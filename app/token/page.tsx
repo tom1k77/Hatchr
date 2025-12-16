@@ -97,10 +97,11 @@ function TokenPageInner() {
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [scoreLoading, setScoreLoading] = useState(false);
 
-  // NEW social slices
+  // social slices
   const [followersQuality, setFollowersQuality] = useState<number | null>(null);
   const [followersAnalytics, setFollowersAnalytics] = useState<any>(null);
   const [tokenMentions, setTokenMentions] = useState<any>(null);
+  const [creatorContext, setCreatorContext] = useState<any>(null);
 
   const [hatchrScore, setHatchrScore] = useState<number | null>(null);
 
@@ -123,7 +124,7 @@ function TokenPageInner() {
     setStatus("idle");
   }, [normalizedAddress]);
 
-  // ✅ 1) ЗАГРУЗКА ТОКЕНА (тут должен быть /api/tokens, а не /api/token-score)
+  // 1) Load token
   useEffect(() => {
     if (!normalizedAddress) return;
     if (status === "invalid") return;
@@ -178,7 +179,7 @@ function TokenPageInner() {
   const farcasterHandle = extractFarcasterUsername(token?.farcaster_url);
   const creatorFidFromToken = token?.farcaster_fid ?? null;
 
-  // ✅ 2) ЗАГРУЗКА SCORE/ANALYTICS (здесь /api/token-score)
+  // 2) Load score/analytics
   useEffect(() => {
     if (!token) return;
     if (!creatorFidFromToken && !farcasterHandle) return;
@@ -197,16 +198,22 @@ function TokenPageInner() {
         setFollowersQuality(null);
         setFollowersAnalytics(null);
         setTokenMentions(null);
+        setCreatorContext(null);
         setHatchrScore(null);
 
         const qs = creatorFidFromToken
           ? `fid=${encodeURIComponent(String(creatorFidFromToken))}`
           : `username=${encodeURIComponent(String(farcasterHandle))}`;
 
-        // если твой /api/token-score уже умеет address (для mentions) — отправим его тоже
         const addressQs = normalizedAddress ? `&address=${encodeURIComponent(normalizedAddress)}` : "";
+        const tokenCreatedAtQs = token?.first_seen_at ? `&tokenCreatedAt=${encodeURIComponent(token.first_seen_at)}` : "";
+        const tokenNameQs = token?.name ? `&tokenName=${encodeURIComponent(token.name)}` : "";
+        const tokenSymbolQs = token?.symbol ? `&tokenSymbol=${encodeURIComponent(token.symbol)}` : "";
 
-        const res = await fetch(`/api/token-score?${qs}${addressQs}`, { cache: "no-store" });
+        const res = await fetch(
+          `/api/token-score?${qs}${addressQs}${tokenCreatedAtQs}${tokenNameQs}${tokenSymbolQs}`,
+          { cache: "no-store" }
+        );
         if (!res.ok) return;
 
         const json = await res.json();
@@ -216,7 +223,6 @@ function TokenPageInner() {
         if (typeof json?.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
           setCreatorNeynarScore(json.neynar_score);
         } else if (typeof json?.creator_score === "number" && Number.isFinite(json.creator_score)) {
-          // на всякий случай
           setCreatorNeynarScore(json.creator_score);
         }
 
@@ -244,9 +250,10 @@ function TokenPageInner() {
           setFollowerCount(json.follower_count);
         }
 
-        // analytics slices
+        // slices
         setFollowersAnalytics(json?.followers_analytics ?? null);
         setTokenMentions(json?.token_mentions ?? null);
+        setCreatorContext(json?.creator_context ?? null);
       } catch (e) {
         console.error("token-score on token page failed", e);
       } finally {
@@ -456,30 +463,79 @@ function TokenPageInner() {
                     {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
                   </div>
 
-                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                    creator(0.6) + followers_quality(0.4)
+                  {/* Mentions summary */}
+                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 10 }}>
+                    <strong>Mentions:</strong>{" "}
+                    {tokenMentions ? (
+                      <>
+                        {tokenMentions.mentions_count ?? 0} total · {tokenMentions.unique_authors ?? 0} authors
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </div>
 
-                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                    creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} ·
-                    followers: {followerCount != null ? followerCount.toLocaleString() : "—"} ·
-                    followers_quality: {followersQuality != null ? round2(followersQuality) : "—"}
-                  </div>
+                  {/* Mentions list */}
+                  {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          padding: 0,
+                          margin: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                        }}
+                      >
+                        {tokenMentions.casts.slice(0, 8).map((c: any) => (
+                          <li
+                            key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
+                            style={{
+                              border: "1px solid #e5e7eb",
+                              background: "#fff",
+                              borderRadius: 10,
+                              padding: "8px 10px",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                              <div style={{ fontSize: 12, opacity: 0.92 }}>
+                                <strong>@{c?.author?.username ?? "unknown"}</strong>
+                                {c?.timestamp ? (
+                                  <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                                    {new Date(c.timestamp).toLocaleString("ru-RU")}
+                                  </span>
+                                ) : null}
+                              </div>
 
-                  {/* mentions */}
-                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                    mentions: {tokenMentions?.mentions_count ?? "—"} · authors: {tokenMentions?.unique_authors ?? "—"}
-                  </div>
+                              {c?.warpcastUrl ? (
+                                <a href={c.warpcastUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                                  open
+                                </a>
+                              ) : null}
+                            </div>
 
-                  {/* followers analytics */}
-                  {followersAnalytics && (
-                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>
-                      followers sample: {followersAnalytics.sample_size ?? "—"} · avg follower score:{" "}
-                      {typeof followersAnalytics.avg_follower_score === "number"
-                        ? round2(followersAnalytics.avg_follower_score)
-                        : "—"}
+                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
+                              {(c?.text ?? "").slice(0, 180)}
+                              {(c?.text ?? "").length > 180 ? "…" : ""}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
+
+                  {/* Creator context */}
+                  <div style={{ fontSize: 12, opacity: 0.86, marginTop: 12 }}>
+                    <strong>Creator context:</strong>{" "}
+                    {creatorContext?.classification === "ongoing_build_or_preannounced"
+                      ? "Ongoing / pre-announced (creator mentioned it before launch)"
+                      : creatorContext?.classification === "fresh_launch_or_unknown"
+                      ? "Fresh launch / unknown"
+                      : creatorContext?.classification === "mentioned_but_no_timestamp_context"
+                      ? "Mentioned by creator (no pre-launch timestamp match)"
+                      : "—"}
+                  </div>
                 </div>
 
                 <div style={{ minWidth: 240 }}>
