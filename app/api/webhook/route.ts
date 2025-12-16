@@ -4,71 +4,91 @@ import { kv } from "@vercel/kv";
 import {
   parseWebhookEvent,
   verifyAppKeyWithNeynar,
-  ParseWebhookEvent,
 } from "@farcaster/miniapp-node";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// KV key helpers
-const keyFor = (fid: number, appFid: number) => `fc:notify:${fid}:${appFid}`;
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
+
+type StoredNotif = {
+  fid: number;
+  url: string;
+  token: string;
+  updatedAt: string;
+};
+
+function subKey(fid: number) {
+  return `fc:notif:${fid}`;
+}
+
+const SUB_SET_KEY = "fc:notif:subs"; // список всех подписчиков (set)
 
 export async function GET() {
-  // Farcaster может дернуть GET чтобы проверить доступность
+  // Farcaster может пинговать URL на доступность
   return NextResponse.json({ ok: true });
 }
 
-export async function POST(request: NextRequest) {
-  const requestJson = await request.json();
-
-  let data: any;
+export async function POST(req: NextRequest) {
   try {
-    data = await parseWebhookEvent(requestJson, verifyAppKeyWithNeynar);
-  } catch (e: unknown) {
-    const error = e as ParseWebhookEvent.ErrorType;
-
-    // Минимально полезная диагностика
-    console.error("Webhook verify failed:", error?.name, error);
-
-    // 400/401 чтобы клиент понял что данные/подпись плохие
-    return NextResponse.json(
-      { ok: false, error: error?.name ?? "unknown" },
-      { status: 401 }
-    );
-  }
-
-  const fid: number = data.fid;
-  const appFid: number = data.appFid; // FID клиента (например Warpcast / Base app)
-  const event = data.event; // { event: "...", notificationDetails?: { token, url } }
-
-  try {
-    switch (event.event) {
-      case "miniapp_added":
-      case "notifications_enabled": {
-        // Если клиент сразу выдал notificationDetails — сохраняем
-        if (event.notificationDetails?.token && event.notificationDetails?.url) {
-          await kv.set(keyFor(fid, appFid), {
-            fid,
-            appFid,
-            token: event.notificationDetails.token,
-            url: event.notificationDetails.url,
-            updatedAt: Date.now(),
-          });
-        }
-        break;
-      }
-
-      case "miniapp_removed":
-      case "notifications_disabled": {
-        await kv.del(keyFor(fid, appFid));
-        break;
-      }
+    if (!NEYNAR_API_KEY) {
+      return NextResponse.json({ ok: false, error: "Missing NEYNAR_API_KEY" }, { status: 500 });
     }
-  } catch (err) {
-    console.error("Error processing webhook event:", err);
-    // Важно: все равно отвечаем быстро
-  }
 
-  // Важно отвечать быстро (≤10s), Base app может ждать успешный ответ  [oai_citation:2‡docs.base.org](https://docs.base.org/mini-apps/core-concepts/notifications?utm_source=chatgpt.com)
-  return NextResponse.json({ ok: true });
+    const rawBody = await req.text();
+    const evt = await parseWebhookEvent(rawBody);
+
+    // Проверка, что вебхук реально от Farcaster / валидный app key
+    const ok = await verifyAppKeyWithNeynar({
+      neynarApiKey: NEYNAR_API_KEY,
+      appKey: evt.appKey,
+    });
+
+    if (!ok) {
+      return NextResponse.json({ ok: false, error: "Invalid appKey" }, { status: 401 });
+    }
+
+    // События подписки/отписки на уведомления
+    // В evt обычно есть fid + notificationDetails (url, token)
+    const fid = evt?.fid;
+    const notificationDetails = evt?.notificationDetails;
+
+    if (typeof fid !== "number") {
+      return NextResponse.json({ ok: true, ignored: true });
+    }
+
+    // subscribe
+    if (notificationDetails?.token && notificationDetails?.url) {
+      const data: StoredNotif = {
+        fid,
+        url: notificationDetails.url,
+        token: notificationDetails.token,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await kv.set(subKey(fid), data);
+      await kv.sadd(SUB_SET_KEY, String(fid));
+
+      return NextResponse.json({ ok: true, stored: true });
+    }
+
+    // unsubscribe (если пришло событие без notificationDetails или явная отписка)
+    // (у разных версий payload это может отличаться, поэтому делаем безопасно)
+    const eventType = (evt as any)?.type ?? (evt as any)?.event ?? null;
+    const isUnsub =
+      eventType === "notifications.unsubscribe" ||
+      eventType === "miniapp.notifications.unsubscribe" ||
+      eventType === "unsubscribe";
+
+    if (isUnsub) {
+      await kv.del(subKey(fid));
+      await kv.srem(SUB_SET_KEY, String(fid));
+      return NextResponse.json({ ok: true, removed: true });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[webhook] error", e);
+    return NextResponse.json({ ok: false, error: "Webhook error" }, { status: 500 });
+  }
 }
