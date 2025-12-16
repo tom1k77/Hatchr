@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/alerts",
+      "schedule": "*/1 * * * *"
+    }
+  ]
+}
