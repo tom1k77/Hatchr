@@ -10,16 +10,41 @@ function clamp(n: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, n));
 }
 
+function toNumberMaybe(x: any): number | null {
+  if (typeof x !== "number") return null;
+  if (!Number.isFinite(x)) return null;
+  return x;
+}
+
+/**
+ * Neynar sometimes returns score in different places depending on endpoint/version.
+ * This tries multiple candidates and clamps to [0..1].
+ */
 function pickNeynarScore(obj: any): number | null {
   const candidates = [
+    // common
     obj?.score,
     obj?.neynar_user_score,
+
+    // experimental blocks
     obj?.experimental?.neynar_user_score,
     obj?.experimental?.user_score,
+    obj?.experimental?.score,
+
+    // viewer context
     obj?.viewer_context?.neynar_user_score,
+    obj?.viewer_context?.user_score,
+    obj?.viewer_context?.score,
+
+    // sometimes nested
+    obj?.user?.score,
+    obj?.user?.neynar_user_score,
+    obj?.result?.user?.score,
   ];
+
   for (const c of candidates) {
-    if (typeof c === "number" && Number.isFinite(c)) return clamp(c, 0, 1);
+    const n = toNumberMaybe(c);
+    if (n != null) return clamp(n, 0, 1);
   }
   return null;
 }
@@ -69,7 +94,6 @@ const EMPTY_FQ: FollowersQuality = {
   followers_quality: null,
 };
 
-// ✅ 150 sample default
 async function fetchFollowersQuality(fid: number, limit = 150): Promise<FollowersQuality> {
   const url =
     `https://api.neynar.com/v2/farcaster/followers/?` +
@@ -99,7 +123,7 @@ async function fetchFollowersQuality(fid: number, limit = 150): Promise<Follower
     const u = r?.user ?? r;
     const s = pickNeynarScore(u);
 
-    if (typeof s === "number" && Number.isFinite(s)) {
+    if (s != null) {
       scoredCount += 1;
       scoreSum += clamp(s, 0, 1);
     }
@@ -127,7 +151,6 @@ async function fetchFollowersQuality(fid: number, limit = 150): Promise<Follower
   };
 }
 
-// ✅ Mentions now returns casts[] with warpcast links
 async function fetchTokenMentions(address: string) {
   const q = address.toLowerCase();
 
@@ -157,7 +180,7 @@ async function fetchTokenMentions(address: string) {
     const fid = c?.author?.fid;
     if (typeof fid === "number" && Number.isFinite(fid)) authors.add(fid);
 
-    const hash = c?.hash ?? null; // "0x..."
+    const hash = c?.hash ?? null; // usually "0x..."
     const warpcastUrl = hash ? `https://warpcast.com/~/cast/${hash}` : null;
 
     return {
@@ -181,7 +204,6 @@ async function fetchTokenMentions(address: string) {
   };
 }
 
-// ✅ creator_context heuristic: был ли токен/символ/адрес упомянут автором ДО создания
 async function fetchCreatorContext(
   fid: number,
   tokenCreatedAt?: string | null,
@@ -211,11 +233,7 @@ async function fetchCreatorContext(
 
   const createdMs = tokenCreatedAt ? Date.parse(tokenCreatedAt) : NaN;
 
-  const needles = [
-    tokenName?.trim(),
-    tokenSymbol?.trim(),
-    address?.trim()?.toLowerCase(),
-  ]
+  const needles = [tokenName?.trim(), tokenSymbol?.trim(), address?.trim()?.toLowerCase()]
     .filter(Boolean)
     .map((s) => String(s).toLowerCase());
 
@@ -244,7 +262,11 @@ async function fetchCreatorContext(
   }
 
   const classification =
-    earliestBefore ? "ongoing_build_or_preannounced" : matches > 0 ? "mentioned_but_no_timestamp_context" : "fresh_launch_or_unknown";
+    earliestBefore
+      ? "ongoing_build_or_preannounced"
+      : matches > 0
+      ? "mentioned_but_no_timestamp_context"
+      : "fresh_launch_or_unknown";
 
   return { classification, checked: casts.length, matches, earliest_match_ts: earliestBefore };
 }
@@ -260,8 +282,7 @@ export async function GET(req: NextRequest) {
     const usernameParam = searchParams.get("username");
     const addressParam = searchParams.get("address");
 
-    // ✅ new creator-context inputs
-    const tokenCreatedAt = searchParams.get("tokenCreatedAt"); // ISO string preferred
+    const tokenCreatedAt = searchParams.get("tokenCreatedAt");
     const tokenName = searchParams.get("tokenName");
     const tokenSymbol = searchParams.get("tokenSymbol");
 
@@ -293,14 +314,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Failed Neynar", status: result.status }, { status: 500 });
     }
 
-    const json: any = result.json;
+    const raw: any = result.json;
 
     const user =
-      json?.user ??
-      json?.result?.user ??
-      (Array.isArray(json?.users) ? json.users[0] : null) ??
-      (Array.isArray(json?.result?.users) ? json.result.users[0] : null) ??
-      json;
+      raw?.user ??
+      raw?.result?.user ??
+      (Array.isArray(raw?.users) ? raw.users[0] : null) ??
+      (Array.isArray(raw?.result?.users) ? raw.result.users[0] : null) ??
+      raw;
 
     const creator_score = pickNeynarScore(user);
 
@@ -318,16 +339,19 @@ export async function GET(req: NextRequest) {
       null;
 
     const followersQuality =
-      resolvedFid && Number.isFinite(resolvedFid)
-        ? await fetchFollowersQuality(resolvedFid, 150)
-        : EMPTY_FQ;
+      resolvedFid && Number.isFinite(resolvedFid) ? await fetchFollowersQuality(resolvedFid, 150) : EMPTY_FQ;
 
     const followers_quality = followersQuality.followers_quality;
 
-    const hatchr_score =
-      creator_score != null && followers_quality != null
-        ? clamp(0.6 * creator_score + 0.4 * followers_quality, 0, 1)
-        : null;
+    // ✅ FIX: score no longer becomes null if one piece is missing
+    let hatchr_score: number | null = null;
+    if (creator_score != null && followers_quality != null) {
+      hatchr_score = clamp(0.6 * creator_score + 0.4 * followers_quality, 0, 1);
+    } else if (creator_score != null) {
+      hatchr_score = clamp(creator_score, 0, 1);
+    } else if (followers_quality != null) {
+      hatchr_score = clamp(followers_quality, 0, 1);
+    }
 
     const token_mentions =
       typeof addressParam === "string" && /^0x[0-9a-fA-F]{40}$/.test(addressParam.trim())
@@ -364,6 +388,14 @@ export async function GET(req: NextRequest) {
 
       token_mentions,
       creator_context,
+
+      // ✅ Debug (can remove later)
+      debug: {
+        user_fetch_url: result.url,
+        creator_score_found: creator_score != null,
+        followers_quality_found: followers_quality != null,
+        followers_sampled: followersQuality.followers_sampled,
+      },
     });
   } catch (e) {
     console.error("token-score route error", e);
