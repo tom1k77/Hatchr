@@ -10,6 +10,9 @@ const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY;
 const BASESCAN_API = "https://api.basescan.org/api";
 
+// ✅ Clanker
+const CLANKER_SEARCH_CREATOR = "https://clanker.world/api/search-creator";
+
 // ---- utils ----
 function clamp(n: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, n));
@@ -194,7 +197,6 @@ async function fetchTokenMentions(address: string) {
     if (typeof fid === "number" && Number.isFinite(fid)) authors.add(fid);
 
     const hash: string | null = typeof c?.hash === "string" ? c.hash : null;
-
     const warpcastUrl = hash ? `https://warpcast.com/~/cast/${hash}` : null;
 
     return {
@@ -318,11 +320,15 @@ async function fetchCreatorContext(
 }
 
 // =============================
-// ✅ BaseScan: deploy count cache
+// ✅ BaseScan: deploy count cache (wallet contract creations)
 // =============================
 type DeployCountResult = {
   count: number | null;
-  method: "basescan_contract_creations" | "basescan_unavailable" | "basescan_rate_limited" | "basescan_error";
+  method:
+    | "basescan_contract_creations"
+    | "basescan_unavailable"
+    | "basescan_rate_limited"
+    | "basescan_error";
   addresses_used: string[];
   scanned_txs: number;
   note?: string;
@@ -339,10 +345,8 @@ function getDeployCache(): Map<string, { ts: number; v: DeployCountResult }> {
 async function fetchBaseScanContractCreations(address: string): Promise<{ count: number; scanned: number } | null> {
   if (!BASESCAN_API_KEY) return null;
 
-  // На бесплатном плане лучше не сканить тысячи страниц.
-  // Для большинства “creator wallets” хватает 1–3 страниц.
   const MAX_PAGES = 3;
-  const OFFSET = 100; // 100 tx * 3 pages = 300 tx
+  const OFFSET = 100;
 
   let page = 1;
   let scanned = 0;
@@ -357,23 +361,16 @@ async function fetchBaseScanContractCreations(address: string): Promise<{ count:
 
     const resp = await fetch(url, { cache: "no-store" });
 
-    if (resp.status === 429) {
-      // rate limit
-      return null;
-    }
-
+    if (resp.status === 429) return null;
     if (!resp.ok) return null;
 
     const json: any = await resp.json();
-
-    // Etherscan-style: status "1" + result array
     const rows: any[] = Array.isArray(json?.result) ? json.result : [];
     if (!rows.length) break;
 
     scanned += rows.length;
 
     for (const tx of rows) {
-      // В Etherscan txlist contract creation обычно: to == "" && contractAddress != ""
       const to = typeof tx?.to === "string" ? tx.to : "";
       const ca = typeof tx?.contractAddress === "string" ? tx.contractAddress : "";
       if ((!to || to === "0x0000000000000000000000000000000000000000") && ca && ca.startsWith("0x")) {
@@ -381,7 +378,6 @@ async function fetchBaseScanContractCreations(address: string): Promise<{ count:
       }
     }
 
-    // если меньше OFFSET — дальше смысла нет
     if (rows.length < OFFSET) break;
     page += 1;
   }
@@ -391,28 +387,34 @@ async function fetchBaseScanContractCreations(address: string): Promise<{ count:
 
 async function fetchCreatorDeployCountFromVerifiedWallets(user: any): Promise<DeployCountResult> {
   if (!BASESCAN_API_KEY) {
-    return { count: null, method: "basescan_unavailable", addresses_used: [], scanned_txs: 0, note: "Missing BASESCAN_API_KEY" };
+    return {
+      count: null,
+      method: "basescan_unavailable",
+      addresses_used: [],
+      scanned_txs: 0,
+      note: "Missing BASESCAN_API_KEY",
+    };
   }
 
   const cache = getDeployCache();
 
-  // Neynar обычно отдаёт verified_addresses.eth_addresses
   const ethAddrsRaw: any[] = Array.isArray(user?.verified_addresses?.eth_addresses)
     ? user.verified_addresses.eth_addresses
     : [];
 
-  const ethAddrs = ethAddrsRaw
-    .map(normEthAddress)
-    .filter(Boolean) as string[];
-
-  // Чтобы не жечь лимиты — берём максимум 2 адреса
+  const ethAddrs = ethAddrsRaw.map(normEthAddress).filter(Boolean) as string[];
   const addresses_used = ethAddrs.slice(0, 2);
 
   if (!addresses_used.length) {
-    return { count: 0, method: "basescan_contract_creations", addresses_used: [], scanned_txs: 0, note: "No verified eth_addresses" };
+    return {
+      count: 0,
+      method: "basescan_contract_creations",
+      addresses_used: [],
+      scanned_txs: 0,
+      note: "No verified eth_addresses",
+    };
   }
 
-  // кеш по “joined addresses”
   const key = `deploycount:${addresses_used.join(",")}`;
   const cached = cache.get(key);
   if (cached && Date.now() - cached.ts < DEPLOY_TTL_MS) return cached.v;
@@ -448,6 +450,129 @@ async function fetchCreatorDeployCountFromVerifiedWallets(user: any): Promise<De
 
   cache.set(key, { ts: Date.now(), v });
   return v;
+}
+
+// =============================
+// ✅ Clanker: creator tokens (official endpoint from docs)
+// =============================
+type ClankerCreatorToken = {
+  contract_address: string | null;
+  name: string | null;
+  symbol: string | null;
+  img_url: string | null;
+  deployed_at: string | null;
+  msg_sender: string | null;
+  trust_level: "allowlisted" | "trusted_deployer" | "fid_verified" | "unverified" | "unknown";
+  trustStatus?: any;
+  clanker_url: string | null;
+};
+
+type ClankerCreatorResult = {
+  q: string;
+  total: number | null;
+  hasMore: boolean | null;
+  searchedAddress: string | null;
+  user?: any;
+  tokens: ClankerCreatorToken[];
+  trust_counts: {
+    allowlisted: number;
+    trusted_deployer: number;
+    fid_verified: number;
+    unverified: number;
+    unknown: number;
+  };
+};
+
+function clankerTrustLevel(ts: any): ClankerCreatorToken["trust_level"] {
+  if (!ts || typeof ts !== "object") return "unknown";
+  if (ts?.isTrustedClanker === true) return "allowlisted";
+  if (ts?.isTrustedDeployer === true) return "trusted_deployer";
+  if (ts?.fidMatchesDeployer === true) return "fid_verified";
+  return "unverified";
+}
+
+function getClankerCache(): Map<string, { ts: number; v: ClankerCreatorResult }> {
+  const g = globalThis as any;
+  if (!g.__hatchr_clanker_creator_cache) g.__hatchr_clanker_creator_cache = new Map();
+  return g.__hatchr_clanker_creator_cache;
+}
+
+const CLANKER_TTL_MS = 10 * 60 * 1000; // 10 min
+
+async function fetchClankerByCreator(q: string, limit = 20): Promise<ClankerCreatorResult | null> {
+  const qq = (q || "").trim();
+  if (!qq) return null;
+
+  const cache = getClankerCache();
+  const key = `clanker:${qq.toLowerCase()}:${limit}`;
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.ts < CLANKER_TTL_MS) return cached.v;
+
+  const url = new URL(CLANKER_SEARCH_CREATOR);
+  url.searchParams.set("q", qq);
+  url.searchParams.set("limit", String(Math.min(Math.max(limit, 1), 50)));
+  url.searchParams.set("offset", "0");
+  url.searchParams.set("sort", "desc");
+  url.searchParams.set("trustedOnly", "false");
+
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    console.error("[Clanker search-creator] error", res.status, t.slice(0, 200));
+    return {
+      q: qq,
+      total: null,
+      hasMore: null,
+      searchedAddress: null,
+      tokens: [],
+      trust_counts: { allowlisted: 0, trusted_deployer: 0, fid_verified: 0, unverified: 0, unknown: 0 },
+    };
+  }
+
+  const json: any = await res.json().catch(() => null);
+  if (!json) return null;
+
+  const rawTokens: any[] = Array.isArray(json?.tokens) ? json.tokens : [];
+
+  const trust_counts = { allowlisted: 0, trusted_deployer: 0, fid_verified: 0, unverified: 0, unknown: 0 };
+
+  const tokens: ClankerCreatorToken[] = rawTokens.slice(0, 20).map((t: any) => {
+    const addr = typeof t?.contract_address === "string" ? t.contract_address.toLowerCase() : null;
+    const ts = t?.trustStatus;
+    const trust_level = clankerTrustLevel(ts);
+
+    if (trust_level === "allowlisted") trust_counts.allowlisted += 1;
+    else if (trust_level === "trusted_deployer") trust_counts.trusted_deployer += 1;
+    else if (trust_level === "fid_verified") trust_counts.fid_verified += 1;
+    else if (trust_level === "unverified") trust_counts.unverified += 1;
+    else trust_counts.unknown += 1;
+
+    return {
+      contract_address: addr,
+      name: typeof t?.name === "string" ? t.name : null,
+      symbol: typeof t?.symbol === "string" ? t.symbol : null,
+      img_url: typeof t?.img_url === "string" ? t.img_url : null,
+      deployed_at: typeof t?.deployed_at === "string" ? t.deployed_at : (typeof t?.created_at === "string" ? t.created_at : null),
+      msg_sender: typeof t?.msg_sender === "string" ? t.msg_sender : null,
+      trust_level,
+      trustStatus: ts,
+      // если у clanker другой url-формат — можно поменять позже
+      clanker_url: addr ? `https://clanker.world/token/${addr}` : null,
+    };
+  });
+
+  const out: ClankerCreatorResult = {
+    q: qq,
+    total: typeof json?.total === "number" && Number.isFinite(json.total) ? json.total : (rawTokens.length || 0),
+    hasMore: typeof json?.hasMore === "boolean" ? json.hasMore : null,
+    searchedAddress: typeof json?.searchedAddress === "string" ? json.searchedAddress : null,
+    user: json?.user,
+    tokens,
+    trust_counts,
+  };
+
+  cache.set(key, { ts: Date.now(), v: out });
+  return out;
 }
 
 // =============================
@@ -554,9 +679,31 @@ export async function GET(req: NextRequest) {
         ? await fetchCreatorContext(resolvedFid, tokenCreatedAt, tokenName, tokenSymbol, addressParam)
         : null;
 
-    // ✅ NEW: how many deploys by creator wallets (BaseScan)
-    const creator_tokens_deployed =
+    // ✅ BaseScan wallet deploys (optional signal)
+    const creator_tokens_deployed_basescan =
       user ? await fetchCreatorDeployCountFromVerifiedWallets(user) : null;
+
+    // ✅ Clanker official “Get Tokens by Creator”
+    // Prefer username, fallback to first verified eth address
+    const verifiedEths: string[] = Array.isArray(user?.verified_addresses?.eth_addresses)
+      ? user.verified_addresses.eth_addresses.map(normEthAddress).filter(Boolean)
+      : [];
+
+    const clankerQ =
+      (typeof resolvedUsername === "string" && resolvedUsername.trim() ? resolvedUsername.trim() : null) ??
+      (verifiedEths[0] ?? null);
+
+    const clanker_creator = clankerQ ? await fetchClankerByCreator(clankerQ, 20) : null;
+
+    // ✅ Unified for UI: use clanker total as primary
+    const creator_tokens_deployed = {
+      clanker_total: typeof clanker_creator?.total === "number" ? clanker_creator.total : null,
+      clanker_q: clanker_creator?.q ?? null,
+      clanker_has_more: clanker_creator?.hasMore ?? null,
+      clanker_trust_counts: clanker_creator?.trust_counts ?? null,
+      clanker_recent_tokens: clanker_creator?.tokens ?? [],
+      basescan_wallet_contract_creations: creator_tokens_deployed_basescan ?? null,
+    };
 
     return NextResponse.json({
       fid: resolvedFid,
@@ -576,13 +723,12 @@ export async function GET(req: NextRequest) {
       creator_summary: {
         power_badge: creator_power_badge,
         created_at: creator_created_at,
-        // полезно для дебага:
         verified_eth_addresses: Array.isArray(user?.verified_addresses?.eth_addresses)
           ? user.verified_addresses.eth_addresses
           : [],
       },
 
-      // ✅ NEW
+      // ✅ NEW (Clanker + BaseScan)
       creator_tokens_deployed,
 
       followers_analytics: {
