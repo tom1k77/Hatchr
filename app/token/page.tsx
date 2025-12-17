@@ -81,26 +81,18 @@ function round2(x: number) {
 }
 
 /** ---------------------------
- * Share helpers (ADDED)
+ * Share helpers
  * --------------------------- */
 function buildTokenShareText(tokenSymbolOrName: string) {
   const raw = (tokenSymbolOrName || "").trim();
-
-  // убираем ведущий $, если вдруг уже есть
   const cleaned = raw.replace(/^\$/g, "");
-
-  // вот эта переменная должна быть объявлена
   const cashtag = cleaned ? `$${cleaned.toUpperCase()}` : "This token";
-
   return `${cashtag} spotted on @hatchr 👀\nLook what else is new on Base.`;
 }
 
 function buildTokenShareUrl(address: string) {
-  // Ты сейчас используешь /token?address=...
-  // Это идеальный “deep link” в твой текущий TokenPage.
   const origin =
     typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://hatchr.xyz";
-
   return `${origin}/token?address=${encodeURIComponent(address)}`;
 }
 
@@ -110,6 +102,13 @@ function buildWarpcastComposeIntent(text: string, embedUrl: string) {
     `text=${encodeURIComponent(text)}` +
     `&embeds[]=${encodeURIComponent(embedUrl)}`
   );
+}
+
+/** Warpcast cast link — самый стабильный */
+function warpcastCastUrlFromHash(hash?: string | null) {
+  if (!hash || typeof hash !== "string") return null;
+  const h = hash.startsWith("0x") ? hash : `0x${hash}`;
+  return `https://warpcast.com/~/cast/${h}`;
 }
 
 function TokenPageInner() {
@@ -238,14 +237,15 @@ function TokenPageInner() {
           : `username=${encodeURIComponent(String(farcasterHandle))}`;
 
         const addressQs = normalizedAddress ? `&address=${encodeURIComponent(normalizedAddress)}` : "";
-        const tokenCreatedAtQs = token?.first_seen_at ? `&tokenCreatedAt=${encodeURIComponent(token.first_seen_at)}` : "";
+        const tokenCreatedAtQs = token?.first_seen_at
+          ? `&tokenCreatedAt=${encodeURIComponent(token.first_seen_at)}`
+          : "";
         const tokenNameQs = token?.name ? `&tokenName=${encodeURIComponent(token.name)}` : "";
         const tokenSymbolQs = token?.symbol ? `&tokenSymbol=${encodeURIComponent(token.symbol)}` : "";
 
-        const res = await fetch(
-          `/api/token-score?${qs}${addressQs}${tokenCreatedAtQs}${tokenNameQs}${tokenSymbolQs}`,
-          { cache: "no-store" }
-        );
+        const res = await fetch(`/api/token-score?${qs}${addressQs}${tokenCreatedAtQs}${tokenNameQs}${tokenSymbolQs}`, {
+          cache: "no-store",
+        });
         if (!res.ok) return;
 
         const json = await res.json();
@@ -260,6 +260,8 @@ function TokenPageInner() {
 
         if (typeof json?.followers_quality === "number" && Number.isFinite(json.followers_quality)) {
           setFollowersQuality(json.followers_quality);
+        } else {
+          setFollowersQuality(null);
         }
 
         // hatchr score (new or fallback)
@@ -304,36 +306,36 @@ function TokenPageInner() {
   const identityFid = creatorFidFromToken ?? resolvedFid ?? null;
   const identityHandle = farcasterHandle ? `@${farcasterHandle}` : resolvedUsername ? `@${resolvedUsername}` : "—";
 
+  const followers_quality_value =
+    followersQuality != null && Number.isFinite(followersQuality) ? round2(followersQuality) : null;
+
   /** ---------------------------
-   * Share action (ADDED)
+   * Share action
    * --------------------------- */
   const onShare = useCallback(async () => {
-  if (!token?.token_address) return;
+    if (!token?.token_address) return;
 
-  const tokenLabel = token.symbol || token.name || "Token";
-  const text = buildTokenShareText(tokenLabel);
-  const embedUrl = buildTokenShareUrl(token.token_address);
-  const intent = buildWarpcastComposeIntent(text, embedUrl);
+    const tokenLabel = token.symbol || token.name || "Token";
+    const text = buildTokenShareText(tokenLabel);
+    const embedUrl = buildTokenShareUrl(token.token_address);
+    const intent = buildWarpcastComposeIntent(text, embedUrl);
 
-  // 1) Mini app composer
-  try {
-    const mod = await import("@farcaster/miniapp-sdk");
-    const sdk = mod.sdk;
-    await sdk.actions.composeCast({ text, embeds: [embedUrl] });
-    return;
-  } catch {}
+    // 1) Mini app composer
+    try {
+      const mod = await import("@farcaster/miniapp-sdk");
+      const sdk = mod.sdk;
+      await sdk.actions.composeCast({ text, embeds: [embedUrl] });
+      return;
+    } catch {}
 
-  // 2) ВЕБ-ФОЛБЭК 
-
-  // Вариант B (новая вкладка)
-  const w = window.open("about:blank", "_blank");
-  if (!w) {
-    window.location.href = intent;
-    return;
-  }
-  w.location.href = intent;
-
-}, [token]);
+    // 2) Web fallback
+    const w = window.open("about:blank", "_blank");
+    if (!w) {
+      window.location.href = intent;
+      return;
+    }
+    w.location.href = intent;
+  }, [token]);
 
   return (
     <div className="hatchr-root">
@@ -441,48 +443,47 @@ function TokenPageInner() {
                   </div>
                 </div>
 
-                {/* ACTIONS (UPDATED): добавил Share рядом с View on ... */}
                 <div
-  className="token-page-actions"
-  style={{
-    marginTop: 10,
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    position: "relative",
-    zIndex: 50,         // <-- поднимаем над возможными оверлеями
-    pointerEvents: "auto",
-  }}
->
-  {token.source_url && (
-    <a
-      href={token.source_url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="token-page-primary-btn"
-      style={{ pointerEvents: "auto" }}
-    >
-      View on {token.source === "clanker" ? "Clanker" : "Zora"}
-    </a>
-  )}
+                  className="token-page-actions"
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    gap: 10,
+                    flexWrap: "wrap",
+                    position: "relative",
+                    zIndex: 50,
+                    pointerEvents: "auto",
+                  }}
+                >
+                  {token.source_url && (
+                    <a
+                      href={token.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="token-page-primary-btn"
+                      style={{ pointerEvents: "auto" }}
+                    >
+                      View on {token.source === "clanker" ? "Clanker" : "Zora"}
+                    </a>
+                  )}
 
-  <button
-    type="button"
-    onClick={onShare}
-    className="token-page-primary-btn"
-    style={{
-      background: "transparent",
-      color: "inherit",
-      cursor: "pointer",
-      pointerEvents: "auto",
-      position: "relative",
-      zIndex: 51,
-    }}
-    title="Share this token on Farcaster"
-  >
-    Share on Farcaster
-  </button>
-</div>
+                  <button
+                    type="button"
+                    onClick={onShare}
+                    className="token-page-primary-btn"
+                    style={{
+                      background: "transparent",
+                      color: "inherit",
+                      cursor: "pointer",
+                      pointerEvents: "auto",
+                      position: "relative",
+                      zIndex: 51,
+                    }}
+                    title="Share this token on Farcaster"
+                  >
+                    Share on Farcaster
+                  </button>
+                </div>
               </section>
 
               <aside className="token-page-card token-page-side">
@@ -553,99 +554,138 @@ function TokenPageInner() {
             </div>
 
             {/* Score block */}
-<section className="token-page-card" style={{ marginTop: 16 }}>
-  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-    <div>
-      <div className="token-page-label">Hatchr score (v1)</div>
-      <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
-        {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
-      </div>
+            <section className="token-page-card" style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <div className="token-page-label">Hatchr score (v1)</div>
+                  <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
+                    {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
+                  </div>
 
-      {/* Mentions summary */}
-      <div style={{ fontSize: 12, opacity: 0.82, marginTop: 10 }}>
-        <strong>Mentions:</strong>{" "}
-        {tokenMentions ? (
-          <>
-            {tokenMentions.mentions_count ?? 0} total · {tokenMentions.unique_authors ?? 0} authors
-          </>
-        ) : (
-          "—"
-        )}
-      </div>
-
-      {/* Mentions list */}
-      {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <ul
-            style={{
-              listStyle: "none",
-              padding: 0,
-              margin: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-            }}
-          >
-            {tokenMentions.casts.slice(0, 8).map((c: any) => (
-              <li
-                key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
-                style={{
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
-                  borderRadius: 10,
-                  padding: "8px 10px",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div style={{ fontSize: 12, opacity: 0.92 }}>
-                    <strong>@{c?.author?.username ?? "unknown"}</strong>
-                    {c?.timestamp ? (
-                      <span style={{ marginLeft: 8, opacity: 0.6 }}>
-                        {new Date(c.timestamp).toLocaleString("ru-RU")}
-                      </span>
+                  {/* ✅ Followers quality — отдельной строкой */}
+                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
+                    <strong>Followers quality:</strong>{" "}
+                    {scoreLoading ? "…" : followers_quality_value != null ? followers_quality_value : "—"}
+                    {typeof followersAnalytics?.sample_size === "number" ? (
+                      <span style={{ opacity: 0.65 }}> · sample {followersAnalytics.sample_size}</span>
                     ) : null}
                   </div>
 
-                  {c?.warpcastUrl ? (
-                    <a href={c.warpcastUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
-                      open
-                    </a>
-                  ) : null}
+                  {/* optional: debug line */}
+                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                    creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
+                    {followerCount != null ? followerCount.toLocaleString() : "—"}
+                  </div>
+
+                  {/* Mentions summary */}
+                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 10 }}>
+                    <strong>Mentions:</strong>{" "}
+                    {tokenMentions ? (
+                      <>
+                        {tokenMentions.mentions_count ?? 0} total · {tokenMentions.unique_authors ?? 0} authors
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
+
+                  {/* Mentions list */}
+                  {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          padding: 0,
+                          margin: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                        }}
+                      >
+                        {tokenMentions.casts.slice(0, 8).map((c: any) => {
+                          const openUrl =
+                            c?.warpcastUrl ||
+                            c?.farcasterUrl ||
+                            warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
+
+                          return (
+                            <li
+                              key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
+                              style={{
+                                border: "1px solid #e5e7eb",
+                                background: "#fff",
+                                borderRadius: 10,
+                                padding: "8px 10px",
+                              }}
+                            >
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                                <div style={{ fontSize: 12, opacity: 0.92 }}>
+                                  <strong>@{c?.author?.username ?? "unknown"}</strong>
+                                  {c?.timestamp ? (
+                                    <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                                      {new Date(c.timestamp).toLocaleString("ru-RU")}
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {openUrl ? (
+                                  <a href={openUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                                    open
+                                  </a>
+                                ) : null}
+                              </div>
+
+                              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
+                                {(c?.text ?? "").slice(0, 180)}
+                                {(c?.text ?? "").length > 180 ? "…" : ""}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Creator context */}
+                  <div style={{ fontSize: 12, opacity: 0.86, marginTop: 12 }}>
+                    <strong>Creator context:</strong>{" "}
+                    {creatorContext?.classification === "ongoing_build_or_preannounced"
+                      ? "Ongoing / pre-announced (creator mentioned it before launch)"
+                      : creatorContext?.classification === "fresh_launch_or_unknown"
+                      ? "Fresh launch / unknown"
+                      : creatorContext?.classification === "mentioned_but_no_timestamp_context"
+                      ? "Mentioned by creator (no pre-launch timestamp match)"
+                      : creatorContext?.classification === "unknown"
+                      ? "Unknown"
+                      : "—"}
+                  </div>
+
+                  {/* ✅ extra context details */}
+                  {creatorContext && (
+                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                      checked: {creatorContext.checked ?? "—"} · matches: {creatorContext.matches ?? "—"}
+                      {creatorContext.earliest_match_ts ? (
+                        <>
+                          {" "}
+                          · earliest pre-launch:{" "}
+                          {new Date(creatorContext.earliest_match_ts).toLocaleString("ru-RU")}
+                        </>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
-                  {(c?.text ?? "").slice(0, 180)}
-                  {(c?.text ?? "").length > 180 ? "…" : ""}
+                <div style={{ minWidth: 240 }}>
+                  <div className="token-page-label">Source identity</div>
+                  <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
+                    FID: <strong>{identityFid ?? "—"}</strong>
+                    <br />
+                    Handle: <strong>{identityHandle}</strong>
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Creator context */}
-      <div style={{ fontSize: 12, opacity: 0.86, marginTop: 12 }}>
-        <strong>Creator context:</strong>{" "}
-        {creatorContext?.classification === "ongoing_build_or_preannounced"
-          ? "Ongoing / pre-announced (creator mentioned it before launch)"
-          : creatorContext?.classification === "fresh_launch_or_unknown"
-          ? "Fresh launch / unknown"
-          : creatorContext?.classification === "mentioned_but_no_timestamp_context"
-          ? "Mentioned by creator (no pre-launch timestamp match)"
-          : "—"}
-      </div>
-    </div>
-
-    <div style={{ minWidth: 240 }}>
-      <div className="token-page-label">Source identity</div>
-      <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
-        FID: <strong>{identityFid ?? "—"}</strong>
-        <br />
-        Handle: <strong>{identityHandle}</strong>
-      </div>
-    </div>
-  </div>
-</section>          </>
+              </div>
+            </section>
+          </>
         )}
       </main>
     </div>
