@@ -134,7 +134,7 @@ function TokenPageInner() {
   const [tokenMentions, setTokenMentions] = useState<any>(null);
   const [creatorContext, setCreatorContext] = useState<any>(null);
 
-  // ✅ NEW
+  // ✅ NEW: creator tokens deployed (clanker + basescan)
   const [creatorTokensDeployed, setCreatorTokensDeployed] = useState<any>(null);
 
   const [hatchrScore, setHatchrScore] = useState<number | null>(null);
@@ -293,7 +293,7 @@ function TokenPageInner() {
         setTokenMentions(json?.token_mentions ?? null);
         setCreatorContext(json?.creator_context ?? null);
 
-        // ✅ NEW
+        // ✅ NEW: clanker + basescan payload
         setCreatorTokensDeployed(json?.creator_tokens_deployed ?? null);
       } catch (e) {
         console.error("token-score on token page failed", e);
@@ -315,6 +315,19 @@ function TokenPageInner() {
 
   const followers_quality_value =
     followersQuality != null && Number.isFinite(followersQuality) ? round2(followersQuality) : null;
+
+  const clankerTotal =
+    typeof creatorTokensDeployed?.clanker_total === "number" ? creatorTokensDeployed.clanker_total : null;
+
+  const clankerRecent: any[] = Array.isArray(creatorTokensDeployed?.clanker_recent_tokens)
+    ? creatorTokensDeployed.clanker_recent_tokens
+    : [];
+
+  const clankerTrust = creatorTokensDeployed?.clanker_trust_counts ?? null;
+
+  const basescan = creatorTokensDeployed?.basescan_wallet_contract_creations ?? null;
+  const basescanCount = typeof basescan?.count === "number" ? basescan.count : null;
+  const basescanMethod = typeof basescan?.method === "string" ? basescan.method : null;
 
   /** ---------------------------
    * Share action
@@ -577,23 +590,89 @@ function TokenPageInner() {
                     ) : null}
                   </div>
 
-                  {/* ✅ NEW: tokens / deploys */}
+                  {/* ✅ NEW: tokens deployed (primary = Clanker total) */}
                   <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
-                    <strong>Tokens deployed:</strong>{" "}
-                    {scoreLoading
-                      ? "…"
-                      : typeof creatorTokensDeployed?.count === "number"
-                        ? creatorTokensDeployed.count
-                        : "—"}
-                    {creatorTokensDeployed?.method ? (
-                      <span style={{ marginLeft: 6, opacity: 0.6 }}>
-                        ({creatorTokensDeployed.method === "basescan_contract_creations" ? "basescan" : "n/a"})
-                      </span>
+                    <strong>Tokens deployed (Clanker):</strong>{" "}
+                    {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
+                    {typeof creatorTokensDeployed?.clanker_q === "string" ? (
+                      <span style={{ marginLeft: 6, opacity: 0.6 }}>q={creatorTokensDeployed.clanker_q}</span>
                     ) : null}
                   </div>
 
+                  {/* Optional: basescan debug */}
+                  <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
+                    <strong>Wallet deploys (BaseScan):</strong>{" "}
+                    {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
+                    {basescanMethod ? <span style={{ marginLeft: 6, opacity: 0.6 }}>({basescanMethod})</span> : null}
+                  </div>
+
+                  {/* Trust breakdown */}
+                  {clankerTrust ? (
+                    <div style={{ fontSize: 12, opacity: 0.82, marginTop: 8 }}>
+                      <strong>Trust:</strong>{" "}
+                      allowlisted {clankerTrust.allowlisted ?? 0} · trusted deployer {clankerTrust.trusted_deployer ?? 0} ·
+                      fid verified {clankerTrust.fid_verified ?? 0} · unverified {clankerTrust.unverified ?? 0}
+                    </div>
+                  ) : null}
+
+                  {/* Recent launches */}
+                  {Array.isArray(clankerRecent) && clankerRecent.length > 0 ? (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>
+                        <strong>Recent launches:</strong>
+                      </div>
+
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          padding: 0,
+                          margin: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                        }}
+                      >
+                        {clankerRecent.slice(0, 6).map((t: any, idx: number) => (
+                          <li
+                            key={t?.contract_address ?? idx}
+                            style={{
+                              border: "1px solid #e5e7eb",
+                              background: "#fff",
+                              borderRadius: 10,
+                              padding: "8px 10px",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                              <div style={{ fontSize: 12, opacity: 0.92 }}>
+                                <strong>{t?.symbol || t?.name || "Token"}</strong>
+                                <span style={{ marginLeft: 8, opacity: 0.7 }}>{t?.trust_level || "unknown"}</span>
+                                {t?.deployed_at ? (
+                                  <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                                    {new Date(t.deployed_at).toLocaleString("ru-RU")}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {t?.clanker_url ? (
+                                <a href={t.clanker_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                                  open
+                                </a>
+                              ) : null}
+                            </div>
+
+                            {t?.contract_address ? (
+                              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
+                                {t.contract_address.slice(0, 8)}…{t.contract_address.slice(-4)}
+                              </div>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
                   {/* optional: debug line */}
-                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 10 }}>
                     creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
                     {followerCount != null ? followerCount.toLocaleString() : "—"}
                   </div>
