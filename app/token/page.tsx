@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -78,6 +78,31 @@ function extractFarcasterUsername(url?: string | null): string | null {
 
 function round2(x: number) {
   return Math.round(x * 100) / 100;
+}
+
+/** ---------------------------
+ * Share helpers (ADDED)
+ * --------------------------- */
+function buildTokenShareText(tokenName: string) {
+  // Можно легко поменять на любой другой шаблон
+  return `${tokenName} spotted on Hatchr 👀\nLook what else is trending on Base.`;
+}
+
+function buildTokenShareUrl(address: string) {
+  // Ты сейчас используешь /token?address=...
+  // Это идеальный “deep link” в твой текущий TokenPage.
+  const origin =
+    typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://hatchr.xyz";
+
+  return `${origin}/token?address=${encodeURIComponent(address)}`;
+}
+
+function buildWarpcastComposeIntent(text: string, embedUrl: string) {
+  return (
+    `https://warpcast.com/~/compose?` +
+    `text=${encodeURIComponent(text)}` +
+    `&embeds[]=${encodeURIComponent(embedUrl)}`
+  );
 }
 
 function TokenPageInner() {
@@ -272,6 +297,30 @@ function TokenPageInner() {
   const identityFid = creatorFidFromToken ?? resolvedFid ?? null;
   const identityHandle = farcasterHandle ? `@${farcasterHandle}` : resolvedUsername ? `@${resolvedUsername}` : "—";
 
+  /** ---------------------------
+   * Share action (ADDED)
+   * --------------------------- */
+  const onShare = useCallback(async () => {
+    if (!token?.token_address) return;
+
+    const tokenName = token.name || token.symbol || "Token";
+    const text = buildTokenShareText(tokenName);
+    const embedUrl = buildTokenShareUrl(token.token_address);
+
+    // 1) Если есть Mini App SDK — откроем нативный composer
+    // (Если пакет не установлен — упадет в catch и откроем warpcast intent)
+    try {
+      const mod = await import("@farcaster/miniapp-sdk");
+      const sdk = mod.sdk;
+      await sdk.actions.composeCast({ text, embeds: [embedUrl] });
+      return;
+    } catch {}
+
+    // 2) Fallback: Warpcast intent
+    const intent = buildWarpcastComposeIntent(text, embedUrl);
+    window.open(intent, "_blank", "noopener,noreferrer");
+  }, [token]);
+
   return (
     <div className="hatchr-root">
       <main className="hatchr-shell">
@@ -378,13 +427,29 @@ function TokenPageInner() {
                   </div>
                 </div>
 
-                {token.source_url && (
-                  <div className="token-page-actions" style={{ marginTop: 10 }}>
-                    <a href={token.source_url} target="_blank" rel="noopener noreferrer" className="token-page-primary-btn">
+                {/* ACTIONS (UPDATED): добавил Share рядом с View on ... */}
+                <div className="token-page-actions" style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {token.source_url && (
+                    <a
+                      href={token.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="token-page-primary-btn"
+                    >
                       View on {token.source === "clanker" ? "Clanker" : "Zora"}
                     </a>
-                  </div>
-                )}
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={onShare}
+                    className="token-page-primary-btn"
+                    style={{ background: "transparent", color: "inherit" }}
+                    title="Share this token on Farcaster"
+                  >
+                    Share on Farcaster
+                  </button>
+                </div>
               </section>
 
               <aside className="token-page-card token-page-side">
@@ -455,68 +520,75 @@ function TokenPageInner() {
             </div>
 
             {/* Score block */}
-<section className="token-page-card" style={{ marginTop: 16 }}>
-  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-    <div>
-      <div className="token-page-label">Hatchr score (v1)</div>
+            <section className="token-page-card" style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <div className="token-page-label">Hatchr score (v1)</div>
+                  <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
+                    {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
+                  </div>
 
-      <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
-        {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
-      </div>
+                  {/* Mentions summary */}
+                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 10 }}>
+                    <strong>Mentions:</strong>{" "}
+                    {tokenMentions ? (
+                      <>
+                        {tokenMentions.mentions_count ?? 0} total · {tokenMentions.unique_authors ?? 0} authors
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </div>
 
-      {/* ✅ NEW: followers quality отдельной строкой под скором */}
-      <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
-        Followers quality:{" "}
-        <strong>
-          {scoreLoading ? "…" : followersQuality != null ? round2(followersQuality) : "—"}
-        </strong>
-        {followersAnalytics?.sample_size ? (
-          <span style={{ opacity: 0.75 }}>
-            {" "}
-            (sample {followersAnalytics.sample_size})
-          </span>
-        ) : null}
-      </div>
+                  {/* Mentions list */}
+                  {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          padding: 0,
+                          margin: 0,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                        }}
+                      >
+                        {tokenMentions.casts.slice(0, 8).map((c: any) => (
+                          <li
+                            key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
+                            style={{
+                              border: "1px solid #e5e7eb",
+                              background: "#fff",
+                              borderRadius: 10,
+                              padding: "8px 10px",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                              <div style={{ fontSize: 12, opacity: 0.92 }}>
+                                <strong>@{c?.author?.username ?? "unknown"}</strong>
+                                {c?.timestamp ? (
+                                  <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                                    {new Date(c.timestamp).toLocaleString("ru-RU")}
+                                  </span>
+                                ) : null}
+                              </div>
 
-      {/* mentions summary */}
-      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 8 }}>
-        Mentions: {tokenMentions?.mentions_count ?? "—"} total · {tokenMentions?.unique_authors ?? "—"} authors
-      </div>
+                              {c?.warpcastUrl ? (
+                                <a href={c.warpcastUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                                  open
+                                </a>
+                              ) : null}
+                            </div>
 
-      {/* Optional: показать топ-1 каст, если есть */}
-      {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 ? (
-        <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6, lineHeight: 1.35 }}>
-          <div style={{ opacity: 0.8 }}>
-            @{tokenMentions.casts[0]?.author?.username ?? "unknown"} ·{" "}
-            {tokenMentions.casts[0]?.timestamp ? String(tokenMentions.casts[0].timestamp).slice(0, 16) : ""}
-            {" · "}
-            {tokenMentions.casts[0]?.farcasterUrl ? (
-              <a href={tokenMentions.casts[0].farcasterUrl} target="_blank" rel="noopener noreferrer">
-                open
-              </a>
-            ) : null}
-          </div>
-          <div style={{ opacity: 0.85 }}>
-            {String(tokenMentions.casts[0]?.text ?? "").slice(0, 220)}
-            {String(tokenMentions.casts[0]?.text ?? "").length > 220 ? "…" : ""}
-          </div>
-        </div>
-      ) : null}
-
-      {/* creator context (если у тебя уже добавлен в json и ты его пробросил в стейт) */}
-      {/* тут можно позже вставить строку creator_context */}
-    </div>
-
-    <div style={{ minWidth: 240 }}>
-      <div className="token-page-label">Source identity</div>
-      <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
-        FID: <strong>{identityFid ?? "—"}</strong>
-        <br />
-        Handle: <strong>{identityHandle}</strong>
-      </div>
-    </div>
-  </div>
-</section>
+                            <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
+                              {(c?.text ?? "").slice(0, 180)}
+                              {(c?.text ?? "").length > 180 ? "…" : ""}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
 
                   {/* Creator context */}
                   <div style={{ fontSize: 12, opacity: 0.86, marginTop: 12 }}>
