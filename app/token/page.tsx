@@ -574,216 +574,283 @@ function TokenPageInner() {
             </div>
 
             {/* Score block */}
-            <section className="token-page-card" style={{ marginTop: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div className="token-page-label">Hatchr score (v1)</div>
-                  <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
-                    {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
-                  </div>
+<section className="token-page-card" style={{ marginTop: 16 }}>
+  <div
+    style={{
+      display: "grid",
+      gridTemplateColumns: "1.05fr 0.95fr",
+      gap: 16,
+      alignItems: "start",
+    }}
+  >
+    {/* LEFT: Stats */}
+    <div>
+      <div className="token-page-label">Hatchr score (v1)</div>
 
-                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
-                    <strong>Followers quality:</strong>{" "}
-                    {scoreLoading ? "…" : followers_quality_value != null ? followers_quality_value : "—"}
-                    {typeof followersAnalytics?.sample_size === "number" ? (
-                      <span style={{ opacity: 0.65 }}> · sample {followersAnalytics.sample_size}</span>
+      <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
+        {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
+      </div>
+
+      <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
+        <strong>Followers quality:</strong>{" "}
+        {scoreLoading ? "…" : followers_quality_value != null ? followers_quality_value : "—"}
+        {typeof followersAnalytics?.sample_size === "number" ? (
+          <span style={{ opacity: 0.65 }}> · sample {followersAnalytics.sample_size}</span>
+        ) : null}
+      </div>
+
+      {/* Tokens deployed (primary = Clanker total) */}
+      <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
+        <strong>Tokens deployed (Clanker):</strong>{" "}
+        {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
+        {typeof creatorTokensDeployed?.clanker_q === "string" ? (
+          <span style={{ marginLeft: 6, opacity: 0.6 }}>q={creatorTokensDeployed.clanker_q}</span>
+        ) : null}
+      </div>
+
+      {/* BaseScan debug smaller */}
+      <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
+        <strong>Wallet deploys (BaseScan):</strong>{" "}
+        {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
+        {basescanMethod ? <span style={{ marginLeft: 6, opacity: 0.6 }}>({basescanMethod})</span> : null}
+      </div>
+
+      {/* Trust breakdown */}
+      {clankerTrust ? (
+        <div style={{ fontSize: 12, opacity: 0.82, marginTop: 8 }}>
+          <strong>Trust:</strong>{" "}
+          allowlisted {clankerTrust.allowlisted ?? 0} · trusted deployer {clankerTrust.trusted_deployer ?? 0} · fid
+          verified {clankerTrust.fid_verified ?? 0} · unverified {clankerTrust.unverified ?? 0}
+        </div>
+      ) : null}
+
+      {/* Small debug line */}
+      <div style={{ fontSize: 12, opacity: 0.75, marginTop: 10 }}>
+        creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
+        {followerCount != null ? followerCount.toLocaleString() : "—"}
+      </div>
+
+      {/* Creator context */}
+      <div style={{ fontSize: 12, opacity: 0.86, marginTop: 12 }}>
+        <strong>Creator context:</strong>{" "}
+        {creatorContext?.classification === "ongoing_build_or_preannounced"
+          ? "Ongoing / pre-announced (creator mentioned it before launch)"
+          : creatorContext?.classification === "fresh_launch_or_unknown"
+            ? "Fresh launch / unknown"
+            : creatorContext?.classification === "mentioned_but_no_timestamp_context"
+              ? "Mentioned by creator (no pre-launch timestamp match)"
+              : creatorContext?.classification === "unknown"
+                ? "Unknown"
+                : "—"}
+      </div>
+
+      {creatorContext && (
+        <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
+          checked: {creatorContext.checked ?? "—"} · matches: {creatorContext.matches ?? "—"}
+          {creatorContext.earliest_match_ts ? (
+            <>
+              {" "}
+              · earliest pre-launch: {new Date(creatorContext.earliest_match_ts).toLocaleString("ru-RU")}
+            </>
+          ) : null}
+        </div>
+      )}
+
+      {/* Source identity (left теперь компактно) */}
+      <div style={{ marginTop: 12 }}>
+        <div className="token-page-label">Source identity</div>
+        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9, lineHeight: 1.35 }}>
+          FID: <strong>{identityFid ?? "—"}</strong>
+          <br />
+          Handle: <strong>{identityHandle}</strong>
+        </div>
+      </div>
+    </div>
+
+    {/* RIGHT: Recent launches + Mentions */}
+    <div>
+      {/* Recent launches */}
+      <div className="token-page-label">Recent launches</div>
+
+      {Array.isArray(clankerRecent) && clankerRecent.length > 0 ? (
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: "8px 0 0 0",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          {clankerRecent.slice(0, 8).map((t: any, idx: number) => (
+            <li
+              key={t?.contract_address ?? idx}
+              style={{
+                border: "1px solid #e5e7eb",
+                background: "#fff",
+                borderRadius: 10,
+                padding: "8px 10px",
+              }}
+            >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  gap: 10,
+                  alignItems: "center",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: 8,
+                      flexWrap: "wrap",
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    <strong style={{ fontSize: 12 }}>{t?.symbol || t?.name || "Token"}</strong>
+                    <span style={{ fontSize: 12, opacity: 0.7 }}>{t?.trust_level || "unknown"}</span>
+                    {t?.deployed_at ? (
+                      <span style={{ fontSize: 12, opacity: 0.6 }}>
+                        {new Date(t.deployed_at).toLocaleString("ru-RU")}
+                      </span>
                     ) : null}
                   </div>
 
-                  {/* ✅ NEW: tokens deployed (primary = Clanker total) */}
-                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
-                    <strong>Tokens deployed (Clanker):</strong>{" "}
-                    {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
-                    {typeof creatorTokensDeployed?.clanker_q === "string" ? (
-                      <span style={{ marginLeft: 6, opacity: 0.6 }}>q={creatorTokensDeployed.clanker_q}</span>
-                    ) : null}
-                  </div>
-
-                  {/* Optional: basescan debug */}
-                  <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
-                    <strong>Wallet deploys (BaseScan):</strong>{" "}
-                    {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
-                    {basescanMethod ? <span style={{ marginLeft: 6, opacity: 0.6 }}>({basescanMethod})</span> : null}
-                  </div>
-
-                  {/* Trust breakdown */}
-                  {clankerTrust ? (
-                    <div style={{ fontSize: 12, opacity: 0.82, marginTop: 8 }}>
-                      <strong>Trust:</strong>{" "}
-                      allowlisted {clankerTrust.allowlisted ?? 0} · trusted deployer {clankerTrust.trusted_deployer ?? 0} ·
-                      fid verified {clankerTrust.fid_verified ?? 0} · unverified {clankerTrust.unverified ?? 0}
+                  {t?.contract_address ? (
+                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
+                      {t.contract_address.slice(0, 8)}…{t.contract_address.slice(-4)}
                     </div>
                   ) : null}
+                </div>
 
-                  {/* Recent launches */}
-                  {Array.isArray(clankerRecent) && clankerRecent.length > 0 ? (
-                    <div style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 6 }}>
-                        <strong>Recent launches:</strong>
-                      </div>
+                {t?.clanker_url ? (
+                  <a
+                    href={t.clanker_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 12, whiteSpace: "nowrap" }}
+                  >
+                    open
+                  </a>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>—</div>
+      )}
 
-                      <ul
-                        style={{
-                          listStyle: "none",
-                          padding: 0,
-                          margin: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                        }}
-                      >
-                        {clankerRecent.slice(0, 6).map((t: any, idx: number) => (
-                          <li
-                            key={t?.contract_address ?? idx}
-                            style={{
-                              border: "1px solid #e5e7eb",
-                              background: "#fff",
-                              borderRadius: 10,
-                              padding: "8px 10px",
-                            }}
-                          >
-                            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                              <div style={{ fontSize: 12, opacity: 0.92 }}>
-                                <strong>{t?.symbol || t?.name || "Token"}</strong>
-                                <span style={{ marginLeft: 8, opacity: 0.7 }}>{t?.trust_level || "unknown"}</span>
-                                {t?.deployed_at ? (
-                                  <span style={{ marginLeft: 8, opacity: 0.6 }}>
-                                    {new Date(t.deployed_at).toLocaleString("ru-RU")}
-                                  </span>
-                                ) : null}
-                              </div>
+      {/* Mentions */}
+      <div className="token-page-label" style={{ marginTop: 14 }}>
+        Mentions
+      </div>
 
-                              {t?.clanker_url ? (
-                                <a href={t.clanker_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
-                                  open
-                                </a>
-                              ) : null}
-                            </div>
+      {/* Mentions summary */}
+      <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
+        {tokenMentions ? (
+          <>
+            <strong>{tokenMentions.mentions_count ?? 0}</strong> total ·{" "}
+            <strong>{tokenMentions.unique_authors ?? 0}</strong> authors
+          </>
+        ) : (
+          "—"
+        )}
+      </div>
 
-                            {t?.contract_address ? (
-                              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.75 }}>
-                                {t.contract_address.slice(0, 8)}…{t.contract_address.slice(-4)}
-                              </div>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
+      {/* Mentions list */}
+      {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 ? (
+        <ul
+          style={{
+            listStyle: "none",
+            padding: 0,
+            margin: "8px 0 0 0",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          {tokenMentions.casts.slice(0, 6).map((c: any) => {
+            const openUrl =
+              c?.warpcastUrl ||
+              c?.farcasterUrl ||
+              warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
 
-                  {/* optional: debug line */}
-                  <div style={{ fontSize: 12, opacity: 0.75, marginTop: 10 }}>
-                    creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
-                    {followerCount != null ? followerCount.toLocaleString() : "—"}
-                  </div>
-
-                  {/* Mentions summary */}
-                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 10 }}>
-                    <strong>Mentions:</strong>{" "}
-                    {tokenMentions ? (
-                      <>
-                        {tokenMentions.mentions_count ?? 0} total · {tokenMentions.unique_authors ?? 0} authors
-                      </>
-                    ) : (
-                      "—"
-                    )}
-                  </div>
-
-                  {/* Mentions list */}
-                  {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 && (
-                    <div style={{ marginTop: 10 }}>
-                      <ul
-                        style={{
-                          listStyle: "none",
-                          padding: 0,
-                          margin: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                        }}
-                      >
-                        {tokenMentions.casts.slice(0, 8).map((c: any) => {
-                          const openUrl =
-                            c?.warpcastUrl ||
-                            c?.farcasterUrl ||
-                            warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
-
-                          return (
-                            <li
-                              key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
-                              style={{
-                                border: "1px solid #e5e7eb",
-                                background: "#fff",
-                                borderRadius: 10,
-                                padding: "8px 10px",
-                              }}
-                            >
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                                <div style={{ fontSize: 12, opacity: 0.92 }}>
-                                  <strong>@{c?.author?.username ?? "unknown"}</strong>
-                                  {c?.timestamp ? (
-                                    <span style={{ marginLeft: 8, opacity: 0.6 }}>
-                                      {new Date(c.timestamp).toLocaleString("ru-RU")}
-                                    </span>
-                                  ) : null}
-                                </div>
-
-                                {openUrl ? (
-                                  <a href={openUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
-                                    open
-                                  </a>
-                                ) : null}
-                              </div>
-
-                              <div style={{ marginTop: 4, fontSize: 12, opacity: 0.82 }}>
-                                {(c?.text ?? "").slice(0, 180)}
-                                {(c?.text ?? "").length > 180 ? "…" : ""}
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Creator context */}
-                  <div style={{ fontSize: 12, opacity: 0.86, marginTop: 12 }}>
-                    <strong>Creator context:</strong>{" "}
-                    {creatorContext?.classification === "ongoing_build_or_preannounced"
-                      ? "Ongoing / pre-announced (creator mentioned it before launch)"
-                      : creatorContext?.classification === "fresh_launch_or_unknown"
-                        ? "Fresh launch / unknown"
-                        : creatorContext?.classification === "mentioned_but_no_timestamp_context"
-                          ? "Mentioned by creator (no pre-launch timestamp match)"
-                          : creatorContext?.classification === "unknown"
-                            ? "Unknown"
-                            : "—"}
-                  </div>
-
-                  {creatorContext && (
-                    <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                      checked: {creatorContext.checked ?? "—"} · matches: {creatorContext.matches ?? "—"}
-                      {creatorContext.earliest_match_ts ? (
-                        <>
-                          {" "}
-                          · earliest pre-launch:{" "}
-                          {new Date(creatorContext.earliest_match_ts).toLocaleString("ru-RU")}
-                        </>
+            return (
+              <li
+                key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
+                style={{
+                  border: "1px solid #e5e7eb",
+                  background: "#fff",
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr auto",
+                    gap: 10,
+                    alignItems: "start",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, opacity: 0.92, lineHeight: 1.15 }}>
+                      <strong>@{c?.author?.username ?? "unknown"}</strong>
+                      {c?.timestamp ? (
+                        <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                          {new Date(c.timestamp).toLocaleString("ru-RU")}
+                        </span>
                       ) : null}
                     </div>
-                  )}
-                </div>
 
-                <div style={{ minWidth: 240 }}>
-                  <div className="token-page-label">Source identity</div>
-                  <div style={{ marginTop: 6, fontSize: 14, opacity: 0.9 }}>
-                    FID: <strong>{identityFid ?? "—"}</strong>
-                    <br />
-                    Handle: <strong>{identityHandle}</strong>
+                    {/* 2–3 lines clamp */}
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontSize: 12,
+                        opacity: 0.82,
+                        lineHeight: 1.25,
+                        overflow: "hidden",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 3,
+                        WebkitBoxOrient: "vertical",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {String(c?.text ?? "")}
+                    </div>
                   </div>
+
+                  {openUrl ? (
+                    <a href={openUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                      open
+                    </a>
+                  ) : null}
                 </div>
-              </div>
-            </section>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  </div>
+
+  {/* Mobile fallback: stack columns */}
+  <div
+    style={{
+      marginTop: 10,
+      fontSize: 11,
+      opacity: 0.55,
+    }}
+  >
+    {/* ничего не пишем — просто “якорь”, чтобы можно было быстро найти блок при дебаге */}
+  </div>
+</section>
           </>
         )}
       </main>
