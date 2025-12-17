@@ -442,28 +442,47 @@ function TokenPageInner() {
                 </div>
 
                 {/* ACTIONS (UPDATED): добавил Share рядом с View on ... */}
-                <div className="token-page-actions" style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {token.source_url && (
-                    <a
-                      href={token.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="token-page-primary-btn"
-                    >
-                      View on {token.source === "clanker" ? "Clanker" : "Zora"}
-                    </a>
-                  )}
+                <div
+  className="token-page-actions"
+  style={{
+    marginTop: 10,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    position: "relative",
+    zIndex: 50,         // <-- поднимаем над возможными оверлеями
+    pointerEvents: "auto",
+  }}
+>
+  {token.source_url && (
+    <a
+      href={token.source_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="token-page-primary-btn"
+      style={{ pointerEvents: "auto" }}
+    >
+      View on {token.source === "clanker" ? "Clanker" : "Zora"}
+    </a>
+  )}
 
-                  <button
-                    type="button"
-                    onClick={onShare}
-                    className="token-page-primary-btn"
-                    style={{ background: "transparent", color: "inherit" }}
-                    title="Share this token on Farcaster"
-                  >
-                    Share on Farcaster
-                  </button>
-                </div>
+  <button
+    type="button"
+    onClick={onShare}
+    className="token-page-primary-btn"
+    style={{
+      background: "transparent",
+      color: "inherit",
+      cursor: "pointer",
+      pointerEvents: "auto",
+      position: "relative",
+      zIndex: 51,
+    }}
+    title="Share this token on Farcaster"
+  >
+    Share on Farcaster
+  </button>
+</div>
               </section>
 
               <aside className="token-page-card token-page-side">
