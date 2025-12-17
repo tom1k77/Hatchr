@@ -186,7 +186,7 @@ function normalizeImageUrl(url?: string | null): string | null {
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
-  const WINDOW_MS = 3 * 60 * 60 * 1000; // 3 hours
+  const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
   const windowAgo = now - WINDOW_MS;
   const startDateUnix = Math.floor(windowAgo / 1000);
 
