@@ -520,9 +520,9 @@ function TokenPageInner() {
             </div>
 
             {/* Score block */}
-            <section className="token-page-card" style={{ marginTop: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
+            section className="token-page-card" style={{ marginTop: 16 }}>
+  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+    <div>
                   <div className="token-page-label">Hatchr score (v1)</div>
                   <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
                     {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
