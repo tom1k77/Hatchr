@@ -26,6 +26,21 @@ function pickNeynarScore(obj: any): number | null {
   return null;
 }
 
+function pickPowerBadge(obj: any): boolean | null {
+  const pb =
+    obj?.power_badge ??
+    obj?.powerBadge ??
+    obj?.badges?.power_badge ??
+    obj?.badges?.powerBadge;
+  return typeof pb === "boolean" ? pb : null;
+}
+
+function safeDateString(x: any): string | null {
+  if (typeof x !== "string" || !x) return null;
+  const t = Date.parse(x);
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
 async function fetchFirstOk(urls: string[]) {
   let lastStatus: number | null = null;
   let lastText: string | null = null;
@@ -92,7 +107,6 @@ async function fetchFollowersQuality(fid: number, limit = 150): Promise<Follower
 
   const json: any = await resp.json();
 
-  // Neynar бывает: json.users или json.result.users
   const rows: any[] = Array.isArray(json?.users)
     ? json.users
     : Array.isArray(json?.result?.users)
@@ -114,19 +128,13 @@ async function fetchFollowersQuality(fid: number, limit = 150): Promise<Follower
       scoreSum += clamp(s, 0, 1);
     }
 
-    const pb =
-      u?.power_badge ??
-      u?.powerBadge ??
-      u?.badges?.power_badge ??
-      u?.badges?.powerBadge;
-
+    const pb = pickPowerBadge(u);
     if (pb === true) powerBadgeCount += 1;
   }
 
   const avg = scoredCount > 0 ? scoreSum / scoredCount : null;
   const pbRatio = sampled > 0 ? powerBadgeCount / sampled : null;
 
-  // если pbRatio не посчитался — считаем как 0, чтобы не получить null
   const fq =
     avg == null
       ? null
@@ -141,6 +149,7 @@ async function fetchFollowersQuality(fid: number, limit = 150): Promise<Follower
   };
 }
 
+// ✅ Mentions: отдаём openUrl в формате warpcast.com/~/cast/<hash>
 async function fetchTokenMentions(address: string) {
   const q = address.toLowerCase();
 
@@ -172,18 +181,19 @@ async function fetchTokenMentions(address: string) {
     if (typeof fid === "number" && Number.isFinite(fid)) authors.add(fid);
 
     const hash: string | null = typeof c?.hash === "string" ? c.hash : null;
-    const authorUsername: string | null = typeof c?.author?.username === "string" ? c.author.username : null;
-    const shortHash = hash ? hash.slice(0, 10) : null; // 0x + 8
-    const farcasterUrl = authorUsername && shortHash ? `https://farcaster.xyz/${authorUsername}/${shortHash}` : null;
+
+    // ✅ стабильный deep-link
+    const warpcastUrl = hash ? `https://warpcast.com/~/cast/${hash}` : null;
 
     return {
       hash,
-      farcasterUrl,
+      warpcastUrl,
+      openUrl: warpcastUrl,
       timestamp: c?.timestamp ?? c?.created_at ?? null,
       text: c?.text ?? "",
       author: {
         fid: c?.author?.fid ?? null,
-        username: authorUsername,
+        username: typeof c?.author?.username === "string" ? c.author.username : null,
         display_name: c?.author?.display_name ?? null,
         pfp_url: c?.author?.pfp_url ?? null,
       },
@@ -197,6 +207,7 @@ async function fetchTokenMentions(address: string) {
   };
 }
 
+// ✅ Creator context: + needles_used + earliest_match_cast (hash/text/timestamp/openUrl)
 async function fetchCreatorContext(
   fid: number,
   tokenCreatedAt?: string | null,
@@ -217,8 +228,19 @@ async function fetchCreatorContext(
     cache: "no-store",
   });
 
+  const needles_used = [tokenName?.trim(), tokenSymbol?.trim(), address?.trim()?.toLowerCase()]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+
   if (!resp.ok) {
-    return { classification: "unknown", checked: 0, matches: 0, earliest_match_ts: null };
+    return {
+      classification: "unknown",
+      checked: 0,
+      matches: 0,
+      earliest_match_ts: null,
+      needles_used,
+      earliest_match_cast: null,
+    };
   }
 
   const json: any = await resp.json();
@@ -227,18 +249,14 @@ async function fetchCreatorContext(
 
   const createdMs = tokenCreatedAt ? Date.parse(tokenCreatedAt) : NaN;
 
-  const needles = [tokenName?.trim(), tokenSymbol?.trim(), address?.trim()?.toLowerCase()]
-    .filter(Boolean)
-    .map((s) => String(s).toLowerCase());
-
   let matches = 0;
-  let earliestBefore: string | null = null;
+  let earliestBefore: { ts: string; cast: any } | null = null;
 
   for (const c of casts) {
     const text = String(c?.text ?? "").toLowerCase();
     if (!text) continue;
 
-    const hit = needles.some((n) => n && text.includes(n));
+    const hit = needles_used.some((n) => n && text.includes(n));
     if (!hit) continue;
 
     matches += 1;
@@ -249,8 +267,9 @@ async function fetchCreatorContext(
     if (Number.isFinite(createdMs)) {
       const t = Date.parse(ts);
       if (Number.isFinite(t) && t < createdMs) {
-        earliestBefore =
-          earliestBefore == null ? ts : Date.parse(ts) < Date.parse(earliestBefore) ? ts : earliestBefore;
+        if (!earliestBefore || Date.parse(ts) < Date.parse(earliestBefore.ts)) {
+          earliestBefore = { ts, cast: c };
+        }
       }
     }
   }
@@ -262,7 +281,28 @@ async function fetchCreatorContext(
         ? "mentioned_but_no_timestamp_context"
         : "fresh_launch_or_unknown";
 
-  return { classification, checked: casts.length, matches, earliest_match_ts: earliestBefore };
+  const earliest_match_ts = earliestBefore?.ts ?? null;
+
+  const earliestHash: string | null =
+    typeof earliestBefore?.cast?.hash === "string" ? earliestBefore.cast.hash : null;
+
+  const earliest_match_cast = earliestBefore
+    ? {
+        hash: earliestHash,
+        timestamp: earliest_match_ts,
+        text: String(earliestBefore.cast?.text ?? "").slice(0, 240),
+        openUrl: earliestHash ? `https://warpcast.com/~/cast/${earliestHash}` : null,
+      }
+    : null;
+
+  return {
+    classification,
+    checked: casts.length,
+    matches,
+    earliest_match_ts,
+    needles_used,
+    earliest_match_cast,
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -332,6 +372,15 @@ export async function GET(req: NextRequest) {
       (typeof user?.followers === "number" && Number.isFinite(user.followers) ? user.followers : null) ??
       null;
 
+    const creator_power_badge = pickPowerBadge(user);
+
+    // (если есть created_at — отлично, если нет — просто null)
+    const creator_created_at =
+      safeDateString(user?.created_at) ??
+      safeDateString(user?.profile?.created_at) ??
+      safeDateString(user?.user?.created_at) ??
+      null;
+
     const followersQuality =
       resolvedFid && Number.isFinite(resolvedFid)
         ? await fetchFollowersQuality(resolvedFid, 150)
@@ -339,7 +388,6 @@ export async function GET(req: NextRequest) {
 
     const followers_quality = followersQuality.followers_quality;
 
-    // fallback: если чего-то нет — всё равно отдаём скор по доступному
     let hatchr_score: number | null = null;
     if (creator_score != null && followers_quality != null) {
       hatchr_score = clamp(0.6 * creator_score + 0.4 * followers_quality, 0, 1);
@@ -367,11 +415,17 @@ export async function GET(req: NextRequest) {
       neynar_score: creator_score,
       hatchr_score_v1: hatchr_score,
 
-      // NEW
+      // SCORES
       creator_score,
       followers_quality,
       hatchr_score,
       follower_count,
+
+      // small creator summary for UI
+      creator_summary: {
+        power_badge: creator_power_badge,
+        created_at: creator_created_at,
+      },
 
       followers_analytics: {
         sample_size: followersQuality.followers_sampled,
