@@ -134,6 +134,9 @@ function TokenPageInner() {
   const [tokenMentions, setTokenMentions] = useState<any>(null);
   const [creatorContext, setCreatorContext] = useState<any>(null);
 
+  // ✅ NEW
+  const [creatorTokensDeployed, setCreatorTokensDeployed] = useState<any>(null);
+
   const [hatchrScore, setHatchrScore] = useState<number | null>(null);
 
   const fullAddress = token?.token_address ?? "";
@@ -230,6 +233,7 @@ function TokenPageInner() {
         setFollowersAnalytics(null);
         setTokenMentions(null);
         setCreatorContext(null);
+        setCreatorTokensDeployed(null);
         setHatchrScore(null);
 
         const qs = creatorFidFromToken
@@ -288,6 +292,9 @@ function TokenPageInner() {
         setFollowersAnalytics(json?.followers_analytics ?? null);
         setTokenMentions(json?.token_mentions ?? null);
         setCreatorContext(json?.creator_context ?? null);
+
+        // ✅ NEW
+        setCreatorTokensDeployed(json?.creator_tokens_deployed ?? null);
       } catch (e) {
         console.error("token-score on token page failed", e);
       } finally {
@@ -562,12 +569,26 @@ function TokenPageInner() {
                     {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
                   </div>
 
-                  {/* ✅ Followers quality — отдельной строкой */}
                   <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
                     <strong>Followers quality:</strong>{" "}
                     {scoreLoading ? "…" : followers_quality_value != null ? followers_quality_value : "—"}
                     {typeof followersAnalytics?.sample_size === "number" ? (
                       <span style={{ opacity: 0.65 }}> · sample {followersAnalytics.sample_size}</span>
+                    ) : null}
+                  </div>
+
+                  {/* ✅ NEW: tokens / deploys */}
+                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
+                    <strong>Tokens deployed:</strong>{" "}
+                    {scoreLoading
+                      ? "…"
+                      : typeof creatorTokensDeployed?.count === "number"
+                        ? creatorTokensDeployed.count
+                        : "—"}
+                    {creatorTokensDeployed?.method ? (
+                      <span style={{ marginLeft: 6, opacity: 0.6 }}>
+                        ({creatorTokensDeployed.method === "basescan_contract_creations" ? "basescan" : "n/a"})
+                      </span>
                     ) : null}
                   </div>
 
@@ -652,15 +673,14 @@ function TokenPageInner() {
                     {creatorContext?.classification === "ongoing_build_or_preannounced"
                       ? "Ongoing / pre-announced (creator mentioned it before launch)"
                       : creatorContext?.classification === "fresh_launch_or_unknown"
-                      ? "Fresh launch / unknown"
-                      : creatorContext?.classification === "mentioned_but_no_timestamp_context"
-                      ? "Mentioned by creator (no pre-launch timestamp match)"
-                      : creatorContext?.classification === "unknown"
-                      ? "Unknown"
-                      : "—"}
+                        ? "Fresh launch / unknown"
+                        : creatorContext?.classification === "mentioned_but_no_timestamp_context"
+                          ? "Mentioned by creator (no pre-launch timestamp match)"
+                          : creatorContext?.classification === "unknown"
+                            ? "Unknown"
+                            : "—"}
                   </div>
 
-                  {/* ✅ extra context details */}
                   {creatorContext && (
                     <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
                       checked: {creatorContext.checked ?? "—"} · matches: {creatorContext.matches ?? "—"}
