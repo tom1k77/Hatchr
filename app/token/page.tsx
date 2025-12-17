@@ -83,8 +83,15 @@ function round2(x: number) {
 /** ---------------------------
  * Share helpers (ADDED)
  * --------------------------- */
-function buildTokenShareText(tokenName: string) {
-  // Можно легко поменять на любой другой шаблон
+function buildTokenShareText(tokenSymbolOrName: string) {
+  const raw = (tokenSymbolOrName || "").trim();
+
+  // убираем ведущий $, если вдруг уже есть
+  const cleaned = raw.replace(/^\$/g, "");
+
+  // вот эта переменная должна быть объявлена
+  const cashtag = cleaned ? `$${cleaned.toUpperCase()}` : "This token";
+
   return `${cashtag} spotted on @hatchr 👀\nLook what else is new on Base.`;
 }
 
