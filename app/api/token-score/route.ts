@@ -6,6 +6,11 @@ export const revalidate = 0;
 
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 
+// ✅ BaseScan
+const BASESCAN_API_KEY = process.env.BASESCAN_API_KEY;
+const BASESCAN_API = "https://api.basescan.org/api";
+
+// ---- utils ----
 function clamp(n: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, n));
 }
@@ -41,6 +46,13 @@ function safeDateString(x: any): string | null {
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 
+function normEthAddress(a: any): string | null {
+  if (typeof a !== "string") return null;
+  const s = a.trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(s)) return null;
+  return s.toLowerCase();
+}
+
 async function fetchFirstOk(urls: string[]) {
   let lastStatus: number | null = null;
   let lastText: string | null = null;
@@ -71,6 +83,7 @@ async function fetchFirstOk(urls: string[]) {
   return { ok: false as const, status: lastStatus ?? 500, body: lastText };
 }
 
+// ---- followers quality ----
 type FollowersQuality = {
   followers_sampled: number;
   scored_followers: number;
@@ -182,7 +195,6 @@ async function fetchTokenMentions(address: string) {
 
     const hash: string | null = typeof c?.hash === "string" ? c.hash : null;
 
-    // ✅ стабильный deep-link
     const warpcastUrl = hash ? `https://warpcast.com/~/cast/${hash}` : null;
 
     return {
@@ -305,6 +317,142 @@ async function fetchCreatorContext(
   };
 }
 
+// =============================
+// ✅ BaseScan: deploy count cache
+// =============================
+type DeployCountResult = {
+  count: number | null;
+  method: "basescan_contract_creations" | "basescan_unavailable" | "basescan_rate_limited" | "basescan_error";
+  addresses_used: string[];
+  scanned_txs: number;
+  note?: string;
+};
+
+const DEPLOY_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
+function getDeployCache(): Map<string, { ts: number; v: DeployCountResult }> {
+  const g = globalThis as any;
+  if (!g.__hatchr_deploy_cache) g.__hatchr_deploy_cache = new Map();
+  return g.__hatchr_deploy_cache;
+}
+
+async function fetchBaseScanContractCreations(address: string): Promise<{ count: number; scanned: number } | null> {
+  if (!BASESCAN_API_KEY) return null;
+
+  // На бесплатном плане лучше не сканить тысячи страниц.
+  // Для большинства “creator wallets” хватает 1–3 страниц.
+  const MAX_PAGES = 3;
+  const OFFSET = 100; // 100 tx * 3 pages = 300 tx
+
+  let page = 1;
+  let scanned = 0;
+  let created = 0;
+
+  while (page <= MAX_PAGES) {
+    const url =
+      `${BASESCAN_API}?module=account&action=txlist` +
+      `&address=${encodeURIComponent(address)}` +
+      `&page=${page}&offset=${OFFSET}&sort=desc` +
+      `&apikey=${encodeURIComponent(BASESCAN_API_KEY)}`;
+
+    const resp = await fetch(url, { cache: "no-store" });
+
+    if (resp.status === 429) {
+      // rate limit
+      return null;
+    }
+
+    if (!resp.ok) return null;
+
+    const json: any = await resp.json();
+
+    // Etherscan-style: status "1" + result array
+    const rows: any[] = Array.isArray(json?.result) ? json.result : [];
+    if (!rows.length) break;
+
+    scanned += rows.length;
+
+    for (const tx of rows) {
+      // В Etherscan txlist contract creation обычно: to == "" && contractAddress != ""
+      const to = typeof tx?.to === "string" ? tx.to : "";
+      const ca = typeof tx?.contractAddress === "string" ? tx.contractAddress : "";
+      if ((!to || to === "0x0000000000000000000000000000000000000000") && ca && ca.startsWith("0x")) {
+        created += 1;
+      }
+    }
+
+    // если меньше OFFSET — дальше смысла нет
+    if (rows.length < OFFSET) break;
+    page += 1;
+  }
+
+  return { count: created, scanned };
+}
+
+async function fetchCreatorDeployCountFromVerifiedWallets(user: any): Promise<DeployCountResult> {
+  if (!BASESCAN_API_KEY) {
+    return { count: null, method: "basescan_unavailable", addresses_used: [], scanned_txs: 0, note: "Missing BASESCAN_API_KEY" };
+  }
+
+  const cache = getDeployCache();
+
+  // Neynar обычно отдаёт verified_addresses.eth_addresses
+  const ethAddrsRaw: any[] = Array.isArray(user?.verified_addresses?.eth_addresses)
+    ? user.verified_addresses.eth_addresses
+    : [];
+
+  const ethAddrs = ethAddrsRaw
+    .map(normEthAddress)
+    .filter(Boolean) as string[];
+
+  // Чтобы не жечь лимиты — берём максимум 2 адреса
+  const addresses_used = ethAddrs.slice(0, 2);
+
+  if (!addresses_used.length) {
+    return { count: 0, method: "basescan_contract_creations", addresses_used: [], scanned_txs: 0, note: "No verified eth_addresses" };
+  }
+
+  // кеш по “joined addresses”
+  const key = `deploycount:${addresses_used.join(",")}`;
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.ts < DEPLOY_TTL_MS) return cached.v;
+
+  let total = 0;
+  let scanned_txs = 0;
+
+  for (const a of addresses_used) {
+    const one = await fetchBaseScanContractCreations(a);
+    if (!one) {
+      const v: DeployCountResult = {
+        count: null,
+        method: "basescan_rate_limited",
+        addresses_used,
+        scanned_txs,
+        note: "Rate limited or unavailable response",
+      };
+      cache.set(key, { ts: Date.now(), v });
+      return v;
+    }
+
+    total += one.count;
+    scanned_txs += one.scanned;
+  }
+
+  const v: DeployCountResult = {
+    count: total,
+    method: "basescan_contract_creations",
+    addresses_used,
+    scanned_txs,
+    note: "Counts contract creations in last ~300 tx per address (desc)",
+  };
+
+  cache.set(key, { ts: Date.now(), v });
+  return v;
+}
+
+// =============================
+// GET
+// =============================
 export async function GET(req: NextRequest) {
   try {
     if (!NEYNAR_API_KEY) {
@@ -374,7 +522,6 @@ export async function GET(req: NextRequest) {
 
     const creator_power_badge = pickPowerBadge(user);
 
-    // (если есть created_at — отлично, если нет — просто null)
     const creator_created_at =
       safeDateString(user?.created_at) ??
       safeDateString(user?.profile?.created_at) ??
@@ -407,6 +554,10 @@ export async function GET(req: NextRequest) {
         ? await fetchCreatorContext(resolvedFid, tokenCreatedAt, tokenName, tokenSymbol, addressParam)
         : null;
 
+    // ✅ NEW: how many deploys by creator wallets (BaseScan)
+    const creator_tokens_deployed =
+      user ? await fetchCreatorDeployCountFromVerifiedWallets(user) : null;
+
     return NextResponse.json({
       fid: resolvedFid,
       username: resolvedUsername,
@@ -425,7 +576,14 @@ export async function GET(req: NextRequest) {
       creator_summary: {
         power_badge: creator_power_badge,
         created_at: creator_created_at,
+        // полезно для дебага:
+        verified_eth_addresses: Array.isArray(user?.verified_addresses?.eth_addresses)
+          ? user.verified_addresses.eth_addresses
+          : [],
       },
+
+      // ✅ NEW
+      creator_tokens_deployed,
 
       followers_analytics: {
         sample_size: followersQuality.followers_sampled,
