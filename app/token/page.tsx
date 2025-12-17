@@ -85,7 +85,7 @@ function round2(x: number) {
  * --------------------------- */
 function buildTokenShareText(tokenName: string) {
   // Можно легко поменять на любой другой шаблон
-  return `${tokenName} spotted on Hatchr 👀\nLook what else is trending on Base.`;
+  return `${cashtag} spotted on @hatchr 👀\nLook what else is new on Base.`;
 }
 
 function buildTokenShareUrl(address: string) {
@@ -301,25 +301,32 @@ function TokenPageInner() {
    * Share action (ADDED)
    * --------------------------- */
   const onShare = useCallback(async () => {
-    if (!token?.token_address) return;
+  if (!token?.token_address) return;
 
-    const tokenName = token.name || token.symbol || "Token";
-    const text = buildTokenShareText(tokenName);
-    const embedUrl = buildTokenShareUrl(token.token_address);
+  const tokenLabel = token.symbol || token.name || "Token";
+  const text = buildTokenShareText(tokenLabel);
+  const embedUrl = buildTokenShareUrl(token.token_address);
+  const intent = buildWarpcastComposeIntent(text, embedUrl);
 
-    // 1) Если есть Mini App SDK — откроем нативный composer
-    // (Если пакет не установлен — упадет в catch и откроем warpcast intent)
-    try {
-      const mod = await import("@farcaster/miniapp-sdk");
-      const sdk = mod.sdk;
-      await sdk.actions.composeCast({ text, embeds: [embedUrl] });
-      return;
-    } catch {}
+  // 1) Mini app composer
+  try {
+    const mod = await import("@farcaster/miniapp-sdk");
+    const sdk = mod.sdk;
+    await sdk.actions.composeCast({ text, embeds: [embedUrl] });
+    return;
+  } catch {}
 
-    // 2) Fallback: Warpcast intent
-    const intent = buildWarpcastComposeIntent(text, embedUrl);
-    window.open(intent, "_blank", "noopener,noreferrer");
-  }, [token]);
+  // 2) ВЕБ-ФОЛБЭК 
+
+  // Вариант B (новая вкладка)
+  const w = window.open("about:blank", "_blank");
+  if (!w) {
+    window.location.href = intent;
+    return;
+  }
+  w.location.href = intent;
+
+}, [token]);
 
   return (
     <div className="hatchr-root">
