@@ -19,36 +19,52 @@ export function SocialSignalsSection() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const minScore = process.env.NEXT_PUBLIC_NEYNAR_MIN_SCORE ?? "0.7";
+  // раскрытие “простыней”
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggleExpanded = (hash: string) =>
+    setExpanded((p) => ({ ...p, [hash]: !p[hash] }));
 
   useEffect(() => {
-    let alive = true;
-    let timer: number | null = null;
+  let alive = true;
+  let timer: number | null = null;
 
-    const load = async (silent = false) => {
-      try {
-        if (!silent && alive) setLoading(true);
-        const r = await fetch("/api/social-signals?limit=25", { cache: "no-store" });
-        const j = await r.json();
-        if (alive) setItems(j.items ?? []);
-      } catch {
-        // можно добавить toast/лог, но пока молча
-      } finally {
-        if (alive) setLoading(false);
-      }
-    };
+  const load = async (silent = false) => {
+    try {
+      if (!silent && alive) setLoading(true);
 
-    // первый запуск
-    load(false);
+      const r = await fetch("/api/social-signals?limit=100", {
+        cache: "no-store",
+      });
+      const j = await r.json();
 
-    // авто-обновление
-    timer = window.setInterval(() => load(true), 12000); // раз в 12 секунд
+      if (alive) setItems(j.items ?? []);
+    } catch (e) {
+      // ничего не делаем, чтобы не ломать UI
+    } finally {
+      if (!silent && alive) setLoading(false);
+    }
+  };
 
-    return () => {
-      alive = false;
-      if (timer) window.clearInterval(timer);
-    };
-  }, []);
+  // первый запрос
+  load(false);
+
+  // автообновление каждые 12 секунд
+  timer = window.setInterval(() => {
+    load(true); // silent — без лоадера
+  }, 12000);
+
+  return () => {
+    alive = false;
+    if (timer) window.clearInterval(timer);
+  };
+}, []);
+
+  const minScore = process.env.NEXT_PUBLIC_NEYNAR_MIN_SCORE ?? "0.7";
+
+  const needsClamp = (text: string | null | undefined) => {
+    if (!text) return false;
+    return text.length > 280 || text.split("\n").length > 6;
+  };
 
   return (
     <section className="token-page-card social-signals-card" style={{ marginTop: 16 }}>
