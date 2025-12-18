@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "./hooks/useIsMobile";
 import Link from "next/link";
-import { SocialSignalsSection } from "@/components/SocialSignalsSection";
 
 type TokenItem = {
   token_address: string;
@@ -639,9 +638,6 @@ const creatorScore =
     )}
   </div>
 )}
-
-            {/* ====== SOCIAL SIGNALS ====== */}
-<SocialSignalsSection />
 
             {/* ====== DESKTOP: карточки как на скетче ====== */}
 {!isMobile && (
