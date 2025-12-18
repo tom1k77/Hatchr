@@ -88,27 +88,28 @@ export async function POST(req: NextRequest) {
 
   // upsert по cast_hash (чтобы не было дублей)
   await sql`
-    insert into social_signals (
-      cast_hash, cast_timestamp, warpcast_url,
-      text, author_fid, author_username, author_display_name, author_pfp_url, author_score,
-      tickers, contracts, raw
-    )
-    values (
-      ${castHash},
-      ${timestamp ? new Date(timestamp).toISOString() : null},
-      ${warpcastUrl},
-      ${text},
-      ${author?.fid ?? null},
-      ${author?.username ?? null},
-      ${author?.display_name ?? null},
-      ${author?.pfp_url ?? null},
-      ${authorScore},
-      ${tickers},
-      ${contracts},
-      ${payload}
-    )
-    on conflict (cast_hash) do nothing;
-  `;
+  insert into social_signals (
+    cast_hash, cast_timestamp, warpcast_url,
+    text, author_fid, author_username, author_display_name, author_pfp_url, author_score,
+    tickers, contracts, raw
+  )
+  values (
+    ${castHash},
+    ${timestamp ? new Date(timestamp).toISOString() : null},
+    ${warpcastUrl},
+    ${text},
+    ${author?.fid ?? null},
+    ${author?.username ?? null},
+    ${author?.display_name ?? null},
+    ${author?.pfp_url ?? null},
+    ${authorScore},
+
+    (select coalesce(array_agg(value::text), '{}'::text[]) from jsonb_array_elements_text(${JSON.stringify(tickers)}::jsonb)),
+    (select coalesce(array_agg(value::text), '{}'::text[]) from jsonb_array_elements_text(${JSON.stringify(contracts)}::jsonb)),
+    ${payload}
+  )
+  on conflict (cast_hash) do nothing;
+`;
 
   return NextResponse.json({ ok: true });
 }
