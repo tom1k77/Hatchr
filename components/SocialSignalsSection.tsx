@@ -147,14 +147,33 @@ export function SocialSignalsSection() {
         }
 
         .social-signals-list {
-          display: grid;
-          gap: 10px;
-        }
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr; /* mobile */
+}
 
-        .signal-card {
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
-          padding-top: 10px;
-        }
+@media (min-width: 780px) {
+  .social-signals-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1100px) {
+  .social-signals-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* опционально для очень широких */
+@media (min-width: 1500px) {
+  .social-signals-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+.signal-card {
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.03);
+  border-radius: 14px;
+  padding: 12px;
+  padding-top: 12px;   /* убираем эффект "списка" */
+}
+
+/* убери линию-разделитель сверху (раньше было border-top) */
 
         .signal-head {
           display: flex;
