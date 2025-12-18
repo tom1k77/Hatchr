@@ -21,15 +21,17 @@ function verifyNeynarSignature(rawBody: string, signatureHeader: string | null) 
 }
 
 function extractTickers(text: string) {
-  // $HATCHR, $BASE, $A0B etc.
   const re = /\$[A-Za-z0-9]{2,12}\b/g;
-  return Array.from(new Set((text.match(re) ?? []).map((t) => t.toUpperCase())));
+  const matches = text.match(re) ?? [];
+  const uniq = [...new Set(matches.map((t) => t.toUpperCase()))];
+  return uniq;
 }
 
 function extractContracts(text: string) {
-  // 0x... (EVM address)
   const re = /\b0x[a-fA-F0-9]{40}\b/g;
-  return Array.from(new Set(text.match(re) ?? []).map((x) => x.toLowerCase()));
+  const matches = text.match(re) ?? [];
+  const uniq = [...new Set(matches)];
+  return uniq.map((x) => x.toLowerCase());
 }
 
 function toWarpcastUrl(username?: string, castHash?: string) {
