@@ -442,11 +442,13 @@ useEffect(() => {
           </div>
 
           <nav className="hatchr-nav">
-            <span className="hatchr-nav-pill primary">New tokens</span>
-            <span className="hatchr-nav-pill">Social signals</span>
-            <span className="hatchr-nav-pill">Trending</span>
-            <span className="hatchr-nav-pill">API</span>
-          </nav>
+  <span className="hatchr-nav-pill primary">New tokens</span>
+  <Link href="/social-signals" className="hatchr-nav-pill">
+    Social signals
+  </Link>
+  <span className="hatchr-nav-pill">Trending</span>
+  <span className="hatchr-nav-pill">API</span>
+</nav>
         </div>
 
         <div className="hatchr-main-grid">
