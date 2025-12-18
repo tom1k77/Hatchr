@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     )
     values (
       ${castHash},
-      ${timestamp ? new Date(timestamp) : null},
+      ${timestamp ? new Date(timestamp).toISOString() : null},
       ${warpcastUrl},
       ${text},
       ${author?.fid ?? null},
