@@ -35,13 +35,15 @@ export function SocialSignalsSection() {
     };
   }, []);
 
+  const minScore = process.env.NEXT_PUBLIC_NEYNAR_MIN_SCORE ?? "0.7";
+
   return (
-    <section className="token-page-card" style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+    <section className="token-page-card social-signals-card" style={{ marginTop: 16 }}>
+      <div className="social-signals-head">
         <div>
           <div className="token-page-label">Social signals</div>
-          <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-            Real-time Farcaster posts mentioning token tickers ($TICKER) or contracts. Filter: Neynar score ≥ {process.env.NEXT_PUBLIC_NEYNAR_MIN_SCORE ?? "0.7"}
+          <div className="social-signals-subtitle">
+            Real-time Farcaster posts mentioning token tickers ($TICKER) or contracts. Filter: Neynar score ≥ {minScore}
           </div>
         </div>
       </div>
@@ -52,66 +54,70 @@ export function SocialSignalsSection() {
         ) : items.length === 0 ? (
           <div style={{ opacity: 0.8 }}>No signals yet.</div>
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="social-signals-list">
             {items.map((it) => (
-              <div key={it.cast_hash} style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <article key={it.cast_hash} className="signal-card">
+                <div className="signal-head">
                   {it.author_pfp_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={it.author_pfp_url}
                       alt=""
-                      width={28}
-                      height={28}
-                      style={{ borderRadius: 999, marginTop: 2 }}
+                      width={32}
+                      height={32}
+                      className="signal-avatar"
                     />
                   ) : (
-                    <div style={{ width: 28, height: 28, borderRadius: 999, background: "rgba(255,255,255,0.08)" }} />
+                    <div className="signal-avatar-fallback" />
                   )}
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontWeight: 700 }}>
+                  <div className="signal-meta">
+                    <div className="signal-title-row">
+                      <div className="signal-name">
                         {it.author_display_name || it.author_username || "Unknown"}
                       </div>
+
                       {it.author_username ? (
-                        <div style={{ opacity: 0.75 }}>@{it.author_username}</div>
+                        <div className="signal-username">@{it.author_username}</div>
                       ) : null}
+
                       {typeof it.author_score === "number" ? (
-                        <div style={{ fontSize: 12, opacity: 0.7 }}>
-                          score {it.author_score.toFixed(2)}
-                        </div>
+                        <div className="signal-score">score {it.author_score.toFixed(2)}</div>
                       ) : null}
+
                       {it.cast_timestamp ? (
-                        <div style={{ fontSize: 12, opacity: 0.6 }}>
+                        <div className="signal-time">
                           {new Date(it.cast_timestamp).toLocaleString()}
                         </div>
                       ) : null}
                     </div>
 
                     {it.text ? (
-                      <div style={{ marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
+                      <div className="signal-text">
                         {it.text}
                       </div>
                     ) : null}
 
-                    <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {(it.tickers ?? []).slice(0, 8).map((t) => (
-                        <span key={t} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, background: "rgba(255,255,255,0.08)" }}>
-                          {t}
-                        </span>
-                      ))}
-                      {(it.contracts ?? []).slice(0, 3).map((c) => (
-                        <span key={c} style={{ fontSize: 12, padding: "2px 8px", borderRadius: 999, background: "rgba(255,255,255,0.08)" }}>
-                          {c.slice(0, 6)}…{c.slice(-4)}
-                        </span>
-                      ))}
+                    <div className="signal-footer">
+                      <div className="signal-tags">
+                        {(it.tickers ?? []).slice(0, 8).map((t) => (
+                          <span key={t} className="signal-tag">
+                            {t}
+                          </span>
+                        ))}
+                        {(it.contracts ?? []).slice(0, 3).map((c) => (
+                          <span key={c} className="signal-tag">
+                            {c.slice(0, 6)}…{c.slice(-4)}
+                          </span>
+                        ))}
+                      </div>
+
                       {it.warpcast_url ? (
                         <a
                           href={it.warpcast_url}
                           target="_blank"
                           rel="noreferrer"
-                          style={{ marginLeft: "auto", fontSize: 12, opacity: 0.9, textDecoration: "underline" }}
+                          className="signal-link"
                         >
                           Open on Warpcast
                         </a>
@@ -119,11 +125,149 @@ export function SocialSignalsSection() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </article>
             ))}
           </div>
         )}
       </div>
+
+      {/* локальные стили — только для Social signals, чтобы не трогать остальной сайт */}
+      <style jsx>{`
+        .social-signals-card {
+          max-width: 860px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+
+        .social-signals-subtitle {
+          margin-top: 6px;
+          font-size: 12px;
+          opacity: 0.75;
+          line-height: 1.35;
+        }
+
+        .social-signals-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .signal-card {
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          padding-top: 10px;
+        }
+
+        .signal-head {
+          display: flex;
+          gap: 10px;
+          align-items: flex-start;
+        }
+
+        .signal-avatar {
+          border-radius: 999px;
+          margin-top: 2px;
+          object-fit: cover;
+          flex: 0 0 auto;
+        }
+
+        .signal-avatar-fallback {
+          width: 32px;
+          height: 32px;
+          border-radius: 999px;
+          margin-top: 2px;
+          background: rgba(255, 255, 255, 0.08);
+          flex: 0 0 auto;
+        }
+
+        /* КЛЮЧЕВОЕ: min-width:0 чтобы текст не раздвигал flex-контейнер */
+        .signal-meta {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .signal-title-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          align-items: baseline;
+          min-width: 0;
+        }
+
+        .signal-name {
+          font-weight: 700;
+        }
+
+        .signal-username {
+          opacity: 0.75;
+          white-space: nowrap;
+        }
+
+        .signal-score {
+          font-size: 12px;
+          opacity: 0.7;
+          white-space: nowrap;
+        }
+
+        .signal-time {
+          font-size: 12px;
+          opacity: 0.6;
+          white-space: nowrap;
+        }
+
+        /* КЛЮЧЕВОЕ: переносим любые длинные куски (хэши/ссылки), чтобы не "уезжало" */
+        .signal-text {
+          margin-top: 6px;
+          white-space: pre-wrap;
+          line-height: 1.35;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+
+        .signal-footer {
+          margin-top: 8px;
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
+
+        .signal-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        .signal-tag {
+          font-size: 12px;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.08);
+          max-width: 100%;
+        }
+
+        .signal-link {
+          font-size: 12px;
+          opacity: 0.9;
+          text-decoration: underline;
+          white-space: nowrap;
+          flex: 0 0 auto;
+        }
+
+        @media (max-width: 520px) {
+          .social-signals-card {
+            max-width: 100%;
+          }
+          .signal-link {
+            margin-left: 0;
+          }
+          .signal-username {
+            max-width: 50vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+        }
+      `}</style>
     </section>
   );
 }
