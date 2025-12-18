@@ -28,7 +28,7 @@ export function SocialSignalsSection() {
     let alive = true;
     (async () => {
       try {
-        const r = await fetch("/api/social-signals?limit=25", { cache: "no-store" });
+        const r = await fetch("/api/social-signals?limit=100", { cache: "no-store" });
         const j = await r.json();
         if (alive) setItems(j.items ?? []);
       } finally {
