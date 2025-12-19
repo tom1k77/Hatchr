@@ -36,8 +36,14 @@ export default function SocialSignalsPage() {
         {/* content */}
         <div className="hatchr-main-grid">
           <section>
-            <SocialSignalsSection />
-          </section>
+  {ENABLE_SOCIAL_SIGNALS ? (
+    <SocialSignalsSection />
+  ) : (
+    <div style={{ opacity: 0.6, fontSize: 14 }}>
+      Social signals are temporarily disabled.
+    </div>
+  )}
+</section>
 
           {/* правая колонка можно оставить пустой или позже добавить */}
           <aside />
