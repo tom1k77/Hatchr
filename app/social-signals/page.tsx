@@ -3,6 +3,8 @@ import { SocialSignalsSection } from "@/components/SocialSignalsSection";
 
 export const dynamic = "force-dynamic";
 
+const ENABLE_SOCIAL_SIGNALS = false;
+
 export default function SocialSignalsPage() {
   return (
     <div className="hatchr-root">
