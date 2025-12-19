@@ -26,7 +26,7 @@ export interface Token {
   zora_market_cap_usd?: number | null;
   zora_volume_24h_usd?: number | null;
 
-  // ✅ NEW: fallback numbers from Clanker (if Gecko doesn't know the token)
+  // ✅ fallback numbers from Clanker (if Gecko doesn't know the token)
   clanker_price_usd?: number | null;
   clanker_market_cap_usd?: number | null;
   clanker_liquidity_usd?: number | null;
@@ -188,6 +188,46 @@ function normalizeImageUrl(url?: string | null): string | null {
   return trimmed;
 }
 
+/**
+ * ✅ NEW: deep numeric lookup.
+ * Clanker часто меняет форму payload — поэтому ищем числа по списку возможных ключей на любом уровне.
+ */
+function pickNumberDeep(obj: any, keys: string[], maxDepth = 6): number | null {
+  const seen = new Set<any>();
+
+  function walk(o: any, depth: number): number | null {
+    if (!o || depth > maxDepth) return null;
+    if (typeof o !== "object") return null;
+    if (seen.has(o)) return null;
+    seen.add(o);
+
+    // прямые ключи
+    for (const k of keys) {
+      if (Object.prototype.hasOwnProperty.call(o, k)) {
+        const v = toNum((o as any)[k]);
+        if (v != null && v > 0) return v;
+      }
+    }
+
+    // вложенные объекты/массивы
+    if (Array.isArray(o)) {
+      for (const it of o) {
+        const got = walk(it, depth + 1);
+        if (got != null) return got;
+      }
+      return null;
+    }
+
+    for (const k of Object.keys(o)) {
+      const got = walk((o as any)[k], depth + 1);
+      if (got != null) return got;
+    }
+    return null;
+  }
+
+  return walk(obj, 0);
+}
+
 // ======================= Market cache (module-scope) =======================
 // Нужен чтобы цифры не "проваливались" в null/0 когда Gecko/Clanker штормит.
 type MarketSnap = {
@@ -213,7 +253,6 @@ function getCachedMarket(addr: string): MarketSnap | null {
 }
 
 function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
-  // сохраняем только если реально есть данные
   const hasAny =
     (snap.price_usd ?? 0) > 0 ||
     (snap.market_cap_usd ?? 0) > 0 ||
@@ -245,8 +284,11 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       sort: "desc",
       startDate: String(startDateUnix),
       includeUser: "true",
-      // ✅ FIX: we need market data from Clanker as fallback
-      includeMarket: "true",
+
+      // ✅ FIX: try multiple variants that Clanker could support
+      includeMarket: "1",
+      includeMarketData: "1",
+      include_market: "1",
     });
 
     if (cursor) params.set("cursor", cursor);
@@ -259,10 +301,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       consecutiveFails += 1;
       logClankerOncePer30s("[Clanker] fetch error, skip page:", url);
 
-      // если Clanker “штормит” — не мучаемся, уходим, но НЕ ломаем Zora
       if (consecutiveFails >= 2) break;
-
-      // небольшой backoff
       await sleep(300);
       continue;
     }
@@ -290,29 +329,45 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
-      // ✅ NEW: Clanker market payload (schema can vary; we try multiple shapes)
-      const m = t.market || t.market_data || t.marketData || t.stats || t;
-      const cl_price = toNum(m?.price_usd ?? m?.priceUsd ?? m?.price ?? m?.token_price_usd ?? m?.tokenPriceUsd);
-      const cl_mcap = toNum(
-        m?.market_cap_usd ??
-          m?.marketCapUsd ??
-          m?.market_cap ??
-          m?.marketCap ??
-          m?.fdv_usd ??
-          m?.fdv ??
-          m?.fully_diluted_valuation_usd
-      );
-      const cl_liq = toNum(
-        m?.liquidity_usd ?? m?.liquidityUsd ?? m?.liquidity ?? m?.reserve_in_usd ?? m?.reserveUsd
-      );
-      const cl_vol24 = toNum(
-        m?.volume_24h_usd ??
-          m?.volume24hUsd ??
-          m?.volume24h ??
-          m?.volume_usd_24h ??
-          m?.volumeUsd24h ??
-          m?.volume_usd?.h24
-      );
+      // ✅ NEW: robust Clanker market extraction
+      const cl_price = pickNumberDeep(t, [
+        "price_usd",
+        "priceUsd",
+        "token_price_usd",
+        "tokenPriceUsd",
+        "price",
+        "tokenPrice",
+      ]);
+
+      const cl_mcap = pickNumberDeep(t, [
+        "market_cap_usd",
+        "marketCapUsd",
+        "market_cap",
+        "marketCap",
+        "fdv_usd",
+        "fdv",
+        "fully_diluted_valuation_usd",
+        "fullyDilutedValuationUsd",
+      ]);
+
+      const cl_liq = pickNumberDeep(t, [
+        "liquidity_usd",
+        "liquidityUsd",
+        "liquidity",
+        "reserve_in_usd",
+        "reserveUsd",
+        "reserve",
+      ]);
+
+      const cl_vol24 = pickNumberDeep(t, [
+        "volume_24h_usd",
+        "volume24hUsd",
+        "volume24h",
+        "trade_volume_24h_usd",
+        "tradeVolume24hUsd",
+        "volume_usd_24h",
+        "volumeUsd24h",
+      ]);
 
       // image
       const rawImage: string | null =
@@ -405,7 +460,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         instagram_url,
         tiktok_url,
 
-        // ✅ NEW: store Clanker market as fallback
+        // ✅ NEW: Clanker fallback market
         clanker_price_usd: cl_price,
         clanker_market_cap_usd: cl_mcap,
         clanker_liquidity_usd: cl_liq,
@@ -430,10 +485,7 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
   const now = Date.now();
   const WINDOW_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-  if (!ZORA_API_KEY) {
-    // не спамим, просто молча вернём []
-    return [];
-  }
+  if (!ZORA_API_KEY) return [];
 
   const tokens: Token[] = [];
   let cursor: string | undefined = undefined;
@@ -575,7 +627,7 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).zora_volume_24h_usd);
     }
 
-    // ✅ NEW: fallback to Clanker market if Gecko missing and source is Clanker
+    // ✅ fallback to Clanker numbers if Gecko missing and source is Clanker
     if (t.source === "clanker") {
       if (price == null || price === 0) price = toNum((t as any).clanker_price_usd);
       if (marketCap == null || marketCap === 0) marketCap = toNum((t as any).clanker_market_cap_usd);
@@ -583,7 +635,6 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).clanker_volume_24h_usd);
     }
 
-    // ✅ если Gecko вернул пустоту — используем кэш (для clanker тоже)
     const filled = {
       price_usd: price == null || price === 0 ? cached?.price_usd ?? null : price,
       market_cap_usd: marketCap == null || marketCap === 0 ? cached?.market_cap_usd ?? null : marketCap,
@@ -591,12 +642,10 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       volume_24h_usd: volume24 == null || volume24 === 0 ? cached?.volume_24h_usd ?? null : volume24,
     };
 
-    // ✅ если получили валидные значения — сохраняем
     if (addr) saveCachedMarket(addr, filled);
 
     return { ...t, ...filled };
   } catch {
-    // ✅ при ошибке/таймауте — отдаём кэш если он есть
     if (cached) {
       return {
         ...t,
@@ -611,8 +660,7 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
 }
 
 export async function enrichWithGeckoTerminal(tokens: Token[]): Promise<TokenWithMarket[]> {
-  // concurrency limit (чтобы не убить сервер/таймаутами/429)
-  const CONCURRENCY = 5; // было 10
+  const CONCURRENCY = 5;
   const out: TokenWithMarket[] = [];
   let i = 0;
 
@@ -629,7 +677,6 @@ export async function enrichWithGeckoTerminal(tokens: Token[]): Promise<TokenWit
 // ======================= Aggregator =======================
 
 export async function getTokens(): Promise<TokenWithMarket[]> {
-  // IMPORTANT: Promise.allSettled чтобы Clanker не валил всё, даже если внутри что-то кинет
   const [clankerRes, zoraRes] = await Promise.allSettled([fetchTokensFromClanker(), fetchTokensFromZora()]);
 
   const clanker = clankerRes.status === "fulfilled" ? clankerRes.value : [];
@@ -637,14 +684,12 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
 
   const all: Token[] = [...clanker, ...zora];
 
-  // de-dupe by address (prefer clanker if exists, else zora)
   const byAddress = new Map<string, Token>();
   for (const t of all) {
     const key = t.token_address.toLowerCase();
     if (!byAddress.has(key)) {
       byAddress.set(key, t);
     } else {
-      // prefer clanker over zora if conflict
       const prev = byAddress.get(key)!;
       if (prev.source !== "clanker" && t.source === "clanker") {
         byAddress.set(key, t);
