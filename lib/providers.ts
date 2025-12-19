@@ -182,6 +182,43 @@ function normalizeImageUrl(url?: string | null): string | null {
   return trimmed;
 }
 
+// ======================= Market cache (module-scope) =======================
+// Нужен чтобы цифры не "проваливались" в null/0 когда Gecko/Clanker штормит.
+type MarketSnap = {
+  ts: number;
+  price_usd: number | null;
+  market_cap_usd: number | null;
+  liquidity_usd: number | null;
+  volume_24h_usd: number | null;
+};
+
+const marketCache = new Map<string, MarketSnap>();
+
+const MARKET_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours (можно 12h)
+
+function getCachedMarket(addr: string): MarketSnap | null {
+  const v = marketCache.get(addr);
+  if (!v) return null;
+  if (Date.now() - v.ts > MARKET_CACHE_TTL_MS) {
+    marketCache.delete(addr);
+    return null;
+  }
+  return v;
+}
+
+function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
+  // сохраняем только если реально есть данные
+  const hasAny =
+    (snap.price_usd ?? 0) > 0 ||
+    (snap.market_cap_usd ?? 0) > 0 ||
+    (snap.liquidity_usd ?? 0) > 0 ||
+    (snap.volume_24h_usd ?? 0) > 0;
+
+  if (!hasAny) return;
+
+  marketCache.set(addr, { ts: Date.now(), ...snap });
+}
+
 // ======================= CLANKER (3 hours) =======================
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
@@ -463,8 +500,11 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
 // ======================= GeckoTerminal enrich =======================
 
 async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
+  const addr = (t.token_address || "").toLowerCase();
+  const cached = addr ? getCachedMarket(addr) : null;
+
   try {
-    const url = `${GECKO_BASE_TOKEN}/${t.token_address}`;
+    const url = `${GECKO_BASE_TOKEN}/${addr}`;
     const res = await fetchWithTimeout(url, undefined, 8000);
 
     let price: number | null = null;
@@ -499,21 +539,36 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).zora_volume_24h_usd);
     }
 
-    return {
-      ...t,
-      price_usd: price,
-      market_cap_usd: marketCap,
-      liquidity_usd: liquidity,
-      volume_24h_usd: volume24,
+    // ✅ если Gecko вернул пустоту — используем кэш (для clanker тоже)
+    const filled = {
+      price_usd: price == null || price === 0 ? cached?.price_usd ?? null : price,
+      market_cap_usd: marketCap == null || marketCap === 0 ? cached?.market_cap_usd ?? null : marketCap,
+      liquidity_usd: liquidity == null || liquidity === 0 ? cached?.liquidity_usd ?? null : liquidity,
+      volume_24h_usd: volume24 == null || volume24 === 0 ? cached?.volume_24h_usd ?? null : volume24,
     };
+
+    // ✅ если получили валидные значения — сохраняем
+    if (addr) saveCachedMarket(addr, filled);
+
+    return { ...t, ...filled };
   } catch {
+    // ✅ при ошибке/таймауте — отдаём кэш если он есть
+    if (cached) {
+      return {
+        ...t,
+        price_usd: cached.price_usd,
+        market_cap_usd: cached.market_cap_usd,
+        liquidity_usd: cached.liquidity_usd,
+        volume_24h_usd: cached.volume_24h_usd,
+      };
+    }
     return { ...t };
   }
 }
 
 export async function enrichWithGeckoTerminal(tokens: Token[]): Promise<TokenWithMarket[]> {
-  // concurrency limit (чтобы не убить сервер/таймаутами)
-  const CONCURRENCY = 10;
+  // concurrency limit (чтобы не убить сервер/таймаутами/429)
+  const CONCURRENCY = 5; // было 10
   const out: TokenWithMarket[] = [];
   let i = 0;
 
