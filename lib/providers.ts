@@ -25,6 +25,12 @@ export interface Token {
   zora_price_usd?: number | null;
   zora_market_cap_usd?: number | null;
   zora_volume_24h_usd?: number | null;
+
+  // ✅ NEW: fallback numbers from Clanker (if Gecko doesn't know the token)
+  clanker_price_usd?: number | null;
+  clanker_market_cap_usd?: number | null;
+  clanker_liquidity_usd?: number | null;
+  clanker_volume_24h_usd?: number | null;
 }
 
 export interface TokenWithMarket extends Token {
@@ -239,7 +245,8 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       sort: "desc",
       startDate: String(startDateUnix),
       includeUser: "true",
-      includeMarket: "false",
+      // ✅ FIX: we need market data from Clanker as fallback
+      includeMarket: "true",
     });
 
     if (cursor) params.set("cursor", cursor);
@@ -282,6 +289,30 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
+
+      // ✅ NEW: Clanker market payload (schema can vary; we try multiple shapes)
+      const m = t.market || t.market_data || t.marketData || t.stats || t;
+      const cl_price = toNum(m?.price_usd ?? m?.priceUsd ?? m?.price ?? m?.token_price_usd ?? m?.tokenPriceUsd);
+      const cl_mcap = toNum(
+        m?.market_cap_usd ??
+          m?.marketCapUsd ??
+          m?.market_cap ??
+          m?.marketCap ??
+          m?.fdv_usd ??
+          m?.fdv ??
+          m?.fully_diluted_valuation_usd
+      );
+      const cl_liq = toNum(
+        m?.liquidity_usd ?? m?.liquidityUsd ?? m?.liquidity ?? m?.reserve_in_usd ?? m?.reserveUsd
+      );
+      const cl_vol24 = toNum(
+        m?.volume_24h_usd ??
+          m?.volume24hUsd ??
+          m?.volume24h ??
+          m?.volume_usd_24h ??
+          m?.volumeUsd24h ??
+          m?.volume_usd?.h24
+      );
 
       // image
       const rawImage: string | null =
@@ -373,6 +404,12 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         telegram_url,
         instagram_url,
         tiktok_url,
+
+        // ✅ NEW: store Clanker market as fallback
+        clanker_price_usd: cl_price,
+        clanker_market_cap_usd: cl_mcap,
+        clanker_liquidity_usd: cl_liq,
+        clanker_volume_24h_usd: cl_vol24,
       };
 
       if (isBlockedCreator(token.farcaster_url)) return null;
@@ -380,7 +417,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
     })
     .filter(Boolean) as Token[];
 
-  // safety filter (3 hours)
   return tokens.filter((t) => {
     if (!t.first_seen_at) return true;
     const ts = new Date(t.first_seen_at).getTime();
@@ -537,6 +573,14 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       if (price == null || price === 0) price = toNum((t as any).zora_price_usd);
       if (marketCap == null || marketCap === 0) marketCap = toNum((t as any).zora_market_cap_usd);
       if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).zora_volume_24h_usd);
+    }
+
+    // ✅ NEW: fallback to Clanker market if Gecko missing and source is Clanker
+    if (t.source === "clanker") {
+      if (price == null || price === 0) price = toNum((t as any).clanker_price_usd);
+      if (marketCap == null || marketCap === 0) marketCap = toNum((t as any).clanker_market_cap_usd);
+      if (liquidity == null || liquidity === 0) liquidity = toNum((t as any).clanker_liquidity_usd);
+      if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).clanker_volume_24h_usd);
     }
 
     // ✅ если Gecko вернул пустоту — используем кэш (для clanker тоже)
