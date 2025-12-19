@@ -23,7 +23,66 @@ async function safeCall<T>(label: string, fn: () => Promise<T>, fallback: T) {
   }
 }
 
+/**
+ * ======================= API-level stale market cache =======================
+ * Цель: если upstream (providers/gecko) вернул null/0 — не затирать последнюю валидную цифру.
+ * В Vercel живёт пока "тёплый" инстанс жив.
+ */
+type MarketSnap = {
+  ts: number;
+  price_usd: number | null;
+  market_cap_usd: number | null;
+  liquidity_usd: number | null;
+  volume_24h_usd: number | null;
+};
+
+const marketCache = new Map<string, MarketSnap>();
+const MARKET_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6h
+
+function isFinitePos(n: any): n is number {
+  return typeof n === "number" && Number.isFinite(n) && n > 0;
+}
+
+function getCachedMarket(addr: string): MarketSnap | null {
+  const v = marketCache.get(addr);
+  if (!v) return null;
+  if (Date.now() - v.ts > MARKET_CACHE_TTL_MS) {
+    marketCache.delete(addr);
+    return null;
+  }
+  return v;
+}
+
+function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
+  const hasAny =
+    isFinitePos(snap.price_usd) ||
+    isFinitePos(snap.market_cap_usd) ||
+    isFinitePos(snap.liquidity_usd) ||
+    isFinitePos(snap.volume_24h_usd);
+
+  if (!hasAny) return;
+  marketCache.set(addr, { ts: Date.now(), ...snap });
+}
+
 function mapToken(t: AnyToken) {
+  const addr = String(t?.token_address ?? "").toLowerCase();
+  const cached = addr ? getCachedMarket(addr) : null;
+
+  // берём новые, но если они null/0/NaN — оставляем старые из кэша
+  const priceNew = t?.price_usd;
+  const mcapNew = t?.market_cap_usd;
+  const liqNew = t?.liquidity_usd;
+  const volNew = t?.volume_24h_usd;
+
+  const mergedMarket = {
+    price_usd: isFinitePos(priceNew) ? priceNew : (cached?.price_usd ?? null),
+    market_cap_usd: isFinitePos(mcapNew) ? mcapNew : (cached?.market_cap_usd ?? null),
+    liquidity_usd: isFinitePos(liqNew) ? liqNew : (cached?.liquidity_usd ?? null),
+    volume_24h_usd: isFinitePos(volNew) ? volNew : (cached?.volume_24h_usd ?? null),
+  };
+
+  if (addr) saveCachedMarket(addr, mergedMarket);
+
   return {
     token_address: t.token_address,
     name: t.name ?? "",
@@ -32,10 +91,7 @@ function mapToken(t: AnyToken) {
     source_url: t.source_url ?? "",
     first_seen_at: t.first_seen_at ?? null,
 
-    price_usd: t.price_usd ?? null,
-    market_cap_usd: t.market_cap_usd ?? null,
-    liquidity_usd: t.liquidity_usd ?? null,
-    volume_24h_usd: t.volume_24h_usd ?? null,
+    ...mergedMarket,
 
     farcaster_url: t.farcaster_url ?? null,
     x_url: t.x_url ?? null,
@@ -96,9 +152,6 @@ export async function GET() {
   }
 
   // ✅ Фоллбек: если у тебя пока только getTokens()
-  // Здесь мы не можем “спасти Zora отдельно”, но можем:
-  // - не отдавать 500
-  // - вернуть пустой список + meta.error → UI не сломается
   if (typeof providers.getTokens !== "function") {
     return NextResponse.json(
       { count: 0, items: [], meta: { error: "Missing getTokens() in @/lib/providers" } },
