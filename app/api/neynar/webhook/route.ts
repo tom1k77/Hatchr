@@ -14,16 +14,32 @@ function verifyNeynarSignature(rawBody: string, signatureHeader: string | null) 
   hmac.update(rawBody);
   const expectedHex = hmac.digest("hex");
 
-  // timing-safe compare in HEX
-  const a = Buffer.from(expectedHex, "hex");
-  const b = Buffer.from(signatureHeader, "hex");
+  // Neynar обычно присылает hex, но на всякий случай поддержим оба варианта
+  const sig = signatureHeader.trim().toLowerCase();
+
+  // timing-safe compare: сравниваем байты
+  try {
+    // если это hex-строка
+    if (/^[a-f0-9]+$/i.test(sig) && sig.length === expectedHex.length) {
+      const a = Buffer.from(expectedHex, "hex");
+      const b = Buffer.from(sig, "hex");
+      if (a.length !== b.length) return false;
+      return timingSafeEqual(a, b);
+    }
+  } catch {
+    // fallthrough
+  }
+
+  // fallback: сравнение как utf8 (если вдруг формат иной)
+  const a = Buffer.from(expectedHex, "utf8");
+  const b = Buffer.from(signatureHeader, "utf8");
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
 
 // --- parsing ---
 function extractTickers(text: string) {
-  const re = /\$[A-Za-z0-9_]{2,12}\b/g;
+  const re = /\$[A-Za-z0-9_]{2,12}\b/gno/g;
   const matches = text.match(re) ?? [];
   const uniq = [...new Set(matches.map((t) => t.toUpperCase()))];
   return uniq;
@@ -42,7 +58,9 @@ function toWarpcastUrl(username?: string, castHash?: string) {
 }
 
 function hasLink(text: string) {
-  return /(https?:\/\/|warpcast\.com|zora\.co|basescan\.org|base\.org|github\.com|mirror\.xyz)/i.test(text);
+  return /(https?:\/\/|warpcast\.com|zora\.co|basescan\.org|base\.org|github\.com|mirror\.xyz)/i.test(
+    text
+  );
 }
 
 const EVENT_WORDS = [
@@ -66,19 +84,7 @@ const EVENT_WORDS = [
   "security",
 ];
 
-const BANTER_WORDS = [
-  "gm",
-  "gn",
-  "wen",
-  "lol",
-  "lmao",
-  "ape",
-  "pump",
-  "send",
-  "moon",
-  "ngmi",
-  "wagmi",
-];
+const BANTER_WORDS = ["gm", "gn", "wen", "lol", "lmao", "ape", "pump", "send", "moon", "ngmi", "wagmi"];
 
 function hasEventWords(text: string) {
   const t = text.toLowerCase();
@@ -87,9 +93,19 @@ function hasEventWords(text: string) {
 
 function isBanter(text: string) {
   const t = text.toLowerCase();
-  // если короткий текст и состоит из бантер-слов — режем
   const banterHits = BANTER_WORDS.filter((w) => t.includes(w)).length;
   return t.length < 140 && banterHits >= 1;
+}
+
+function safeIso(ts: any): string | null {
+  if (!ts) return null;
+  try {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toISOString();
+  } catch {
+    return null;
+  }
 }
 
 export async function GET() {
@@ -105,7 +121,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "invalid_signature" }, { status: 401 });
   }
 
-  const payload = JSON.parse(rawBody);
+  let payload: any;
+  try {
+    payload = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
+  }
+
+  // payload shape может быть разный
   const cast = payload?.data?.cast ?? payload?.cast ?? payload?.data ?? payload;
   const author = cast?.author ?? payload?.data?.author ?? null;
 
@@ -129,7 +152,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "no_token_mentions" });
   }
 
-  // анти-спам: если пост перечисляет кучу тикеров — это почти всегда шум
+  // анти-спам: слишком много тикеров — обычно шум
   if (tickers.length > 5) {
     return NextResponse.json({ ok: true, skipped: "too_many_tickers" });
   }
@@ -140,14 +163,14 @@ export async function POST(req: NextRequest) {
   }
 
   // “полезный сигнал” = (есть ссылка) ИЛИ (есть event-слова)
-  // иначе — режем мусор
   if (!hasLink(text) && !hasEventWords(text)) {
     return NextResponse.json({ ok: true, skipped: "no_event_signal" });
   }
 
-  // --- cooldowns (уменьшает шум/повторы) ---
+  // --- cooldowns ---
+  const authorFid: number | null = typeof author?.fid === "number" ? author.fid : null;
+
   // per-author: 2 minutes
-  const authorFid = author?.fid ?? null;
   if (authorFid != null) {
     const recentByAuthor = await sql`
       select 1
@@ -161,24 +184,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // per-ticker: 10 minutes (если тикер есть)
+  // per-ticker: 10 minutes
+  // ВАЖНО: @vercel/postgres НЕ поддерживает sql.array(), поэтому передаём массив как JSON -> text[]
   if (tickers.length > 0) {
     const recentByTicker = await sql`
       select 1
       from social_signals
-      where tickers && ${sql.array(tickers, "text")}::text[]
-        and created_at > now() - interval '10 minutes'
+      where tickers && (
+        select coalesce(array_agg(value::text), '{}'::text[])
+        from jsonb_array_elements_text(${JSON.stringify(tickers)}::jsonb)
+      )
+      and created_at > now() - interval '10 minutes'
       limit 1
     `;
-    if (recentByTicker.rowCount > 0) {
+    if ((recentByTicker.rowCount ?? 0) > 0) {
       return NextResponse.json({ ok: true, skipped: "ticker_cooldown" });
     }
   }
 
-  const username = author?.username ?? null;
+  const username = typeof author?.username === "string" ? author.username : null;
   const warpcastUrl = toWarpcastUrl(username ?? undefined, castHash);
 
-  // upsert по cast_hash
+  // insert (cast_hash уникальный) — не дублируем
   await sql`
     insert into social_signals (
       cast_hash, cast_timestamp, warpcast_url,
@@ -187,16 +214,20 @@ export async function POST(req: NextRequest) {
     )
     values (
       ${castHash},
-      ${timestamp ? new Date(timestamp).toISOString() : null},
+      ${safeIso(timestamp)},
       ${warpcastUrl},
       ${text},
       ${authorFid},
-      ${author?.username ?? null},
-      ${author?.display_name ?? null},
-      ${author?.pfp_url ?? null},
+      ${username},
+      ${typeof author?.display_name === "string" ? author.display_name : null},
+      ${typeof author?.pfp_url === "string" ? author.pfp_url : null},
       ${authorScore},
-      (select coalesce(array_agg(value::text), '{}'::text[]) from jsonb_array_elements_text(${JSON.stringify(tickers)}::jsonb)),
-      (select coalesce(array_agg(value::text), '{}'::text[]) from jsonb_array_elements_text(${JSON.stringify(contracts)}::jsonb)),
+      (select coalesce(array_agg(value::text), '{}'::text[]) from jsonb_array_elements_text(${JSON.stringify(
+        tickers
+      )}::jsonb)),
+      (select coalesce(array_agg(value::text), '{}'::text[]) from jsonb_array_elements_text(${JSON.stringify(
+        contracts
+      )}::jsonb)),
       ${payload}
     )
     on conflict (cast_hash) do nothing
