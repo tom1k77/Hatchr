@@ -3,7 +3,7 @@ import { SocialSignalsSection } from "@/components/SocialSignalsSection";
 
 export const dynamic = "force-dynamic";
 
-const ENABLE_SOCIAL_SIGNALS = false;
+const ENABLE_SOCIAL_SIGNALS = true;
 
 export default function SocialSignalsPage() {
   return (
