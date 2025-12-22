@@ -39,7 +39,7 @@ function verifyNeynarSignature(rawBody: string, signatureHeader: string | null) 
 
 // --- parsing ---
 function extractTickers(text: string) {
-  const re = /\$[A-Za-z0-9_]{2,12}\b/gno/g;
+  const re = /\$[A-Za-z0-9_]{2,12}\b/g;
   const matches = text.match(re) ?? [];
   const uniq = [...new Set(matches.map((t) => t.toUpperCase()))];
   return uniq;
