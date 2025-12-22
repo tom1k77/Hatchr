@@ -286,12 +286,6 @@ function TokenPageInner() {
           setCreatorNeynarScore(json.creator_score);
         }
 
-        if (typeof json?.followers_quality === "number" && Number.isFinite(json.followers_quality)) {
-          setFollowersQuality(json.followers_quality);
-        } else {
-          setFollowersQuality(null);
-        }
-
         // hatchr score (new or fallback)
         if (typeof json?.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
           setHatchrScore(json.hatchr_score);
@@ -336,9 +330,6 @@ function TokenPageInner() {
 
   const identityFid = creatorFidFromToken ?? resolvedFid ?? null;
   const identityHandle = farcasterHandle ? `@${farcasterHandle}` : resolvedUsername ? `@${resolvedUsername}` : "—";
-
-  const followers_quality_value =
-    followersQuality != null && Number.isFinite(followersQuality) ? round2(followersQuality) : null;
 
   const clankerTotal =
     typeof creatorTokensDeployed?.clanker_total === "number" ? creatorTokensDeployed.clanker_total : null;
@@ -630,14 +621,6 @@ function TokenPageInner() {
                   <div style={{ fontSize: 12, opacity: 0.82, marginTop: 10 }}>
                     <strong>Reputation:</strong>{" "}
                     <span title="A simple indicator based on creator identity signals and creator score.">{reputation}</span>
-                  </div>
-
-                  <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
-                    <strong>Followers quality:</strong>{" "}
-                    {scoreLoading ? "…" : followers_quality_value != null ? followers_quality_value : "—"}
-                    {typeof followersAnalytics?.sample_size === "number" ? (
-                      <span style={{ opacity: 0.65 }}> · sample {followersAnalytics.sample_size}</span>
-                    ) : null}
                   </div>
 
                   <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
