@@ -59,7 +59,7 @@ export function SocialSignalsSection() {
   };
 }, []);
 
-  const minScore = process.env.NEXT_PUBLIC_NEYNAR_MIN_SCORE ?? "0.7";
+  const minScore = process.env.NEXT_PUBLIC_NEYNAR_MIN_SCORE ?? "0.9";
 
   const needsClamp = (text: string | null | undefined) => {
     if (!text) return false;
