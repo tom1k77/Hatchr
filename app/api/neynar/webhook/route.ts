@@ -39,7 +39,12 @@ function verifyNeynarSignature(rawBody: string, signatureHeader: string | null) 
 
 // --- parsing ---
 function extractTickers(text: string) {
-  const re = /\$[A-Za-z0-9_]{2,12}\b/g;
+  /**
+   * FIX: тикер должен начинаться с БУКВЫ после "$"
+   * чтобы "$69", "$50000" и т.п. не считались тикерами.
+   * Длина: от 2 до 20 символов после "$" (как в твоих фильтрах Neynar).
+   */
+  const re = /\$[A-Za-z][A-Za-z0-9_]{1,19}\b/g;
   const matches = text.match(re) ?? [];
   const uniq = [...new Set(matches.map((t) => t.toUpperCase()))];
   return uniq;
@@ -57,39 +62,7 @@ function toWarpcastUrl(username?: string, castHash?: string) {
   return `https://warpcast.com/${username}/${castHash.slice(0, 8)}`;
 }
 
-function hasLink(text: string) {
-  return /(https?:\/\/|warpcast\.com|zora\.co|basescan\.org|base\.org|github\.com|mirror\.xyz)/i.test(
-    text
-  );
-}
-
-const EVENT_WORDS = [
-  "airdrop",
-  "claim",
-  "snapshot",
-  "listing",
-  "listed",
-  "audit",
-  "exploit",
-  "hack",
-  "mainnet",
-  "testnet",
-  "launch",
-  "partnership",
-  "integration",
-  "bridge",
-  "migration",
-  "tokenomics",
-  "incident",
-  "security",
-];
-
 const BANTER_WORDS = ["gm", "gn", "wen", "lol", "lmao", "ape", "pump", "send", "moon", "ngmi", "wagmi"];
-
-function hasEventWords(text: string) {
-  const t = text.toLowerCase();
-  return EVENT_WORDS.some((w) => t.includes(w));
-}
 
 function isBanter(text: string) {
   const t = text.toLowerCase();
@@ -117,6 +90,13 @@ function escapeRegExp(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Режем “пустой шум”:
+ * - "50000 $OINC"
+ * - "$OINC"
+ * - "Higher 100400 $OINC"
+ * При этом НЕ режем посты с контрактом (их оставляем).
+ */
 function isPureShill(text: string, tickers: string[], contracts: string[]) {
   const t = stripNoise(text);
 
@@ -139,10 +119,8 @@ function isPureShill(text: string, tickers: string[], contracts: string[]) {
       // 1) совсем короткий пост
       if (t.length <= 60) return true;
 
-      // 2) остались только числа/знаки/эмодзи/пробелы
-      // (в JS нет поддержки \p{Extended_Pictographic} во всех средах стабильно,
-      // поэтому держим простой whitelist “популярных” символов)
-      if (/^[\d\s.,+xXkKmM%$€£₽#@!?:;'"()\[\]{}<>/_\-*=&|~^`🚀💎🔥✨🫡✅❗️‼️]+$/.test(withoutTicker)) {
+      // 2) остались только цифры/знаки/пробелы (без эмодзи-списков, чтобы не ломать regex в сборке)
+      if (/^[\d\s.,+xXkKmM%$€£₽#@!?:;'"()\[\]{}<>/_\-*=&|~^`]+$/.test(withoutTicker)) {
         return true;
       }
 
@@ -150,8 +128,7 @@ function isPureShill(text: string, tickers: string[], contracts: string[]) {
       if (/^[\d\s.,+xXkKmM%]+$/.test(withoutTicker)) return true;
     }
 
-    // 4) отдельный кейс: пост почти полностью состоит из одного тикера
-    // типа "$OINC" или "$OINC 🚀"
+    // 4) пост почти полностью состоит из одного тикера
     if (t.length <= ticker.length + 6 && !hasLetters) return true;
   }
 
@@ -216,9 +193,6 @@ export async function POST(req: NextRequest) {
   if (isPureShill(text, tickers, contracts)) {
     return NextResponse.json({ ok: true, skipped: "pure_shill" });
   }
-
-  // Оставляем только базовое условие: есть тикер или контракт.
-  // Никаких требований по ссылкам/keywords — иначе поток легко падает в ноль.
 
   // --- cooldowns ---
   const authorFid: number | null = typeof author?.fid === "number" ? author.fid : null;
