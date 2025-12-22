@@ -165,7 +165,7 @@ async function fetchFollowersQuality(fid: number, limit = 150): Promise<Follower
   };
 }
 
-// ✅ Mentions: отдаём openUrl в формате warpcast.com/~/cast/<hash>
+// ✅ Mentions: отдаём openUrl в формате warpcast.com/cast/<hash>
 async function fetchTokenMentions(address: string) {
   const q = address.toLowerCase();
 
