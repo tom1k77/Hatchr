@@ -86,85 +86,6 @@ async function fetchFirstOk(urls: string[]) {
   return { ok: false as const, status: lastStatus ?? 500, body: lastText };
 }
 
-// ---- followers quality ----
-type FollowersQuality = {
-  followers_sampled: number;
-  scored_followers: number;
-  avg_follower_score: number | null;
-  power_badge_ratio: number | null;
-  followers_quality: number | null;
-};
-
-const EMPTY_FQ: FollowersQuality = {
-  followers_sampled: 0,
-  scored_followers: 0,
-  avg_follower_score: null,
-  power_badge_ratio: null,
-  followers_quality: null,
-};
-
-async function fetchFollowersQuality(fid: number, limit = 150): Promise<FollowersQuality> {
-  const url =
-    `https://api.neynar.com/v2/farcaster/followers/?` +
-    `fid=${encodeURIComponent(String(fid))}` +
-    `&limit=${encodeURIComponent(String(limit))}` +
-    `&sort_type=algorithmic`;
-
-  const resp = await fetch(url, {
-    headers: {
-      "x-api-key": NEYNAR_API_KEY || "",
-      "x-neynar-experimental": "true",
-      accept: "application/json",
-    },
-    cache: "no-store",
-  });
-
-  if (!resp.ok) return EMPTY_FQ;
-
-  const json: any = await resp.json();
-
-  const rows: any[] = Array.isArray(json?.users)
-    ? json.users
-    : Array.isArray(json?.result?.users)
-      ? json.result.users
-      : [];
-
-  const sampled = rows.length;
-
-  let scoredCount = 0;
-  let scoreSum = 0;
-  let powerBadgeCount = 0;
-
-  for (const r of rows) {
-    const u = r?.user ?? r;
-    const s = pickNeynarScore(u);
-
-    if (typeof s === "number" && Number.isFinite(s)) {
-      scoredCount += 1;
-      scoreSum += clamp(s, 0, 1);
-    }
-
-    const pb = pickPowerBadge(u);
-    if (pb === true) powerBadgeCount += 1;
-  }
-
-  const avg = scoredCount > 0 ? scoreSum / scoredCount : null;
-  const pbRatio = sampled > 0 ? powerBadgeCount / sampled : null;
-
-  const fq =
-    avg == null
-      ? null
-      : clamp(0.85 * avg + 0.15 * (typeof pbRatio === "number" ? pbRatio : 0), 0, 1);
-
-  return {
-    followers_sampled: sampled,
-    scored_followers: scoredCount,
-    avg_follower_score: avg,
-    power_badge_ratio: pbRatio,
-    followers_quality: fq,
-  };
-}
-
 // ✅ Mentions: отдаём openUrl в формате warpcast.com/cast/<hash>
 async function fetchTokenMentions(address: string) {
   const q = address.toLowerCase();
@@ -222,6 +143,7 @@ async function fetchTokenMentions(address: string) {
 }
 
 // ✅ Creator context: + needles_used + earliest_match_cast (hash/text/timestamp/openUrl)
+// ✅ limit reduced to 50
 async function fetchCreatorContext(
   fid: number,
   tokenCreatedAt?: string | null,
@@ -231,7 +153,7 @@ async function fetchCreatorContext(
 ) {
   const url =
     `https://api.neynar.com/v2/farcaster/feed/user/casts?` +
-    `fid=${encodeURIComponent(String(fid))}&limit=100`;
+    `fid=${encodeURIComponent(String(fid))}&limit=50`;
 
   const resp = await fetch(url, {
     headers: {
@@ -552,18 +474,23 @@ async function fetchClankerByCreator(q: string, limit = 20): Promise<ClankerCrea
       name: typeof t?.name === "string" ? t.name : null,
       symbol: typeof t?.symbol === "string" ? t.symbol : null,
       img_url: typeof t?.img_url === "string" ? t.img_url : null,
-      deployed_at: typeof t?.deployed_at === "string" ? t.deployed_at : (typeof t?.created_at === "string" ? t.created_at : null),
+      deployed_at:
+        typeof t?.deployed_at === "string"
+          ? t.deployed_at
+          : typeof t?.created_at === "string"
+            ? t.created_at
+            : null,
       msg_sender: typeof t?.msg_sender === "string" ? t.msg_sender : null,
       trust_level,
       trustStatus: ts,
-      // если у clanker другой url-формат — можно поменять позже
       clanker_url: addr ? `https://clanker.world/token/${addr}` : null,
     };
   });
 
   const out: ClankerCreatorResult = {
     q: qq,
-    total: typeof json?.total === "number" && Number.isFinite(json.total) ? json.total : (rawTokens.length || 0),
+    total:
+      typeof json?.total === "number" && Number.isFinite(json.total) ? json.total : rawTokens.length || 0,
     hasMore: typeof json?.hasMore === "boolean" ? json.hasMore : null,
     searchedAddress: typeof json?.searchedAddress === "string" ? json.searchedAddress : null,
     user: json?.user,
@@ -653,21 +580,8 @@ export async function GET(req: NextRequest) {
       safeDateString(user?.user?.created_at) ??
       null;
 
-    const followersQuality =
-      resolvedFid && Number.isFinite(resolvedFid)
-        ? await fetchFollowersQuality(resolvedFid, 150)
-        : EMPTY_FQ;
-
-    const followers_quality = followersQuality.followers_quality;
-
-    let hatchr_score: number | null = null;
-    if (creator_score != null && followers_quality != null) {
-      hatchr_score = clamp(0.6 * creator_score + 0.4 * followers_quality, 0, 1);
-    } else if (creator_score != null) {
-      hatchr_score = clamp(creator_score, 0, 1);
-    } else if (followers_quality != null) {
-      hatchr_score = clamp(followers_quality, 0, 1);
-    }
+    // ✅ hatchr_score теперь без followers_quality
+    const hatchr_score = creator_score != null ? clamp(creator_score, 0, 1) : null;
 
     const token_mentions =
       typeof addressParam === "string" && /^0x[0-9a-fA-F]{40}$/.test(addressParam.trim())
@@ -695,7 +609,6 @@ export async function GET(req: NextRequest) {
 
     const clanker_creator = clankerQ ? await fetchClankerByCreator(clankerQ, 20) : null;
 
-    // ✅ Unified for UI: use clanker total as primary
     const creator_tokens_deployed = {
       clanker_total: typeof clanker_creator?.total === "number" ? clanker_creator.total : null,
       clanker_q: clanker_creator?.q ?? null,
@@ -715,7 +628,6 @@ export async function GET(req: NextRequest) {
 
       // SCORES
       creator_score,
-      followers_quality,
       hatchr_score,
       follower_count,
 
@@ -728,17 +640,7 @@ export async function GET(req: NextRequest) {
           : [],
       },
 
-      // ✅ NEW (Clanker + BaseScan)
       creator_tokens_deployed,
-
-      followers_analytics: {
-        sample_size: followersQuality.followers_sampled,
-        scored_followers: followersQuality.scored_followers,
-        avg_follower_score: followersQuality.avg_follower_score,
-        power_badge_ratio: followersQuality.power_badge_ratio,
-        formula: "followers_quality = clamp(0.85*avg_follower_score + 0.15*power_badge_ratio_or_0)",
-        sample_n: 150,
-      },
 
       token_mentions,
       creator_context,
