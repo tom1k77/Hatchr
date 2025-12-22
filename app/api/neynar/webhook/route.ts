@@ -162,10 +162,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "banter" });
   }
 
-  // “полезный сигнал” = (есть ссылка) ИЛИ (есть event-слова)
-  if (!hasLink(text) && !hasEventWords(text)) {
-    return NextResponse.json({ ok: true, skipped: "no_event_signal" });
-  }
+  // Оставляем только базовое условие: есть тикер или контракт.
+// Никаких требований по ссылкам/keywords — иначе поток легко падает в ноль.
 
   // --- cooldowns ---
   const authorFid: number | null = typeof author?.fid === "number" ? author.fid : null;
