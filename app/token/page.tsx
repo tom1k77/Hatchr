@@ -643,18 +643,12 @@ function TokenPageInner() {
                   <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
                     <strong>Tokens deployed:</strong>{" "}
                     {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
-                    {typeof creatorTokensDeployed?.clanker_q === "string" ? (
-                      <span style={{ marginLeft: 6, opacity: 0.6 }}>q={creatorTokensDeployed.clanker_q}</span>
-                    ) : null}
                     <span style={{ marginLeft: 6, opacity: 0.6 }}>(Clanker)</span>
                   </div>
 
                   <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
-                    <strong>Wallet deploys:</strong>{" "}
-                    {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
-                    {basescanMethod ? <span style={{ marginLeft: 6, opacity: 0.6 }}>({basescanMethod})</span> : null}
-                    <span style={{ marginLeft: 6, opacity: 0.6 }}>(BaseScan)</span>
-                  </div>
+  <strong>Wallet deploys:</strong> {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
+</div>
 
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 10 }}>
                     creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
