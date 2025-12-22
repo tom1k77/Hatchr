@@ -578,15 +578,14 @@ function TokenPageInner() {
   <div
     style={{
       display: "grid",
-      gridTemplateColumns: "1.05fr 0.95fr",
-      gap: 16,
+      gridTemplateColumns: "minmax(0, 1fr) minmax(280px, 360px)",
+      gap: 14,
       alignItems: "start",
     }}
   >
-    {/* LEFT: Stats */}
-    <div>
+    {/* LEFT: stats */}
+    <div style={{ minWidth: 0 }}>
       <div className="token-page-label">Hatchr score (v1)</div>
-
       <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6 }}>
         {scoreLoading ? "…" : hatchr_score != null ? hatchr_score : "—"}
       </div>
@@ -599,7 +598,7 @@ function TokenPageInner() {
         ) : null}
       </div>
 
-      {/* Tokens deployed (primary = Clanker total) */}
+      {/* ✅ tokens deployed (primary = Clanker total) */}
       <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
         <strong>Tokens deployed (Clanker):</strong>{" "}
         {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
@@ -608,7 +607,7 @@ function TokenPageInner() {
         ) : null}
       </div>
 
-      {/* BaseScan debug smaller */}
+      {/* Optional: basescan debug */}
       <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
         <strong>Wallet deploys (BaseScan):</strong>{" "}
         {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
@@ -624,7 +623,7 @@ function TokenPageInner() {
         </div>
       ) : null}
 
-      {/* Small debug line */}
+      {/* optional: debug line */}
       <div style={{ fontSize: 12, opacity: 0.75, marginTop: 10 }}>
         creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
         {followerCount != null ? followerCount.toLocaleString() : "—"}
@@ -636,12 +635,12 @@ function TokenPageInner() {
         {creatorContext?.classification === "ongoing_build_or_preannounced"
           ? "Ongoing / pre-announced (creator mentioned it before launch)"
           : creatorContext?.classification === "fresh_launch_or_unknown"
-            ? "Fresh launch / unknown"
-            : creatorContext?.classification === "mentioned_but_no_timestamp_context"
-              ? "Mentioned by creator (no pre-launch timestamp match)"
-              : creatorContext?.classification === "unknown"
-                ? "Unknown"
-                : "—"}
+          ? "Fresh launch / unknown"
+          : creatorContext?.classification === "mentioned_but_no_timestamp_context"
+          ? "Mentioned by creator (no pre-launch timestamp match)"
+          : creatorContext?.classification === "unknown"
+          ? "Unknown"
+          : "—"}
       </div>
 
       {creatorContext && (
@@ -656,10 +655,9 @@ function TokenPageInner() {
         </div>
       )}
 
-      {/* Source identity (left теперь компактно) */}
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 12, fontSize: 12, opacity: 0.9 }}>
         <div className="token-page-label">Source identity</div>
-        <div style={{ marginTop: 6, fontSize: 13, opacity: 0.9, lineHeight: 1.35 }}>
+        <div style={{ marginTop: 6 }}>
           FID: <strong>{identityFid ?? "—"}</strong>
           <br />
           Handle: <strong>{identityHandle}</strong>
@@ -667,178 +665,143 @@ function TokenPageInner() {
       </div>
     </div>
 
-    {/* RIGHT: Recent launches + Mentions */}
-    <div>
-      {/* Recent launches */}
-      <div className="token-page-label">Recent launches</div>
+    {/* RIGHT: recent + mentions (scroll inside) */}
+    <div style={{ minWidth: 0 }}>
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 10,
+          background: "#fff",
+          maxHeight: 460,
+          overflowY: "auto",
+        }}
+      >
+        {/* Recent launches */}
+        <div style={{ fontSize: 12, opacity: 0.9, marginBottom: 8 }}>
+          <strong>Recent launches</strong>
+        </div>
 
-      {Array.isArray(clankerRecent) && clankerRecent.length > 0 ? (
-        <ul
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: "8px 0 0 0",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
-          {clankerRecent.slice(0, 8).map((t: any, idx: number) => (
-            <li
-              key={t?.contract_address ?? idx}
-              style={{
-                border: "1px solid #e5e7eb",
-                background: "#fff",
-                borderRadius: 10,
-                padding: "8px 10px",
-              }}
-            >
+        {Array.isArray(clankerRecent) && clankerRecent.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {clankerRecent.slice(0, 10).map((t: any, idx: number) => (
               <div
+                key={t?.contract_address ?? idx}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  gap: 10,
-                  alignItems: "center",
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      gap: 8,
-                      flexWrap: "wrap",
-                      lineHeight: 1.15,
-                    }}
-                  >
-                    <strong style={{ fontSize: 12 }}>{t?.symbol || t?.name || "Token"}</strong>
-                    <span style={{ fontSize: 12, opacity: 0.7 }}>{t?.trust_level || "unknown"}</span>
-                    {t?.deployed_at ? (
-                      <span style={{ fontSize: 12, opacity: 0.6 }}>
-                        {new Date(t.deployed_at).toLocaleString("ru-RU")}
-                      </span>
-                    ) : null}
-                  </div>
-
-                  {t?.contract_address ? (
-                    <div style={{ marginTop: 4, fontSize: 12, opacity: 0.72 }}>
-                      {t.contract_address.slice(0, 8)}…{t.contract_address.slice(-4)}
-                    </div>
-                  ) : null}
-                </div>
-
-                {t?.clanker_url ? (
-                  <a
-                    href={t.clanker_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 12, whiteSpace: "nowrap" }}
-                  >
-                    open
-                  </a>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>—</div>
-      )}
-
-      {/* Mentions */}
-      <div className="token-page-label" style={{ marginTop: 14 }}>
-        Mentions
-      </div>
-
-      {/* Mentions summary */}
-      <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
-        {tokenMentions ? (
-          <>
-            <strong>{tokenMentions.mentions_count ?? 0}</strong> total ·{" "}
-            <strong>{tokenMentions.unique_authors ?? 0}</strong> authors
-          </>
-        ) : (
-          "—"
-        )}
-      </div>
-
-      {/* Mentions list */}
-      {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 ? (
-        <ul
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: "8px 0 0 0",
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-          }}
-        >
-          {tokenMentions.casts.slice(0, 6).map((c: any) => {
-            const openUrl =
-              c?.warpcastUrl ||
-              c?.farcasterUrl ||
-              warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
-
-            return (
-              <li
-                key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
-                style={{
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
+                  border: "1px solid #eef2f7",
                   borderRadius: 10,
                   padding: "8px 10px",
                 }}
               >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: 10,
-                    alignItems: "start",
-                  }}
-                >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12, opacity: 0.92, lineHeight: 1.15 }}>
-                      <strong>@{c?.author?.username ?? "unknown"}</strong>
-                      {c?.timestamp ? (
-                        <span style={{ marginLeft: 8, opacity: 0.6 }}>
-                          {new Date(c.timestamp).toLocaleString("ru-RU")}
-                        </span>
+                    <div style={{ fontSize: 12, fontWeight: 800, lineHeight: 1.2 }}>
+                      {(t?.symbol || t?.name || "Token").toString()}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.75, marginTop: 3, lineHeight: 1.2 }}>
+                      {t?.trust_level || "unknown"}
+                      {t?.deployed_at ? (
+                        <>
+                          {" "}
+                          · {new Date(t.deployed_at).toLocaleDateString("ru-RU")}{" "}
+                          {new Date(t.deployed_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </>
                       ) : null}
                     </div>
-
-                    {/* 2–3 lines clamp */}
-                    <div
-                      style={{
-                        marginTop: 6,
-                        fontSize: 12,
-                        opacity: 0.82,
-                        lineHeight: 1.25,
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: "vertical",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {String(c?.text ?? "")}
-                    </div>
+                    {t?.contract_address ? (
+                      <div style={{ fontSize: 11, opacity: 0.7, marginTop: 3 }}>
+                        {t.contract_address.slice(0, 8)}…{t.contract_address.slice(-4)}
+                      </div>
+                    ) : null}
                   </div>
 
-                  {openUrl ? (
-                    <a href={openUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>
+                  {t?.clanker_url ? (
+                    <a
+                      href={t.clanker_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ fontSize: 12, whiteSpace: "nowrap" }}
+                    >
                       open
                     </a>
                   ) : null}
                 </div>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, opacity: 0.7 }}>—</div>
+        )}
+
+        {/* Mentions */}
+        <div style={{ marginTop: 14, fontSize: 12, opacity: 0.9 }}>
+          <strong>Mentions</strong>{" "}
+          {tokenMentions ? (
+            <span style={{ opacity: 0.7 }}>
+              · {tokenMentions.mentions_count ?? 0} total · {tokenMentions.unique_authors ?? 0} authors
+            </span>
+          ) : null}
+        </div>
+
+        {Array.isArray(tokenMentions?.casts) && tokenMentions.casts.length > 0 ? (
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+            {tokenMentions.casts.slice(0, 6).map((c: any) => {
+              const openUrl =
+                c?.warpcastUrl || c?.farcasterUrl || warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
+
+              return (
+                <div
+                  key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
+                  style={{ border: "1px solid #eef2f7", borderRadius: 10, padding: "8px 10px" }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                    <div style={{ fontSize: 12, opacity: 0.92 }}>
+                      <strong>@{c?.author?.username ?? "unknown"}</strong>
+                      {c?.timestamp ? (
+                        <span style={{ marginLeft: 8, opacity: 0.6 }}>
+                          {new Date(c.timestamp).toLocaleDateString("ru-RU")}{" "}
+                          {new Date(c.timestamp).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    {openUrl ? (
+                      <a href={openUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                        open
+                      </a>
+                    ) : null}
+                  </div>
+
+                  {/* 2–3 строки вместо “простыни” */}
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 12,
+                      opacity: 0.82,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      lineHeight: 1.25,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {(c?.text ?? "").toString()}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>—</div>
+        )}
+      </div>
     </div>
   </div>
+
+  {/* mobile: если хочешь, чтобы на узких экранах колонки стали в столбик — добавь media в CSS.
+      Но даже без CSS будет норм, просто две колонки могут стать тесными. */}
+</section>
 
   {/* Mobile fallback: stack columns */}
   <div
