@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
         and created_at > now() - interval '2 minutes'
       limit 1
     `;
-    if (recentByAuthor.rowCount > 0) {
+    if ((recentByAuthor.rowCount ?? 0) > 0) {
       return NextResponse.json({ ok: true, skipped: "author_cooldown" });
     }
   }
