@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
     const recentByTicker = await sql`
       select 1
       from social_signals
-      where tickers && ${tickers}::text[]
+      where tickers && ${sql.array(tickers, "text")}::text[]
         and created_at > now() - interval '10 minutes'
       limit 1
     `;
