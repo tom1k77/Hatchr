@@ -108,6 +108,56 @@ function safeIso(ts: any): string | null {
   }
 }
 
+/** --- NEW: pure shill filter (число+тикер, одиночный тикер и т.п.) --- */
+function stripNoise(text: string) {
+  return (text || "").trim();
+}
+
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isPureShill(text: string, tickers: string[], contracts: string[]) {
+  const t = stripNoise(text);
+
+  // если есть контракт — это уже может быть полезным сигналом
+  if ((contracts?.length ?? 0) > 0) return false;
+
+  // режем совсем пустые/короткие
+  if (!t) return true;
+
+  // если 1 тикер и нет “смысловых” букв после удаления тикера
+  if ((tickers?.length ?? 0) === 1) {
+    const ticker = tickers[0]; // "$OINC"
+    const reTicker = new RegExp(escapeRegExp(ticker), "gi");
+    const withoutTicker = t.replace(reTicker, "").trim();
+
+    // если после удаления тикера нет букв (лат/кир) — это “шилл”
+    const hasLetters = /[a-zA-Zа-яА-Я]/.test(withoutTicker);
+
+    if (!hasLetters) {
+      // 1) совсем короткий пост
+      if (t.length <= 60) return true;
+
+      // 2) остались только числа/знаки/эмодзи/пробелы
+      // (в JS нет поддержки \p{Extended_Pictographic} во всех средах стабильно,
+      // поэтому держим простой whitelist “популярных” символов)
+      if (/^[\d\s.,+xXkKmM%$€£₽#@!?:;'"()\[\]{}<>/_\-*=&|~^`🚀💎🔥✨🫡✅❗️‼️]+$/.test(withoutTicker)) {
+        return true;
+      }
+
+      // 3) “просто число” или “число + знак”
+      if (/^[\d\s.,+xXkKmM%]+$/.test(withoutTicker)) return true;
+    }
+
+    // 4) отдельный кейс: пост почти полностью состоит из одного тикера
+    // типа "$OINC" или "$OINC 🚀"
+    if (t.length <= ticker.length + 6 && !hasLetters) return true;
+  }
+
+  return false;
+}
+
 export async function GET() {
   return NextResponse.json({ ok: true });
 }
@@ -162,8 +212,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "banter" });
   }
 
+  // --- NEW: режем “число + тикер” и прочий пустой шилл ---
+  if (isPureShill(text, tickers, contracts)) {
+    return NextResponse.json({ ok: true, skipped: "pure_shill" });
+  }
+
   // Оставляем только базовое условие: есть тикер или контракт.
-// Никаких требований по ссылкам/keywords — иначе поток легко падает в ноль.
+  // Никаких требований по ссылкам/keywords — иначе поток легко падает в ноль.
 
   // --- cooldowns ---
   const authorFid: number | null = typeof author?.fid === "number" ? author.fid : null;
