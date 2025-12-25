@@ -252,6 +252,171 @@ function MobileBottomNav({ active }: { active: BottomTabKey }) {
   );
 }
 
+/* ====== NEW: Игровая загрузка (typing + shimmer skeletons) ====== */
+function LoadingGame({ isMobile }: { isMobile: boolean }) {
+  const lines = [
+    "Booting Hatchr engine…",
+    "Scanning Zora + Clanker mints on Base…",
+    "Pulling creator stats & socials…",
+    "Warming up charts…",
+    "Almost there — tokens incoming 🚀",
+  ];
+
+  const [i, setI] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [dots, setDots] = useState(".");
+
+  useEffect(() => {
+    const d = setInterval(() => {
+      setDots((p) => (p.length >= 3 ? "." : p + "."));
+    }, 350);
+    return () => clearInterval(d);
+  }, []);
+
+  useEffect(() => {
+    const full = lines[i] ?? lines[lines.length - 1];
+    setTyped("");
+
+    let k = 0;
+    const t = setInterval(() => {
+      k += 1;
+      setTyped(full.slice(0, k));
+      if (k >= full.length) {
+        clearInterval(t);
+        setTimeout(() => setI((prev) => (prev + 1) % lines.length), 700);
+      }
+    }, 28);
+
+    return () => clearInterval(t);
+  }, [i]);
+
+  const SkeletonCard = () => (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 18,
+        padding: 12,
+        background: "#fff",
+      }}
+    >
+      <div style={{ display: "flex", gap: 12 }}>
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            background: "linear-gradient(90deg,#f3f4f6,#e5e7eb,#f3f4f6)",
+            backgroundSize: "200% 100%",
+            animation: "hatchrShimmer 1.1s linear infinite",
+          }}
+        />
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              height: 12,
+              width: "70%",
+              borderRadius: 999,
+              background: "linear-gradient(90deg,#f3f4f6,#e5e7eb,#f3f4f6)",
+              backgroundSize: "200% 100%",
+              animation: "hatchrShimmer 1.1s linear infinite",
+              marginBottom: 10,
+            }}
+          />
+          <div
+            style={{
+              height: 10,
+              width: "45%",
+              borderRadius: 999,
+              background: "linear-gradient(90deg,#f3f4f6,#e5e7eb,#f3f4f6)",
+              backgroundSize: "200% 100%",
+              animation: "hatchrShimmer 1.1s linear infinite",
+              marginBottom: 12,
+            }}
+          />
+          <div style={{ display: "flex", gap: 10 }}>
+            <div
+              style={{
+                height: 10,
+                width: 90,
+                borderRadius: 999,
+                background: "linear-gradient(90deg,#f3f4f6,#e5e7eb,#f3f4f6)",
+                backgroundSize: "200% 100%",
+                animation: "hatchrShimmer 1.1s linear infinite",
+              }}
+            />
+            <div
+              style={{
+                height: 10,
+                width: 120,
+                borderRadius: 999,
+                background: "linear-gradient(90deg,#f3f4f6,#e5e7eb,#f3f4f6)",
+                backgroundSize: "200% 100%",
+                animation: "hatchrShimmer 1.1s linear infinite",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <style>{`
+        @keyframes hatchrShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
+
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          background: "#fff",
+          borderRadius: 22,
+          padding: isMobile ? 14 : 18,
+          marginTop: 6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 18 }}>🐣</span>
+          <div style={{ fontWeight: 700, color: "#111827" }}>Hatchr is loading{dots}</div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 10,
+            fontFamily:
+              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+            fontSize: 13,
+            color: "#374151",
+            minHeight: 22,
+          }}
+        >
+          {typed}
+          <span style={{ opacity: 0.6 }}>▍</span>
+        </div>
+
+        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+          {!isMobile && (
+            <>
+              <SkeletonCard />
+              <SkeletonCard />
+            </>
+          )}
+        </div>
+
+        <div style={{ marginTop: 12, fontSize: 12, color: "#6b7280" }}>
+          Tip: first load can take ~10–15s (cold start). After that it’s much faster.
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function HomePage() {
   const isMobile = useIsMobile();
   const pathname = usePathname();
@@ -282,6 +447,9 @@ export default function HomePage() {
 
   const [creatorScores, setCreatorScores] = useState<Record<number, number>>({});
   const [hatchrScores, setHatchrScores] = useState<Record<number, number>>({});
+
+  // ✅ показываем "игровую" загрузку только на первом заходе
+  const isInitialLoading = isLoading && tokens.length === 0;
 
   // ---------- загрузка токенов + кэш цифр ----------
   async function loadTokens() {
@@ -395,10 +563,7 @@ export default function HomePage() {
     return sorted;
   }, [tokens, sourceFilter, minVolume, hideEmpty, hideZeroMarket, search]);
 
-  const visibleTokens = useMemo(
-    () => filteredTokens.slice(0, visibleRows),
-    [filteredTokens, visibleRows]
-  );
+  const visibleTokens = useMemo(() => filteredTokens.slice(0, visibleRows), [filteredTokens, visibleRows]);
 
   // Загружаем Neynar score для создателей с FID
   useEffect(() => {
@@ -430,9 +595,7 @@ export default function HomePage() {
 
   // все торгуемые токены для live feed
   const tradedTokensAll = useMemo(() => {
-    const nonZero = filteredTokens.filter(
-      (t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0
-    );
+    const nonZero = filteredTokens.filter((t) => (t.market_cap_usd ?? 0) > 0 || (t.volume_24h_usd ?? 0) > 0);
 
     const sorted = [...nonZero].sort((a, b) => {
       const volA = a.volume_24h_usd ?? 0;
@@ -448,10 +611,7 @@ export default function HomePage() {
     return sorted;
   }, [filteredTokens]);
 
-  const tradedTokensVisible = useMemo(
-    () => tradedTokensAll.slice(0, visibleFeed),
-    [tradedTokensAll, visibleFeed]
-  );
+  const tradedTokensVisible = useMemo(() => tradedTokensAll.slice(0, visibleFeed), [tradedTokensAll, visibleFeed]);
 
   async function ensureProfile(username: string) {
     if (!username) return;
@@ -512,9 +672,7 @@ export default function HomePage() {
             </div>
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
-              <span className="hatchr-brand-title-sub">
-                Analytics layer for Base. Discover new tokens on Base live.
-              </span>
+              <span className="hatchr-brand-title-sub">Analytics layer for Base. Discover new tokens on Base live.</span>
             </div>
           </div>
 
@@ -561,16 +719,8 @@ export default function HomePage() {
                   />
                 </label>
 
-                <label
-                  className="hatchr-label"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={hideEmpty}
-                    onChange={(e) => setHideEmpty(e.target.checked)}
-                    style={{ margin: 0 }}
-                  />
+                <label className="hatchr-label" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                  <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} style={{ margin: 0 }} />
                   Hide empty
                 </label>
 
@@ -604,10 +754,10 @@ export default function HomePage() {
             {/* ====== MOBILE: карточки в один столбец ====== */}
             {isMobile && (
               <div className="token-card-list">
-                {visibleTokens.length === 0 ? (
-                  <div className="hatchr-table-empty">
-                    {isLoading ? "Loading Base mints…" : "Nothing here yet. Try again in a minute."}
-                  </div>
+                {isInitialLoading ? (
+                  <LoadingGame isMobile={true} />
+                ) : visibleTokens.length === 0 ? (
+                  <div className="hatchr-table-empty">Nothing here yet. Try again in a minute.</div>
                 ) : (
                   visibleTokens.map((token) => {
                     const { time, date } = formatCreated(token.first_seen_at);
@@ -652,9 +802,7 @@ export default function HomePage() {
                               <div className="token-card-header">
                                 <div className="token-card-title">
                                   <span className="token-card-name">{name}</span>
-                                  {symbol && symbol !== name && (
-                                    <span className="token-card-symbol">&nbsp;{symbol}</span>
-                                  )}
+                                  {symbol && symbol !== name && <span className="token-card-symbol">&nbsp;{symbol}</span>}
                                 </div>
                                 <div className="token-card-time">
                                   {time} · {date}
@@ -666,9 +814,7 @@ export default function HomePage() {
                                 <span>Vol 24h: {vol}</span>
                               </div>
 
-                              {creatorScore != null && (
-                                <div className="token-card-score">Creator score: {creatorScore}</div>
-                              )}
+                              {creatorScore != null && <div className="token-card-score">Creator score: {creatorScore}</div>}
 
                               <div className="token-card-source">
                                 <span className="token-card-source-pill">{sourceLabel}</span>
@@ -692,10 +838,10 @@ export default function HomePage() {
             {/* ====== DESKTOP: карточки как на скетче ====== */}
             {!isMobile && (
               <div className="desktop-card-grid">
-                {visibleTokens.length === 0 ? (
-                  <div className="hatchr-table-empty">
-                    {isLoading ? "Loading Base mints…" : "Nothing here yet. Try again in a minute."}
-                  </div>
+                {isInitialLoading ? (
+                  <LoadingGame isMobile={false} />
+                ) : visibleTokens.length === 0 ? (
+                  <div className="hatchr-table-empty">Nothing here yet. Try again in a minute.</div>
                 ) : (
                   visibleTokens.map((token) => {
                     const rowKey = `${token.source}-${token.token_address}`;
@@ -728,7 +874,10 @@ export default function HomePage() {
                       if (token.x_url) {
                         secondarySocial = { url: token.x_url, label: xUsername ? `@${xUsername}` : "X" };
                       } else if (token.instagram_url) {
-                        secondarySocial = { url: token.instagram_url, label: igUsername ? `@${igUsername}` : "Instagram" };
+                        secondarySocial = {
+                          url: token.instagram_url,
+                          label: igUsername ? `@${igUsername}` : "Instagram",
+                        };
                       } else if (token.tiktok_url) {
                         secondarySocial = { url: token.tiktok_url, label: ttUsername ? `@${ttUsername}` : "TikTok" };
                       }
@@ -746,9 +895,7 @@ export default function HomePage() {
                         className="no-underline"
                       >
                         <div className="h-card">
-                          {/* ВЕРХ КАРТОЧКИ: две колонки */}
                           <div className="h-card-main">
-                            {/* ЛЕВАЯ КОЛОНКА: картинка + Address/Source/Socials */}
                             <div className="h-card-left">
                               <div className="h-card-avatar">
                                 {token.image_url ? (
@@ -759,7 +906,6 @@ export default function HomePage() {
                               </div>
 
                               <div className="h-card-left-meta">
-                                {/* Time */}
                                 <div className="h-card-row">
                                   <span className="h-card-row-label">Time</span>
                                   <span className="h-card-row-value h-card-row-value-time">
@@ -767,7 +913,6 @@ export default function HomePage() {
                                   </span>
                                 </div>
 
-                                {/* Hatchr score (single line) */}
                                 {creatorFid != null && (
                                   <div className="h-card-row">
                                     <span className="h-card-row-label">Hatchr score</span>
@@ -779,7 +924,6 @@ export default function HomePage() {
                                   </div>
                                 )}
 
-                                {/* Address */}
                                 <div className="h-card-row">
                                   <span className="h-card-row-label">Address</span>
                                   <span className="h-card-row-value h-card-row-value-address">
@@ -802,13 +946,11 @@ export default function HomePage() {
                                   </span>
                                 </div>
 
-                                {/* Source */}
                                 <div className="h-card-row">
                                   <span className="h-card-row-label">Source</span>
                                   <span className="h-card-row-value">{sourceLabel}</span>
                                 </div>
 
-                                {/* Socials */}
                                 <div className="h-card-row">
                                   <span className="h-card-row-label">Socials</span>
                                   <span className="h-card-row-value">
@@ -897,7 +1039,6 @@ export default function HomePage() {
                               </div>
                             </div>
 
-                            {/* ПРАВАЯ КОЛОНКА: name/ticker + MC/Vol */}
                             <div className="h-card-right">
                               <div className="h-card-title">
                                 <span className="h-card-name">{name}</span>
@@ -917,7 +1058,6 @@ export default function HomePage() {
                             </div>
                           </div>
 
-                          {/* НИЗ КАРТОЧКИ: кнопка по центру */}
                           {token.source_url && (
                             <a
                               href={token.source_url}
@@ -937,7 +1077,6 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Load more – и для мобилы, и для десктопа */}
             {filteredTokens.length > visibleRows && (
               <div style={{ marginTop: 10, textAlign: "center" }}>
                 <button
@@ -958,7 +1097,6 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* правая колонка — live traded feed */}
           <aside className="hatchr-feed">
             <div className="hatchr-feed-title">
               <span>Live traded feed</span>
@@ -1016,7 +1154,6 @@ export default function HomePage() {
         </div>
       </main>
 
-      {/* нижняя навигация только на мобилке */}
       {isMobile && <MobileBottomNav active={activeTab} />}
     </div>
   );
