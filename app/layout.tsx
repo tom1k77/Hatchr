@@ -17,28 +17,27 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Hatchr",
-  description: "Base-native token discovery & signal platform",
+  description: "Token discovery & signal platform",
 };
 
-// ✅ FIXED: добавлено action.name (обязательное поле для Embed Valid)
+const SITE_URL = "https://hatchr.vercel.app"; // <-- ПРОД-ДОМЕН, поменяй если нужно
+const PREVIEW_IMAGE = `${SITE_URL}/branding/Hatchr-PreviewImage.PNG`; // проверь что файл реально доступен
+
+// Farcaster Mini App embed
 const MINIAPP_EMBED = JSON.stringify({
   version: "1",
-  imageUrl: "https://hatchr.vercel.app/branding/Hatchr-PreviewImage.PNG",
+  imageUrl: PREVIEW_IMAGE,
   button: {
     title: "Open Hatchr",
     action: {
       type: "launch_miniapp",
-      name: "Hatchr", // 👈 КРИТИЧЕСКОЕ ПОЛЕ
-      url: "https://hatchr.vercel.app",
+      name: "Hatchr",
+      url: SITE_URL,
     },
   },
 });
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
