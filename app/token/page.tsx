@@ -81,6 +81,83 @@ function round2(x: number) {
 }
 
 /** ---------------------------
+ * Loading UI (NEW)
+ * --------------------------- */
+function TokenLoadingState() {
+  const steps = [
+    "Resolving token metadata…",
+    "Checking creator identity…",
+    "Scanning social mentions…",
+    "Calculating Hatchr score…",
+    "Almost ready 👀",
+  ];
+
+  const [step, setStep] = useState(0);
+  const [typed, setTyped] = useState("");
+
+  useEffect(() => {
+    const text = steps[step] ?? steps[steps.length - 1];
+    setTyped("");
+    let i = 0;
+
+    const t = setInterval(() => {
+      i++;
+      setTyped(text.slice(0, i));
+      if (i >= text.length) {
+        clearInterval(t);
+        setTimeout(() => setStep((s) => (s + 1) % steps.length), 700);
+      }
+    }, 22);
+
+    return () => clearInterval(t);
+  }, [step]);
+
+  return (
+    <div className="token-page-card" style={{ padding: 16 }}>
+      <div style={{ fontSize: 14, fontWeight: 600 }}>🐣 Analyzing token on Base</div>
+
+      <div
+        style={{
+          marginTop: 8,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          fontSize: 13,
+          opacity: 0.85,
+          minHeight: 20,
+        }}
+      >
+        {typed}
+        <span style={{ opacity: 0.4 }}>▍</span>
+      </div>
+
+      {/* Skeleton blocks */}
+      <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+        <div className="skeleton-card" />
+        <div className="skeleton-card" />
+      </div>
+
+      <style jsx>{`
+        .skeleton-card {
+          height: 72px;
+          border-radius: 14px;
+          background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6);
+          background-size: 200% 100%;
+          animation: shimmer 1.2s infinite linear;
+        }
+
+        @keyframes shimmer {
+          0% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/** ---------------------------
  * Share helpers
  * --------------------------- */
 function buildTokenShareText(params: {
@@ -349,9 +426,9 @@ function TokenPageInner() {
     const allow = Number(clankerTrust?.allowlisted ?? 0);
     const trusted = Number(clankerTrust?.trusted_deployer ?? 0);
     const fidv = Number(clankerTrust?.fid_verified ?? 0);
-    const score = typeof creatorNeynarScore === "number" && Number.isFinite(creatorNeynarScore) ? creatorNeynarScore : null;
+    const score =
+      typeof creatorNeynarScore === "number" && Number.isFinite(creatorNeynarScore) ? creatorNeynarScore : null;
 
-    // heuristic: if any strong signal OR high creator score => High
     if (trusted > 0 || allow > 0 || fidv > 0 || (score != null && score >= 0.8)) return "High";
     if ((score != null && score >= 0.55) || allow + trusted + fidv > 0) return "Medium";
     return "Low";
@@ -411,9 +488,8 @@ function TokenPageInner() {
             </p>
           </div>
         ) : isLoading && status === "idle" ? (
-          <div className="token-page-card">
-            <p>Loading token data…</p>
-          </div>
+          // ✅ NEW loading state
+          <TokenLoadingState />
         ) : status === "error" ? (
           <div className="token-page-card">
             <p>Failed to load token data. Try again in a minute.</p>
@@ -438,7 +514,9 @@ function TokenPageInner() {
                   <div className="token-page-title-block">
                     <div className="token-page-name-row">
                       <span className="token-page-name">{token.name || token.symbol || "New token"}</span>
-                      {token.symbol && token.symbol !== token.name && <span className="token-page-symbol">{token.symbol}</span>}
+                      {token.symbol && token.symbol !== token.name && (
+                        <span className="token-page-symbol">{token.symbol}</span>
+                      )}
                       <span className="token-page-source-pill">{token.source === "clanker" ? "Clanker" : "Zora"}</span>
                     </div>
 
@@ -624,14 +702,13 @@ function TokenPageInner() {
                   </div>
 
                   <div style={{ fontSize: 12, opacity: 0.82, marginTop: 6 }}>
-                    <strong>Tokens deployed:</strong>{" "}
-                    {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
+                    <strong>Tokens deployed:</strong> {scoreLoading ? "…" : clankerTotal != null ? clankerTotal : "—"}
                     <span style={{ marginLeft: 6, opacity: 0.6 }}>(Clanker)</span>
                   </div>
 
                   <div style={{ fontSize: 12, opacity: 0.72, marginTop: 4 }}>
-  <strong>Wallet deploys:</strong> {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
-</div>
+                    <strong>Wallet deploys:</strong> {scoreLoading ? "…" : basescanCount != null ? basescanCount : "—"}
+                  </div>
 
                   <div style={{ fontSize: 12, opacity: 0.75, marginTop: 10 }}>
                     creator_score: {creatorNeynarScore != null ? round2(creatorNeynarScore) : "—"} · followers:{" "}
@@ -684,10 +761,7 @@ function TokenPageInner() {
                           <div key={t?.contract_address ?? idx} className="miniCard">
                             <div className="rowBetween">
                               <div style={{ minWidth: 0, flex: 1 }}>
-                                <div
-                                  className="tokenNameEllipsis"
-                                  title={(t?.symbol || t?.name || "Token").toString()}
-                                >
+                                <div className="tokenNameEllipsis" title={(t?.symbol || t?.name || "Token").toString()}>
                                   {(t?.symbol || t?.name || "Token").toString()}
                                 </div>
 
@@ -748,15 +822,10 @@ function TokenPageInner() {
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                         {tokenMentions.casts.slice(0, 50).map((c: any) => {
                           const openUrl =
-                            c?.warpcastUrl ||
-                            c?.farcasterUrl ||
-                            warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
+                            c?.warpcastUrl || c?.farcasterUrl || warpcastCastUrlFromHash(typeof c?.hash === "string" ? c.hash : null);
 
                           return (
-                            <div
-                              key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`}
-                              className="miniCard"
-                            >
+                            <div key={c?.hash ?? `${c?.author?.fid ?? "x"}-${c?.timestamp ?? Math.random()}`} className="miniCard">
                               <div className="rowBetween">
                                 <div style={{ fontSize: 12, opacity: 0.92, minWidth: 0 }}>
                                   <strong>@{c?.author?.username ?? "unknown"}</strong>
@@ -829,7 +898,6 @@ function TokenPageInner() {
                   overflow-y: auto;
                 }
 
-                /* ~3.5 visible cards on desktop */
                 .recentScroll {
                   max-height: 310px;
                   padding-right: 4px;
@@ -898,17 +966,16 @@ function TokenPageInner() {
                   word-break: break-word;
                 }
 
-                /* MOBILE: stack + recent shows 3 visible then scroll, mentions also scroll */
                 @media (max-width: 860px) {
                   .scoreGrid {
                     grid-template-columns: 1fr;
                     align-items: start;
                   }
                   .recentScroll {
-                    max-height: 270px; /* ~3 cards */
+                    max-height: 270px;
                   }
                   .mentionsScroll {
-                    max-height: 270px; /* keep it compact on mobile */
+                    max-height: 270px;
                   }
                 }
               `}</style>
@@ -932,9 +999,9 @@ export default function TokenPage() {
               </Link>
               <h1 className="token-page-title">Token</h1>
             </div>
-            <div className="token-page-card">
-              <p>Loading token…</p>
-            </div>
+
+            {/* ✅ NEW loading state in Suspense fallback */}
+            <TokenLoadingState />
           </main>
         </div>
       }
