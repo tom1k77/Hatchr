@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "./hooks/useIsMobile";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type TokenItem = {
   token_address: string;
@@ -55,9 +56,7 @@ function formatNumber(value: number | null | undefined): string {
   return (value / 1_000_000).toFixed(1) + "M";
 }
 
-function formatCreated(
-  dateString: string | null
-): { time: string; date: string } {
+function formatCreated(dateString: string | null): { time: string; date: string } {
   if (!dateString) return { time: "—", date: "" };
   const d = new Date(dateString);
   if (Number.isNaN(d.getTime())) return { time: dateString, date: "" };
@@ -162,35 +161,126 @@ function FarcasterFallbackIcon({ size = 24 }: { size?: number }) {
   );
 }
 
+type BottomTabKey = "new" | "signals" | "trending" | "api";
+
+function MobileBottomNav({ active }: { active: BottomTabKey }) {
+  const itemBase: React.CSSProperties = {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    padding: "10px 8px",
+    borderRadius: 16,
+    textDecoration: "none",
+    fontSize: 11,
+    lineHeight: 1,
+    userSelect: "none",
+  };
+
+  const activeStyle: React.CSSProperties = {
+    background: "#111827",
+    color: "#ffffff",
+  };
+
+  const inactiveStyle: React.CSSProperties = {
+    background: "transparent",
+    color: "#6b7280",
+  };
+
+  // NOTE: Trending/API пока заглушки — поменяешь href на реальные роуты
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+        padding: "10px 12px",
+        paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)",
+        pointerEvents: "auto",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 720,
+          margin: "0 auto",
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(10px)",
+          border: "1px solid #e5e7eb",
+          borderRadius: 24,
+          boxShadow: "0 6px 18px rgba(0,0,0,0.08)",
+          display: "flex",
+          gap: 6,
+          padding: 6,
+        }}
+      >
+        <Link href="/" style={{ ...itemBase, ...(active === "new" ? activeStyle : inactiveStyle) }}>
+          <span style={{ fontSize: 18 }}>⚡️</span>
+          <span>New</span>
+        </Link>
+
+        <Link
+          href="/social-signals"
+          style={{ ...itemBase, ...(active === "signals" ? activeStyle : inactiveStyle) }}
+        >
+          <span style={{ fontSize: 18 }}>📣</span>
+          <span>Signals</span>
+        </Link>
+
+        <a
+          href="#"
+          onClick={(e) => e.preventDefault()}
+          style={{ ...itemBase, ...(active === "trending" ? activeStyle : inactiveStyle) }}
+        >
+          <span style={{ fontSize: 18 }}>📊</span>
+          <span>Trending</span>
+        </a>
+
+        <a
+          href="#"
+          onClick={(e) => e.preventDefault()}
+          style={{ ...itemBase, ...(active === "api" ? activeStyle : inactiveStyle) }}
+        >
+          <span style={{ fontSize: 18 }}>👥</span>
+          <span>API</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const isMobile = useIsMobile();
+  const pathname = usePathname();
+
+  const activeTab: BottomTabKey = useMemo(() => {
+    if (pathname?.startsWith("/social-signals")) return "signals";
+    if (pathname?.startsWith("/trending")) return "trending";
+    if (pathname?.startsWith("/api")) return "api";
+    return "new";
+  }, [pathname]);
+
   const [tokens, setTokens] = useState<TokenItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">(
-    "all"
-  );
+  const [sourceFilter, setSourceFilter] = useState<"all" | "clanker" | "zora">("all");
   const [minVolume, setMinVolume] = useState<number>(0);
   const [hideEmpty, setHideEmpty] = useState<boolean>(false);
   const [hideZeroMarket, setHideZeroMarket] = useState<boolean>(false);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>(
-    {}
-  );
-  const [profileLoading, setProfileLoading] = useState<
-    Record<string, boolean>
-  >({});
+  const [profiles, setProfiles] = useState<Record<string, FarcasterProfile>>({});
+  const [profileLoading, setProfileLoading] = useState<Record<string, boolean>>({});
 
   const [hoveredRowKey, setHoveredRowKey] = useState<string | null>(null);
   const [visibleRows, setVisibleRows] = useState(LEFT_PAGE_SIZE);
   const [visibleFeed, setVisibleFeed] = useState(RIGHT_PAGE_SIZE);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const [creatorScores, setCreatorScores] = useState<
-  Record<number, number>
->({});
-
+  const [creatorScores, setCreatorScores] = useState<Record<number, number>>({});
   const [hatchrScores, setHatchrScores] = useState<Record<number, number>>({});
 
   // ---------- загрузка токенов + кэш цифр ----------
@@ -205,9 +295,7 @@ export default function HomePage() {
       const data: TokensResponse = await res.json();
 
       setTokens((prev) => {
-        const prevMap = new Map(
-          prev.map((t) => [t.token_address.toLowerCase(), t])
-        );
+        const prevMap = new Map(prev.map((t) => [t.token_address.toLowerCase(), t]));
 
         const merged = data.items.map((t) => {
           const key = t.token_address.toLowerCase();
@@ -313,35 +401,32 @@ export default function HomePage() {
   );
 
   // Загружаем Neynar score для создателей с FID
-useEffect(() => {
-  // локальный сет загруженных fid, чтобы не дёргать API по 100 раз
-  const loadedFids = new Set<number>(Object.keys(creatorScores).map(Number));
+  useEffect(() => {
+    const loadedFids = new Set<number>(Object.keys(creatorScores).map(Number));
 
-  tokens.forEach((t) => {
-    const fid = (t as any).farcaster_fid as number | null | undefined;
-    if (!fid) return;
-    if (loadedFids.has(fid)) return;
+    tokens.forEach((t) => {
+      const fid = (t as any).farcaster_fid as number | null | undefined;
+      if (!fid) return;
+      if (loadedFids.has(fid)) return;
 
-    fetch(`/api/token-score?fid=${fid}`)
-      .then((r) => r.json())
-      .then((json) => {
-  // creator score (back-compat: neynar_score)
-  if (typeof json.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
-    setCreatorScores((prev) => ({ ...prev, [fid]: json.neynar_score }));
-  } else if (typeof json.creator_score === "number" && Number.isFinite(json.creator_score)) {
-    setCreatorScores((prev) => ({ ...prev, [fid]: json.creator_score }));
-  }
+      fetch(`/api/token-score?fid=${fid}`)
+        .then((r) => r.json())
+        .then((json) => {
+          if (typeof json.neynar_score === "number" && Number.isFinite(json.neynar_score)) {
+            setCreatorScores((prev) => ({ ...prev, [fid]: json.neynar_score }));
+          } else if (typeof json.creator_score === "number" && Number.isFinite(json.creator_score)) {
+            setCreatorScores((prev) => ({ ...prev, [fid]: json.creator_score }));
+          }
 
-  // hatchr score
-  if (typeof json.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
-    setHatchrScores((prev) => ({ ...prev, [fid]: json.hatchr_score }));
-  } else if (typeof json.hatchr_score_v1 === "number" && Number.isFinite(json.hatchr_score_v1)) {
-    setHatchrScores((prev) => ({ ...prev, [fid]: json.hatchr_score_v1 }));
-  }
-})
-      .catch(() => {});
-  });
-}, [tokens, creatorScores]);
+          if (typeof json.hatchr_score === "number" && Number.isFinite(json.hatchr_score)) {
+            setHatchrScores((prev) => ({ ...prev, [fid]: json.hatchr_score }));
+          } else if (typeof json.hatchr_score_v1 === "number" && Number.isFinite(json.hatchr_score_v1)) {
+            setHatchrScores((prev) => ({ ...prev, [fid]: json.hatchr_score_v1 }));
+          }
+        })
+        .catch(() => {});
+    });
+  }, [tokens, creatorScores]);
 
   // все торгуемые токены для live feed
   const tradedTokensAll = useMemo(() => {
@@ -374,9 +459,7 @@ useEffect(() => {
 
     setProfileLoading((prev) => ({ ...prev, [username]: true }));
     try {
-      const res = await fetch(
-        `/api/farcaster-profile?username=${encodeURIComponent(username)}`
-      );
+      const res = await fetch(`/api/farcaster-profile?username=${encodeURIComponent(username)}`);
       if (!res.ok) return;
       const data: FarcasterProfile = await res.json();
       setProfiles((prev) => ({ ...prev, [username]: data }));
@@ -394,10 +477,7 @@ useEffect(() => {
       ?.writeText(address)
       .then(() => {
         setCopiedKey(key);
-        setTimeout(
-          () => setCopiedKey((prev) => (prev === key ? null : prev)),
-          1000
-        );
+        setTimeout(() => setCopiedKey((prev) => (prev === key ? null : prev)), 1000);
       })
       .catch(() => {});
   }
@@ -409,7 +489,8 @@ useEffect(() => {
 
   return (
     <div className="hatchr-root">
-      <main className="hatchr-shell">
+      {/* чтобы контент не прятался под нижней навигацией */}
+      <main className="hatchr-shell" style={{ paddingBottom: isMobile ? 110 : undefined }}>
         {/* top bar */}
         <div className="hatchr-topbar">
           <div className="hatchr-brand">
@@ -420,10 +501,7 @@ useEffect(() => {
                 onError={(e) => {
                   e.currentTarget.style.display = "none";
                   const parent = e.currentTarget.parentElement;
-                  if (
-                    parent &&
-                    !parent.querySelector(".hatchr-brand-logo-letter")
-                  ) {
+                  if (parent && !parent.querySelector(".hatchr-brand-logo-letter")) {
                     const span = document.createElement("span");
                     span.className = "hatchr-brand-logo-letter";
                     span.textContent = "H";
@@ -435,20 +513,22 @@ useEffect(() => {
             <div className="hatchr-brand-title">
               <span className="hatchr-brand-title-main">Hatchr</span>
               <span className="hatchr-brand-title-sub">
-                Analytics layer for Base.
-                Discover new tokens on Base live.
+                Analytics layer for Base. Discover new tokens on Base live.
               </span>
             </div>
           </div>
 
-          <nav className="hatchr-nav">
-  <span className="hatchr-nav-pill primary">New tokens</span>
-  <Link href="/social-signals" className="hatchr-nav-pill">
-    Social signals
-  </Link>
-  <span className="hatchr-nav-pill">Trending</span>
-  <span className="hatchr-nav-pill">API</span>
-</nav>
+          {/* Десктопные табы оставляем сверху, на мобилке скрываем */}
+          {!isMobile && (
+            <nav className="hatchr-nav">
+              <span className="hatchr-nav-pill primary">New tokens</span>
+              <Link href="/social-signals" className="hatchr-nav-pill">
+                Social signals
+              </Link>
+              <span className="hatchr-nav-pill">Trending</span>
+              <span className="hatchr-nav-pill">API</span>
+            </nav>
+          )}
         </div>
 
         <div className="hatchr-main-grid">
@@ -461,11 +541,7 @@ useEffect(() => {
                   Source:
                   <select
                     value={sourceFilter}
-                    onChange={(e) =>
-                      setSourceFilter(
-                        e.target.value as "all" | "clanker" | "zora"
-                      )
-                    }
+                    onChange={(e) => setSourceFilter(e.target.value as "all" | "clanker" | "zora")}
                     className="hatchr-select"
                   >
                     <option value="all">All</option>
@@ -479,9 +555,7 @@ useEffect(() => {
                   <input
                     type="number"
                     value={minVolume}
-                    onChange={(e) =>
-                      setMinVolume(Number(e.target.value) || 0)
-                    }
+                    onChange={(e) => setMinVolume(Number(e.target.value) || 0)}
                     className="hatchr-input-number"
                     style={{ width: 80 }}
                   />
@@ -489,12 +563,7 @@ useEffect(() => {
 
                 <label
                   className="hatchr-label"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                  }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}
                 >
                   <input
                     type="checkbox"
@@ -507,12 +576,7 @@ useEffect(() => {
 
                 <label
                   className="hatchr-label"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 12,
-                  }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12 }}
                 >
                   <input
                     type="checkbox"
@@ -539,390 +603,340 @@ useEffect(() => {
 
             {/* ====== MOBILE: карточки в один столбец ====== */}
             {isMobile && (
-  <div className="token-card-list">
-    {visibleTokens.length === 0 ? (
-      <div className="hatchr-table-empty">
-        {isLoading
-          ? "Loading Base mints…"
-          : "Nothing here yet. Try again in a minute."}
-      </div>
-    ) : (
-      visibleTokens.map((token) => {
-        const { time, date } = formatCreated(token.first_seen_at);
-        const symbol = token.symbol || "";
-        const name = token.name || symbol || "New token";
-        const username = extractFarcasterUsername(
-          token.farcaster_url || undefined
-        );
-        const mcap = formatNumber(token.market_cap_usd);
-        const vol = formatNumber(token.volume_24h_usd);
-
-        const firstLetter =
-          (symbol || name).trim().charAt(0).toUpperCase() || "₿";
-
-        const sourceLabel =
-          token.source === "clanker" ? "Clanker" : "Zora";
-
-        const creatorFid = (token as any).farcaster_fid as number | null | undefined;
-const creatorScore =
-  creatorFid != null ? creatorScores[creatorFid] : undefined;
-
-        return (
-          <Link
-  key={token.token_address}
-  href={`/token?address=${token.token_address.toLowerCase()}`}
-  className="token-card-link"
->
-            <div className="token-card">
-              <div className="token-card-top">
-                <div className="token-card-avatar">
-                  {token.image_url ? (
-                    <img
-                      src={token.image_url}
-                      alt={name}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        borderRadius: "16px",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    <span>{firstLetter}</span>
-                  )}
-                </div>
-
-                <div className="token-card-main">
-                  <div className="token-card-header">
-                    <div className="token-card-title">
-                      <span className="token-card-name">{name}</span>
-                      {symbol && symbol !== name && (
-                        <span className="token-card-symbol">
-                          &nbsp;{symbol}
-                        </span>
-                      )}
-                    </div>
-                    <div className="token-card-time">
-                      {time} · {date}
-                    </div>
+              <div className="token-card-list">
+                {visibleTokens.length === 0 ? (
+                  <div className="hatchr-table-empty">
+                    {isLoading ? "Loading Base mints…" : "Nothing here yet. Try again in a minute."}
                   </div>
+                ) : (
+                  visibleTokens.map((token) => {
+                    const { time, date } = formatCreated(token.first_seen_at);
+                    const symbol = token.symbol || "";
+                    const name = token.name || symbol || "New token";
+                    const username = extractFarcasterUsername(token.farcaster_url || undefined);
+                    const mcap = formatNumber(token.market_cap_usd);
+                    const vol = formatNumber(token.volume_24h_usd);
 
-                  <div className="token-card-stats">
-                    <span>MC: {mcap}</span>
-                    <span>Vol 24h: {vol}</span>
-                  </div>
+                    const firstLetter = (symbol || name).trim().charAt(0).toUpperCase() || "₿";
+                    const sourceLabel = token.source === "clanker" ? "Clanker" : "Zora";
 
-                  {creatorScore != null && (
-  <div className="token-card-score">
-    Creator score: {creatorScore}
-  </div>
-)}
+                    const creatorFid = (token as any).farcaster_fid as number | null | undefined;
+                    const creatorScore = creatorFid != null ? creatorScores[creatorFid] : undefined;
 
-                  <div className="token-card-source">
-                    <span className="token-card-source-pill">
-                      {sourceLabel}
-                    </span>
-                    {username && (
-                      <>
-                        <span style={{ margin: "0 4px" }}>·</span>
-                        <span className="token-card-creator">
-                          @{username}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Link>
-        );
-      })
-    )}
-  </div>
-)}
-
-            {/* ====== DESKTOP: карточки как на скетче ====== */}
-{!isMobile && (
-  <div className="desktop-card-grid">
-    {visibleTokens.length === 0 ? (
-      <div className="hatchr-table-empty">
-        {isLoading
-          ? "Loading Base mints…"
-          : "Nothing here yet. Try again in a minute."}
-      </div>
-    ) : (
-      visibleTokens.map((token) => {
-        const rowKey = `${token.source}-${token.token_address}`;
-        const { time, date } = formatCreated(token.first_seen_at);
-
-        const symbol = token.symbol || "";
-        const name = token.name || symbol || "New token";
-        const sourceLabel =
-          token.source === "clanker" ? "Clanker" : "Zora";
-
-        const username = extractFarcasterUsername(
-          token.farcaster_url || undefined
-        );
-        const profile = username ? profiles[username] : undefined;
-
-        const mcap = formatNumber(token.market_cap_usd);
-        const vol = formatNumber(token.volume_24h_usd);
-
-        const fullAddress = token.token_address || "";
-        const shortAddress =
-          fullAddress.length > 8
-            ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}`
-            : fullAddress;
-
-        const copyKey = fullAddress.toLowerCase();
-        const isCopied = copiedKey === copyKey;
-
-        const xUsername = extractXUsername(token.x_url || undefined);
-        const igUsername = extractInstagramUsername(
-          token.instagram_url || undefined
-        );
-        const ttUsername = extractTiktokUsername(
-          token.tiktok_url || undefined
-        );
-
-        let secondarySocial: { url: string; label: string } | null = null;
-
-        if (!username) {
-          if (token.x_url) {
-            secondarySocial = {
-              url: token.x_url,
-              label: xUsername ? `@${xUsername}` : "X",
-            };
-          } else if (token.instagram_url) {
-            secondarySocial = {
-              url: token.instagram_url,
-              label: igUsername ? `@${igUsername}` : "Instagram",
-            };
-          } else if (token.tiktok_url) {
-            secondarySocial = {
-              url: token.tiktok_url,
-              label: ttUsername ? `@${ttUsername}` : "TikTok",
-            };
-          }
-        }
-
-        const isTooltipVisible = hoveredRowKey === rowKey;
-
-        const creatorFid = (token as any).farcaster_fid as number | null | undefined;
-const creatorScore =
-  creatorFid != null ? creatorScores[creatorFid] : undefined;
-
-        return (
-          <Link
-  key={rowKey}
-  href={`/token?address=${token.token_address.toLowerCase()}`}
-  className="no-underline"
->
-            <div className="h-card">
-              {/* ВЕРХ КАРТОЧКИ: две колонки */}
-              <div className="h-card-main">
-                {/* ЛЕВАЯ КОЛОНКА: картинка + Address/Source/Socials */}
-                <div className="h-card-left">
-                  <div className="h-card-avatar">
-                    {token.image_url ? (
-                      <img src={token.image_url} alt={name} />
-                    ) : (
-                      <span>
-                        {(symbol || name).trim().charAt(0).toUpperCase() || "₿"}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="h-card-left-meta">
-                    {/* Time */}
-                    <div className="h-card-row">
-                      <span className="h-card-row-label">Time</span>
-                      <span className="h-card-row-value h-card-row-value-time">
-                        {time} · {date}
-                      </span>
-                    </div>
-
-                    {/* Hatchr score (single line) */}
-{creatorFid != null && (
-  <div className="h-card-row">
-    <span className="h-card-row-label">Hatchr score</span>
-    <span className="h-card-row-value">
-      {typeof hatchrScores[creatorFid] === "number" ? hatchrScores[creatorFid].toFixed(2) : "—"}
-    </span>
-  </div>
-)}
-
-                    {/* Address */}
-                    <div className="h-card-row">
-                      <span className="h-card-row-label">Address</span>
-                      <span className="h-card-row-value h-card-row-value-address">
-                        <span title={fullAddress} style={{ marginRight: 6 }}>
-                          {shortAddress || "—"}
-                        </span>
-                        {fullAddress && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault(); // чтобы не триггерить переход по ссылке
-                              handleCopyAddress(fullAddress);
-                            }}
-                            className="copy-btn"
-                            title="Copy address"
-                          >
-                            {isCopied ? "✓" : "⧉"}
-                          </button>
-                        )}
-                      </span>
-                    </div>
-
-                    {/* Source */}
-                    <div className="h-card-row">
-                      <span className="h-card-row-label">Source</span>
-                      <span className="h-card-row-value">{sourceLabel}</span>
-                    </div>
-
-                    {/* Socials */}
-                    <div className="h-card-row">
-                      <span className="h-card-row-label">Socials</span>
-                      <span className="h-card-row-value">
-                        {username ? (
-                          <div
-                            className="desktop-social-wrap"
-                            onMouseEnter={() => {
-                              setHoveredRowKey(rowKey);
-                              ensureProfile(username);
-                            }}
-                            onMouseLeave={() => setHoveredRowKey(null)}
-                          >
-                            <a
-                              href={`https://warpcast.com/${username}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="desktop-farcaster-pill"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <span>@{username}</span>
-                              {profile?.pfp_url ? (
+                    return (
+                      <Link
+                        key={token.token_address}
+                        href={`/token?address=${token.token_address.toLowerCase()}`}
+                        className="token-card-link"
+                      >
+                        <div className="token-card">
+                          <div className="token-card-top">
+                            <div className="token-card-avatar">
+                              {token.image_url ? (
                                 <img
-                                  src={profile.pfp_url}
-                                  alt={profile.display_name || username}
-                                  onError={(e) => {
-                                    e.currentTarget.src = "/farcaster-logo.png";
+                                  src={token.image_url}
+                                  alt={name}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    borderRadius: "16px",
+                                    objectFit: "cover",
                                   }}
                                 />
                               ) : (
-                                <FarcasterFallbackIcon size={20} />
+                                <span>{firstLetter}</span>
                               )}
-                            </a>
+                            </div>
 
-                            {creatorScore != null && (
-  <div className="h-card-score-row">
-    <span className="h-card-stats-label">Creator score</span>
-    <span className="h-card-stats-value">{creatorScore}</span>
-  </div>
-)}
-
-                            {isTooltipVisible && profile && (
-                              <div className="desktop-farcaster-tooltip">
-                                <div className="tooltip-header">
-                                  {profile.pfp_url ? (
-                                    <img
-                                      src={profile.pfp_url}
-                                      alt={profile.display_name || username}
-                                      onError={(e) => {
-                                        e.currentTarget.src =
-                                          "/farcaster-logo.png";
-                                      }}
-                                    />
-                                  ) : (
-                                    <FarcasterFallbackIcon size={30} />
+                            <div className="token-card-main">
+                              <div className="token-card-header">
+                                <div className="token-card-title">
+                                  <span className="token-card-name">{name}</span>
+                                  {symbol && symbol !== name && (
+                                    <span className="token-card-symbol">&nbsp;{symbol}</span>
                                   )}
-                                  <div>
-                                    <div className="tooltip-name">
-                                      {profile.display_name ||
-                                        profile.username}
-                                    </div>
-                                    <div className="tooltip-handle">
-                                      @{profile.username}
-                                    </div>
-                                  </div>
                                 </div>
-                                <div className="tooltip-stats">
-                                  <span>
-                                    <strong>
-                                      {profile.follower_count}
-                                    </strong>{" "}
-                                    followers
+                                <div className="token-card-time">
+                                  {time} · {date}
+                                </div>
+                              </div>
+
+                              <div className="token-card-stats">
+                                <span>MC: {mcap}</span>
+                                <span>Vol 24h: {vol}</span>
+                              </div>
+
+                              {creatorScore != null && (
+                                <div className="token-card-score">Creator score: {creatorScore}</div>
+                              )}
+
+                              <div className="token-card-source">
+                                <span className="token-card-source-pill">{sourceLabel}</span>
+                                {username && (
+                                  <>
+                                    <span style={{ margin: "0 4px" }}>·</span>
+                                    <span className="token-card-creator">@{username}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* ====== DESKTOP: карточки как на скетче ====== */}
+            {!isMobile && (
+              <div className="desktop-card-grid">
+                {visibleTokens.length === 0 ? (
+                  <div className="hatchr-table-empty">
+                    {isLoading ? "Loading Base mints…" : "Nothing here yet. Try again in a minute."}
+                  </div>
+                ) : (
+                  visibleTokens.map((token) => {
+                    const rowKey = `${token.source}-${token.token_address}`;
+                    const { time, date } = formatCreated(token.first_seen_at);
+
+                    const symbol = token.symbol || "";
+                    const name = token.name || symbol || "New token";
+                    const sourceLabel = token.source === "clanker" ? "Clanker" : "Zora";
+
+                    const username = extractFarcasterUsername(token.farcaster_url || undefined);
+                    const profile = username ? profiles[username] : undefined;
+
+                    const mcap = formatNumber(token.market_cap_usd);
+                    const vol = formatNumber(token.volume_24h_usd);
+
+                    const fullAddress = token.token_address || "";
+                    const shortAddress =
+                      fullAddress.length > 8 ? `0x${fullAddress.slice(2, 6)}…${fullAddress.slice(-4)}` : fullAddress;
+
+                    const copyKey = fullAddress.toLowerCase();
+                    const isCopied = copiedKey === copyKey;
+
+                    const xUsername = extractXUsername(token.x_url || undefined);
+                    const igUsername = extractInstagramUsername(token.instagram_url || undefined);
+                    const ttUsername = extractTiktokUsername(token.tiktok_url || undefined);
+
+                    let secondarySocial: { url: string; label: string } | null = null;
+
+                    if (!username) {
+                      if (token.x_url) {
+                        secondarySocial = { url: token.x_url, label: xUsername ? `@${xUsername}` : "X" };
+                      } else if (token.instagram_url) {
+                        secondarySocial = { url: token.instagram_url, label: igUsername ? `@${igUsername}` : "Instagram" };
+                      } else if (token.tiktok_url) {
+                        secondarySocial = { url: token.tiktok_url, label: ttUsername ? `@${ttUsername}` : "TikTok" };
+                      }
+                    }
+
+                    const isTooltipVisible = hoveredRowKey === rowKey;
+
+                    const creatorFid = (token as any).farcaster_fid as number | null | undefined;
+                    const creatorScore = creatorFid != null ? creatorScores[creatorFid] : undefined;
+
+                    return (
+                      <Link
+                        key={rowKey}
+                        href={`/token?address=${token.token_address.toLowerCase()}`}
+                        className="no-underline"
+                      >
+                        <div className="h-card">
+                          {/* ВЕРХ КАРТОЧКИ: две колонки */}
+                          <div className="h-card-main">
+                            {/* ЛЕВАЯ КОЛОНКА: картинка + Address/Source/Socials */}
+                            <div className="h-card-left">
+                              <div className="h-card-avatar">
+                                {token.image_url ? (
+                                  <img src={token.image_url} alt={name} />
+                                ) : (
+                                  <span>{(symbol || name).trim().charAt(0).toUpperCase() || "₿"}</span>
+                                )}
+                              </div>
+
+                              <div className="h-card-left-meta">
+                                {/* Time */}
+                                <div className="h-card-row">
+                                  <span className="h-card-row-label">Time</span>
+                                  <span className="h-card-row-value h-card-row-value-time">
+                                    {time} · {date}
                                   </span>
-                                  <span>
-                                    <strong>
-                                      {profile.following_count}
-                                    </strong>{" "}
-                                    following
+                                </div>
+
+                                {/* Hatchr score (single line) */}
+                                {creatorFid != null && (
+                                  <div className="h-card-row">
+                                    <span className="h-card-row-label">Hatchr score</span>
+                                    <span className="h-card-row-value">
+                                      {typeof hatchrScores[creatorFid] === "number"
+                                        ? hatchrScores[creatorFid].toFixed(2)
+                                        : "—"}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Address */}
+                                <div className="h-card-row">
+                                  <span className="h-card-row-label">Address</span>
+                                  <span className="h-card-row-value h-card-row-value-address">
+                                    <span title={fullAddress} style={{ marginRight: 6 }}>
+                                      {shortAddress || "—"}
+                                    </span>
+                                    {fullAddress && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          handleCopyAddress(fullAddress);
+                                        }}
+                                        className="copy-btn"
+                                        title="Copy address"
+                                      >
+                                        {isCopied ? "✓" : "⧉"}
+                                      </button>
+                                    )}
+                                  </span>
+                                </div>
+
+                                {/* Source */}
+                                <div className="h-card-row">
+                                  <span className="h-card-row-label">Source</span>
+                                  <span className="h-card-row-value">{sourceLabel}</span>
+                                </div>
+
+                                {/* Socials */}
+                                <div className="h-card-row">
+                                  <span className="h-card-row-label">Socials</span>
+                                  <span className="h-card-row-value">
+                                    {username ? (
+                                      <div
+                                        className="desktop-social-wrap"
+                                        onMouseEnter={() => {
+                                          setHoveredRowKey(rowKey);
+                                          ensureProfile(username);
+                                        }}
+                                        onMouseLeave={() => setHoveredRowKey(null)}
+                                      >
+                                        <a
+                                          href={`https://warpcast.com/${username}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="desktop-farcaster-pill"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <span>@{username}</span>
+                                          {profile?.pfp_url ? (
+                                            <img
+                                              src={profile.pfp_url}
+                                              alt={profile.display_name || username}
+                                              onError={(e) => {
+                                                e.currentTarget.src = "/farcaster-logo.png";
+                                              }}
+                                            />
+                                          ) : (
+                                            <FarcasterFallbackIcon size={20} />
+                                          )}
+                                        </a>
+
+                                        {creatorScore != null && (
+                                          <div className="h-card-score-row">
+                                            <span className="h-card-stats-label">Creator score</span>
+                                            <span className="h-card-stats-value">{creatorScore}</span>
+                                          </div>
+                                        )}
+
+                                        {isTooltipVisible && profile && (
+                                          <div className="desktop-farcaster-tooltip">
+                                            <div className="tooltip-header">
+                                              {profile.pfp_url ? (
+                                                <img
+                                                  src={profile.pfp_url}
+                                                  alt={profile.display_name || username}
+                                                  onError={(e) => {
+                                                    e.currentTarget.src = "/farcaster-logo.png";
+                                                  }}
+                                                />
+                                              ) : (
+                                                <FarcasterFallbackIcon size={30} />
+                                              )}
+                                              <div>
+                                                <div className="tooltip-name">{profile.display_name || profile.username}</div>
+                                                <div className="tooltip-handle">@{profile.username}</div>
+                                              </div>
+                                            </div>
+                                            <div className="tooltip-stats">
+                                              <span>
+                                                <strong>{profile.follower_count}</strong> followers
+                                              </span>
+                                              <span>
+                                                <strong>{profile.following_count}</strong> following
+                                              </span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : secondarySocial ? (
+                                      <a
+                                        href={secondarySocial.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="desktop-secondary-pill"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {secondarySocial.label}
+                                      </a>
+                                    ) : (
+                                      "—"
+                                    )}
                                   </span>
                                 </div>
                               </div>
-                            )}
+                            </div>
+
+                            {/* ПРАВАЯ КОЛОНКА: name/ticker + MC/Vol */}
+                            <div className="h-card-right">
+                              <div className="h-card-title">
+                                <span className="h-card-name">{name}</span>
+                                {symbol && symbol !== name && <span className="h-card-symbol">{symbol}</span>}
+                              </div>
+
+                              <div className="h-card-stats">
+                                <div>
+                                  <div className="h-card-stats-label">MC</div>
+                                  <div className="h-card-stats-value">{mcap}</div>
+                                </div>
+                                <div>
+                                  <div className="h-card-stats-label">Vol 24h</div>
+                                  <div className="h-card-stats-value">{vol}</div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                        ) : secondarySocial ? (
-                          <a
-                            href={secondarySocial.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="desktop-secondary-pill"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {secondarySocial.label}
-                          </a>
-                        ) : (
-                          "—"
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                </div>
 
-                {/* ПРАВАЯ КОЛОНКА: name/ticker + MC/Vol */}
-                <div className="h-card-right">
-                  <div className="h-card-title">
-                    <span className="h-card-name">{name}</span>
-                    {symbol && symbol !== name && (
-                      <span className="h-card-symbol">{symbol}</span>
-                    )}
-                  </div>
-
-                  <div className="h-card-stats">
-                    <div>
-                      <div className="h-card-stats-label">MC</div>
-                      <div className="h-card-stats-value">{mcap}</div>
-                    </div>
-                    <div>
-                      <div className="h-card-stats-label">Vol 24h</div>
-                      <div className="h-card-stats-value">{vol}</div>
-                    </div>
-                  </div>
-                </div>
+                          {/* НИЗ КАРТОЧКИ: кнопка по центру */}
+                          {token.source_url && (
+                            <a
+                              href={token.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-card-button"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              View on {sourceLabel}
+                            </a>
+                          )}
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
               </div>
+            )}
 
-              {/* НИЗ КАРТОЧКИ: кнопка по центру */}
-              {token.source_url && (
-                <a
-                  href={token.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-card-button"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View on {sourceLabel}
-                </a>
-              )}
-            </div>
-          </Link>
-        );
-      })
-    )}
-  </div>
-)}
             {/* Load more – и для мобилы, и для десктопа */}
             {filteredTokens.length > visibleRows && (
               <div style={{ marginTop: 10, textAlign: "center" }}>
@@ -953,49 +967,33 @@ const creatorScore =
             <ul className="hatchr-feed-list">
               {tradedTokensVisible.length === 0 && (
                 <li className="hatchr-feed-item">
-                  <span className="hatchr-feed-sub">
-                    Waiting for the first trades on fresh tokens…
-                  </span>
-                  <span className="hatchr-feed-sub">
-                    Soon: Base-wide stats &amp; creator leaderboards.
-                  </span>
+                  <span className="hatchr-feed-sub">Waiting for the first trades on fresh tokens…</span>
+                  <span className="hatchr-feed-sub">Soon: Base-wide stats &amp; creator leaderboards.</span>
                 </li>
               )}
 
               {tradedTokensVisible.map((t) => {
-                const username = extractFarcasterUsername(
-                  t.farcaster_url || undefined
-                );
+                const username = extractFarcasterUsername(t.farcaster_url || undefined);
 
                 return (
-                  <li
-                    key={t.token_address + (t.first_seen_at || "")}
-                    className="hatchr-feed-item"
-                  >
+                  <li key={t.token_address + (t.first_seen_at || "")} className="hatchr-feed-item">
                     <div className="hatchr-feed-main">
                       <a
                         href={t.source_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="token"
-                        style={{
-                          textDecoration: "none",
-                          color: "#111827",
-                        }}
+                        style={{ textDecoration: "none", color: "#111827" }}
                       >
                         {t.symbol || t.name || "New token"}
                       </a>
-                      <span className="meta">
-                        {formatTimeAgo(t.first_seen_at)}
-                      </span>
+                      <span className="meta">{formatTimeAgo(t.first_seen_at)}</span>
                     </div>
                     <div className="hatchr-feed-sub">
-                      🐣 {t.source === "clanker" ? "Clanker" : "Zora"} ·{" "}
-                      {t.name || "Unnamed"}
+                      🐣 {t.source === "clanker" ? "Clanker" : "Zora"} · {t.name || "Unnamed"}
                     </div>
                     <div className="hatchr-feed-sub">
-                      MC: {formatNumber(t.market_cap_usd)} · Vol 24h:{" "}
-                      {formatNumber(t.volume_24h_usd)}
+                      MC: {formatNumber(t.market_cap_usd)} · Vol 24h: {formatNumber(t.volume_24h_usd)}
                     </div>
                     {username && (
                       <div className="hatchr-feed-sub">
@@ -1004,10 +1002,7 @@ const creatorScore =
                           href={`https://warpcast.com/${username}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{
-                            color: "#4f46e5",
-                            textDecoration: "none",
-                          }}
+                          style={{ color: "#4f46e5", textDecoration: "none" }}
                         >
                           @{username}
                         </a>
@@ -1020,6 +1015,9 @@ const creatorScore =
           </aside>
         </div>
       </main>
+
+      {/* нижняя навигация только на мобилке */}
+      {isMobile && <MobileBottomNav active={activeTab} />}
     </div>
   );
 }
