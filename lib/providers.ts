@@ -189,7 +189,7 @@ function normalizeImageUrl(url?: string | null): string | null {
 }
 
 /**
- * ✅ NEW: deep numeric lookup.
+ * ✅ deep numeric lookup.
  * Clanker часто меняет форму payload — поэтому ищем числа по списку возможных ключей на любом уровне.
  */
 function pickNumberDeep(obj: any, keys: string[], maxDepth = 6): number | null {
@@ -229,7 +229,7 @@ function pickNumberDeep(obj: any, keys: string[], maxDepth = 6): number | null {
 }
 
 // ======================= Market cache (module-scope) =======================
-// Нужен чтобы цифры не "проваливались" в null/0 когда Gecko/Clanker штормит.
+
 type MarketSnap = {
   ts: number;
   price_usd: number | null;
@@ -240,7 +240,7 @@ type MarketSnap = {
 
 const marketCache = new Map<string, MarketSnap>();
 
-const MARKET_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours (можно 12h)
+const MARKET_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 function getCachedMarket(addr: string): MarketSnap | null {
   const v = marketCache.get(addr);
@@ -260,7 +260,6 @@ function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
     (snap.volume_24h_usd ?? 0) > 0;
 
   if (!hasAny) return;
-
   marketCache.set(addr, { ts: Date.now(), ...snap });
 }
 
@@ -269,7 +268,9 @@ function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
 // Включается флагом ENABLE_ON_NEW_TOKEN_INGEST=1 (иначе не делает ничего).
 
 const ENABLE_ON_NEW_TOKEN_INGEST = process.env.ENABLE_ON_NEW_TOKEN_INGEST === "1";
-const ON_NEW_TOKEN_INGEST_SECRET = process.env.ON_NEW_TOKEN_INGEST_SECRET || "";
+
+// ✅ IMPORTANT: use same env as your route expects
+const INGEST_SECRET = (process.env.INGEST_SECRET || "").trim();
 
 // дедуп в рамках одного инстанса (на hobby может быть несколько инстансов, поэтому основная дедуп должна быть в Neon)
 const seenNewToken = new Map<string, number>();
@@ -278,7 +279,6 @@ const SEEN_TTL_MS = 60 * 60 * 1000; // 1 час
 function rememberSeen(addr: string) {
   const now = Date.now();
   seenNewToken.set(addr, now);
-  // легкая уборка
   for (const [k, ts] of seenNewToken) {
     if (now - ts > SEEN_TTL_MS) seenNewToken.delete(k);
   }
@@ -320,10 +320,18 @@ async function postOnNewToken(t: Token) {
   const site = getSiteUrl();
   if (!site) return;
 
+  // if you enabled ingest but forgot secret — don't spam 401
+  if (!INGEST_SECRET) {
+    console.error("[ingest][on-new-token] missing INGEST_SECRET env (set it in Vercel)");
+    return;
+  }
+
   const url = `${site}/api/notify/on-new-token`;
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (ON_NEW_TOKEN_INGEST_SECRET) headers["x-ingest-secret"] = ON_NEW_TOKEN_INGEST_SECRET;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-ingest-secret": INGEST_SECRET,
+  };
 
   const payload = {
     token_address: t.token_address,
@@ -344,7 +352,6 @@ async function postOnNewToken(t: Token) {
       cache: "no-store",
     });
 
-    // route может отдавать 200/201/409 (если дедуп) — это ок
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       console.error("[ingest][on-new-token] failed:", res.status, txt.slice(0, 300));
@@ -441,15 +448,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
-      // ✅ robust Clanker market extraction
-      const cl_price = pickNumberDeep(t, [
-        "price_usd",
-        "priceUsd",
-        "token_price_usd",
-        "tokenPriceUsd",
-        "price",
-        "tokenPrice",
-      ]);
+      const cl_price = pickNumberDeep(t, ["price_usd", "priceUsd", "token_price_usd", "tokenPriceUsd", "price", "tokenPrice"]);
 
       const cl_mcap = pickNumberDeep(t, [
         "market_cap_usd",
@@ -462,14 +461,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         "fullyDilutedValuationUsd",
       ]);
 
-      const cl_liq = pickNumberDeep(t, [
-        "liquidity_usd",
-        "liquidityUsd",
-        "liquidity",
-        "reserve_in_usd",
-        "reserveUsd",
-        "reserve",
-      ]);
+      const cl_liq = pickNumberDeep(t, ["liquidity_usd", "liquidityUsd", "liquidity", "reserve_in_usd", "reserveUsd", "reserve"]);
 
       const cl_vol24 = pickNumberDeep(t, [
         "volume_24h_usd",
@@ -481,7 +473,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         "volumeUsd24h",
       ]);
 
-      // image
       const rawImage: string | null =
         (t.img_url as string | undefined) ||
         (t.image_url as string | undefined) ||
@@ -497,7 +488,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
 
       const image_url = normalizeImageUrl(rawImage);
 
-      // creator identity (ONLY from user/fid)
       let fid: number | string | undefined;
       if (Array.isArray(t.fids) && t.fids.length > 0) fid = t.fids[0];
       else if (typeof t.fid !== "undefined") fid = t.fid;
@@ -516,7 +506,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         if (Number.isFinite(parsed)) farcaster_fid_raw = parsed;
       }
 
-      // token socials from metadata only (ignore farcaster links to prevent spoofing)
       const urlsMeta = collectUrls(meta);
 
       let website_url: string | undefined;
@@ -572,7 +561,6 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         instagram_url,
         tiktok_url,
 
-        // ✅ Clanker fallback market
         clanker_price_usd: cl_price,
         clanker_market_cap_usd: cl_mcap,
         clanker_liquidity_usd: cl_liq,
@@ -629,7 +617,6 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const name = (n.name || "").toString();
       const symbol = (n.symbol || "").toString();
 
-      // createdAt normalize
       const createdRaw = n.createdAt ?? null;
       let createdIso: string | undefined;
       if (typeof createdRaw === "string" && createdRaw) {
@@ -642,7 +629,6 @@ export async function fetchTokensFromZora(): Promise<Token[]> {
       const volume24Num = toNum(n.volume24h);
       const priceUsdcNum = toNum(n.tokenPrice?.priceInUsdc);
 
-      // creator socials
       const social = n.creatorProfile?.socialAccounts ?? {};
       let farcaster_url: string | undefined;
       let x_url: string | undefined;
@@ -719,27 +705,20 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       price = toNum(attr.price_usd);
 
       marketCap = toNum(
-        attr.market_cap_usd ??
-          attr.fully_diluted_valuation_usd ??
-          attr.fully_diluted_valuation ??
-          attr.fdv_usd
+        attr.market_cap_usd ?? attr.fully_diluted_valuation_usd ?? attr.fully_diluted_valuation ?? attr.fdv_usd
       );
 
       liquidity = toNum(attr.liquidity_usd ?? attr.reserve_in_usd);
 
-      volume24 = toNum(
-        attr.volume_usd?.h24 ?? attr.trade_volume_24h_usd ?? attr.trade_volume_24h ?? attr.volume_24h_usd
-      );
+      volume24 = toNum(attr.volume_usd?.h24 ?? attr.trade_volume_24h_usd ?? attr.trade_volume_24h ?? attr.volume_24h_usd);
     }
 
-    // fallback to Zora numbers if Gecko missing and source is Zora
     if (t.source === "zora") {
       if (price == null || price === 0) price = toNum((t as any).zora_price_usd);
       if (marketCap == null || marketCap === 0) marketCap = toNum((t as any).zora_market_cap_usd);
       if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).zora_volume_24h_usd);
     }
 
-    // fallback to Clanker numbers if Gecko missing and source is Clanker
     if (t.source === "clanker") {
       if (price == null || price === 0) price = toNum((t as any).clanker_price_usd);
       if (marketCap == null || marketCap === 0) marketCap = toNum((t as any).clanker_market_cap_usd);
@@ -755,17 +734,10 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
     };
 
     if (addr) saveCachedMarket(addr, filled);
-
     return { ...t, ...filled };
   } catch {
     if (cached) {
-      return {
-        ...t,
-        price_usd: cached.price_usd,
-        market_cap_usd: cached.market_cap_usd,
-        liquidity_usd: cached.liquidity_usd,
-        volume_24h_usd: cached.volume_24h_usd,
-      };
+      return { ...t, price_usd: cached.price_usd, market_cap_usd: cached.market_cap_usd, liquidity_usd: cached.liquidity_usd, volume_24h_usd: cached.volume_24h_usd };
     }
     return { ...t };
   }
@@ -811,8 +783,7 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
 
   const merged = Array.from(byAddress.values());
 
-  // ✅ NEW: emit "new token" events (guarded by ENABLE_ON_NEW_TOKEN_INGEST=1)
-  // Делается до Gecko, чтобы событие было максимально быстрым.
+  // ✅ emit "new token" events (guarded by ENABLE_ON_NEW_TOKEN_INGEST=1)
   await ingestNewTokens(merged);
 
   const withMarket = await enrichWithGeckoTerminal(merged);
