@@ -264,7 +264,119 @@ function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
   marketCache.set(addr, { ts: Date.now(), ...snap });
 }
 
-// ======================= CLANKER (3 hours) =======================
+// ======================= NEW TOKEN INGEST (module-scope) =======================
+// Дергаем /api/notify/on-new-token при появлении "свежих" токенов.
+// Включается флагом ENABLE_ON_NEW_TOKEN_INGEST=1 (иначе не делает ничего).
+
+const ENABLE_ON_NEW_TOKEN_INGEST = process.env.ENABLE_ON_NEW_TOKEN_INGEST === "1";
+const ON_NEW_TOKEN_INGEST_SECRET = process.env.ON_NEW_TOKEN_INGEST_SECRET || "";
+
+// дедуп в рамках одного инстанса (на hobby может быть несколько инстансов, поэтому основная дедуп должна быть в Neon)
+const seenNewToken = new Map<string, number>();
+const SEEN_TTL_MS = 60 * 60 * 1000; // 1 час
+
+function rememberSeen(addr: string) {
+  const now = Date.now();
+  seenNewToken.set(addr, now);
+  // легкая уборка
+  for (const [k, ts] of seenNewToken) {
+    if (now - ts > SEEN_TTL_MS) seenNewToken.delete(k);
+  }
+}
+
+function wasSeen(addr: string) {
+  const ts = seenNewToken.get(addr);
+  if (!ts) return false;
+  return Date.now() - ts <= SEEN_TTL_MS;
+}
+
+function getSiteUrl(): string | null {
+  // приоритет: SITE_URL -> NEXT_PUBLIC_SITE_URL -> VERCEL_URL
+  const s =
+    process.env.SITE_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+  const site = (s || "").trim();
+  if (!site) return null;
+  return site.startsWith("http") ? site : `https://${site}`;
+}
+
+function parseTs(first_seen_at?: string) {
+  if (!first_seen_at) return null;
+  const ts = new Date(first_seen_at).getTime();
+  return Number.isNaN(ts) ? null : ts;
+}
+
+// "свежий" — в окне 10 минут
+const FRESH_WINDOW_MS = 10 * 60 * 1000;
+
+function isFreshToken(t: Token) {
+  const ts = parseTs(t.first_seen_at);
+  if (ts == null) return true;
+  return Date.now() - ts <= FRESH_WINDOW_MS;
+}
+
+async function postOnNewToken(t: Token) {
+  const site = getSiteUrl();
+  if (!site) return;
+
+  const url = `${site}/api/notify/on-new-token`;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (ON_NEW_TOKEN_INGEST_SECRET) headers["x-ingest-secret"] = ON_NEW_TOKEN_INGEST_SECRET;
+
+  const payload = {
+    token_address: t.token_address,
+    name: t.name || null,
+    symbol: t.symbol || null,
+    source: t.source || null,
+    source_url: t.source_url || null,
+    first_seen_at: t.first_seen_at || null,
+    farcaster_url: t.farcaster_url || null,
+    farcaster_fid: t.farcaster_fid ?? null,
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+
+    // route может отдавать 200/201/409 (если дедуп) — это ок
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      console.error("[ingest][on-new-token] failed:", res.status, txt.slice(0, 300));
+    }
+  } catch (e: any) {
+    console.error("[ingest][on-new-token] error:", e?.message ?? String(e));
+  }
+}
+
+async function ingestNewTokens(tokens: Token[]) {
+  if (!ENABLE_ON_NEW_TOKEN_INGEST) return;
+
+  const fresh = tokens.filter((t) => t?.token_address && isFreshToken(t));
+
+  // ограничим отправку на один прогон, чтобы не заспамить себя на cold start
+  const LIMIT = 25;
+  let sent = 0;
+
+  for (const t of fresh) {
+    const addr = (t.token_address || "").toLowerCase();
+    if (!addr) continue;
+
+    if (wasSeen(addr)) continue;
+    rememberSeen(addr);
+
+    await postOnNewToken(t);
+    sent += 1;
+    if (sent >= LIMIT) break;
+  }
+}
+
+// ======================= CLANKER (12 hours) =======================
 
 export async function fetchTokensFromClanker(): Promise<Token[]> {
   const now = Date.now();
@@ -329,7 +441,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
       const meta = t.metadata || {};
       const creator = t.related?.user || {};
 
-      // ✅ NEW: robust Clanker market extraction
+      // ✅ robust Clanker market extraction
       const cl_price = pickNumberDeep(t, [
         "price_usd",
         "priceUsd",
@@ -460,7 +572,7 @@ export async function fetchTokensFromClanker(): Promise<Token[]> {
         instagram_url,
         tiktok_url,
 
-        // ✅ NEW: Clanker fallback market
+        // ✅ Clanker fallback market
         clanker_price_usd: cl_price,
         clanker_market_cap_usd: cl_mcap,
         clanker_liquidity_usd: cl_liq,
@@ -627,7 +739,7 @@ async function enrichOneWithGecko(t: Token): Promise<TokenWithMarket> {
       if (volume24 == null || volume24 === 0) volume24 = toNum((t as any).zora_volume_24h_usd);
     }
 
-    // ✅ fallback to Clanker numbers if Gecko missing and source is Clanker
+    // fallback to Clanker numbers if Gecko missing and source is Clanker
     if (t.source === "clanker") {
       if (price == null || price === 0) price = toNum((t as any).clanker_price_usd);
       if (marketCap == null || marketCap === 0) marketCap = toNum((t as any).clanker_market_cap_usd);
@@ -698,6 +810,11 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
   }
 
   const merged = Array.from(byAddress.values());
+
+  // ✅ NEW: emit "new token" events (guarded by ENABLE_ON_NEW_TOKEN_INGEST=1)
+  // Делается до Gecko, чтобы событие было максимально быстрым.
+  await ingestNewTokens(merged);
+
   const withMarket = await enrichWithGeckoTerminal(merged);
   return withMarket;
 }
