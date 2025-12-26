@@ -43,7 +43,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Берём активные токены (лимит 100 на один запрос к farcaster, но мы будем батчить)
     const { rows } = await sql`
       select token, url
       from miniapp_notification_tokens
@@ -53,10 +52,10 @@ export async function POST(req: Request) {
     `;
 
     if (!rows?.length) {
-      return NextResponse.json({ ok: true, sent: 0, detail: [] });
+      return NextResponse.json({ ok: true, sent_attempts: 0, detail: [] });
     }
 
-    // Группируем по url (важно: разные Farcaster clients могут дать разные notificationUrl)
+    // group by url (per-client notification endpoint can differ)
     const byUrl = new Map<string, string[]>();
     for (const r of rows) {
       const t = asString((r as any)?.token).trim();
@@ -72,7 +71,7 @@ export async function POST(req: Request) {
     let totalSentAttempts = 0;
 
     for (const [sendUrl, tokensAll] of byUrl) {
-      const batches = chunk(tokensAll, 100); // max 100 tokens per request  [oai_citation:4‡Farcaster Mini Apps](https://miniapps.farcaster.xyz/docs/specification?utm_source=chatgpt.com)
+      const batches = chunk(tokensAll, 100);
 
       for (const tokens of batches) {
         totalSentAttempts += tokens.length;
@@ -97,15 +96,17 @@ export async function POST(req: Request) {
           data = { raw: txt };
         }
 
-        // если invalidTokens — помечаем disabled
         const invalid: string[] = Array.isArray(data?.invalidTokens) ? data.invalidTokens : [];
+
+        // ✅ FIX: disable invalid tokens safely (no array casts for @vercel/postgres tag)
         if (invalid.length) {
-          // одним запросом пачкой
-          await sql`
-            update miniapp_notification_tokens
-            set status = 'disabled', updated_at = now()
-            where token = any(${invalid}::text[])
-          `;
+          for (const t of invalid) {
+            await sql`
+              update miniapp_notification_tokens
+              set status = 'disabled', updated_at = now()
+              where token = ${t}
+            `;
+          }
         }
 
         results.push({
