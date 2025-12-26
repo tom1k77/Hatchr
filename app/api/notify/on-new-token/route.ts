@@ -15,20 +15,17 @@ function clamp(n: number, min = 0, max = 1) {
 }
 
 /**
- * ✅ Ingest auth (simple shared secret)
- * Set in Vercel Env: INGEST_SECRET = <random string>
- * Client must send either:
- * - x-ingest-secret: <secret>
+ * ✅ Ingest auth (shared secret)
+ * Vercel Env:
+ *  - INGEST_SECRET = <random string>
+ * Client sends:
+ *  - x-ingest-secret: <secret>
  * OR
- * - Authorization: Bearer <secret>
+ *  - Authorization: Bearer <secret>
  */
 function verifyIngestSecret(req: Request): { ok: true } | { ok: false; reason: string } {
-  const secret = process.env.INGEST_SECRET;
-
-  // If you forgot to set it — fail closed (safer) with clear message.
-  if (!secret || !secret.trim()) {
-    return { ok: false, reason: "INGEST_SECRET is not set in environment variables" };
-  }
+  const secret = (process.env.INGEST_SECRET || "").trim();
+  if (!secret) return { ok: false, reason: "INGEST_SECRET is not set in environment variables" };
 
   const headerSecret = (req.headers.get("x-ingest-secret") || "").trim();
 
@@ -36,11 +33,22 @@ function verifyIngestSecret(req: Request): { ok: true } | { ok: false; reason: s
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
 
   const provided = headerSecret || bearer;
-
   if (!provided) return { ok: false, reason: "Missing ingest secret header" };
-  if (provided !== secret.trim()) return { ok: false, reason: "Invalid ingest secret" };
+  if (provided !== secret) return { ok: false, reason: "Invalid ingest secret" };
 
   return { ok: true };
+}
+
+async function ensureTokenAlertStateTable() {
+  // ✅ creates table if missing (fixes: relation "token_alert_state" does not exist)
+  await sql`
+    create table if not exists token_alert_state (
+      token_address text primary key,
+      alerted_score_90 boolean not null default false,
+      alerted_vol_1000 boolean not null default false,
+      updated_at timestamptz not null default now()
+    )
+  `;
 }
 
 async function sendPush(
@@ -60,7 +68,7 @@ async function sendPush(
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(`send failed: ${res.status} ${txt}`);
+    throw new Error(`send failed: ${res.status} ${txt}`.slice(0, 300));
   }
 
   return res.json().catch(() => ({}));
@@ -76,6 +84,9 @@ export async function POST(req: Request) {
   }
 
   try {
+    // ✅ 0.1) make sure table exists
+    await ensureTokenAlertStateTable();
+
     const body = await req.json().catch(() => ({}));
     const token_address = String(body?.token_address ?? "")
       .trim()
@@ -182,6 +193,8 @@ export async function POST(req: Request) {
       sent: { score90: sentScore, vol1000: sentVol },
     });
   } catch (e: any) {
+    // покажем реальную ошибку в логах Vercel
+    console.error("[on-new-token] error:", e);
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
   }
 }
