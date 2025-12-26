@@ -40,7 +40,6 @@ function verifyIngestSecret(req: Request): { ok: true } | { ok: false; reason: s
 }
 
 async function ensureTokenAlertStateTable() {
-  // ✅ creates table if missing (fixes: relation "token_alert_state" does not exist)
   await sql`
     create table if not exists token_alert_state (
       token_address text primary key,
@@ -84,31 +83,22 @@ export async function POST(req: Request) {
   }
 
   try {
-    // ✅ 0.1) make sure table exists
+    // ✅ 0.1) make sure state table exists (no "tokens" table required)
     await ensureTokenAlertStateTable();
 
     const body = await req.json().catch(() => ({}));
-    const token_address = String(body?.token_address ?? "")
-      .trim()
-      .toLowerCase();
 
+    const token_address = String(body?.token_address ?? "").trim().toLowerCase();
     if (!/^0x[0-9a-f]{40}$/.test(token_address)) {
       return NextResponse.json({ ok: false, error: "Invalid token_address" }, { status: 400 });
     }
 
-    // 1) fetch token from DB
-    const tokenRes = await sql`
-      select token_address, symbol, first_seen_at, farcaster_fid, farcaster_url, volume_24h_usd
-      from tokens
-      where token_address = ${token_address}
-      limit 1
-    `;
-    const token = tokenRes.rows?.[0];
-    if (!token) {
-      return NextResponse.json({ ok: false, error: "Token not found in DB yet" }, { status: 404 });
-    }
+    const symbol = body?.symbol ? String(body.symbol).toUpperCase() : "Token";
+    const fid = typeof body?.farcaster_fid === "number" ? body.farcaster_fid : null;
 
-    // 2) state
+    const targetUrl = `${baseUrl}/token?address=${token_address}`;
+
+    // 1) load state
     const stRes = await sql`
       select token_address, alerted_score_90, alerted_vol_1000
       from token_alert_state
@@ -117,14 +107,8 @@ export async function POST(req: Request) {
     `;
     const state = stRes.rows?.[0] ?? { alerted_score_90: false, alerted_vol_1000: false };
 
-    const symbol = token.symbol ? String(token.symbol).toUpperCase() : "Token";
-    const targetUrl = `${baseUrl}/token?address=${token_address}`;
-
+    // 2) compute score (optional)
     let score: number | null = null;
-
-    // 3) score only if we have identity
-    const fid = typeof token.farcaster_fid === "number" ? token.farcaster_fid : null;
-
     if (fid) {
       const scoreRes = await fetch(
         `${baseUrl}/api/token-score?fid=${encodeURIComponent(String(fid))}&address=${encodeURIComponent(
@@ -135,17 +119,24 @@ export async function POST(req: Request) {
 
       if (scoreRes.ok) {
         const json = await scoreRes.json().catch(() => null);
-
         if (typeof json?.hatchr_score === "number") score = clamp(json.hatchr_score, 0, 1);
         else if (typeof json?.hatchr_score_v1 === "number") score = clamp(json.hatchr_score_v1, 0, 1);
         else if (typeof json?.creator_score === "number") score = clamp(json.creator_score, 0, 1);
       }
     }
 
+    // 3) volume from payload (optional)
+    const vol =
+      typeof body?.volume_24h_usd === "number"
+        ? body.volume_24h_usd
+        : typeof body?.volume24hUsd === "number"
+        ? body.volume24hUsd
+        : null;
+
     let sentScore = false;
     let sentVol = false;
 
-    // 4) SCORE > 0.9
+    // SCORE > 0.9
     if (score != null && score > 0.9 && !state.alerted_score_90) {
       await sendPush(baseUrl, {
         notificationId: `score90:${token_address}`,
@@ -164,9 +155,7 @@ export async function POST(req: Request) {
       sentScore = true;
     }
 
-    // 5) VOLUME > 1000
-    const vol = typeof token.volume_24h_usd === "number" ? token.volume_24h_usd : null;
-
+    // VOLUME > 1000 (if vol provided)
     if (vol != null && vol > 1000 && !state.alerted_vol_1000) {
       await sendPush(baseUrl, {
         notificationId: `vol1000:${token_address}`,
@@ -188,12 +177,12 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       token_address,
-      fid: fid ?? null,
+      fid,
       score,
+      vol,
       sent: { score90: sentScore, vol1000: sentVol },
     });
   } catch (e: any) {
-    // покажем реальную ошибку в логах Vercel
     console.error("[on-new-token] error:", e);
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
   }
