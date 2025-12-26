@@ -270,11 +270,7 @@ function saveCachedMarket(addr: string, snap: Omit<MarketSnap, "ts">) {
 
 const ENABLE_ON_NEW_TOKEN_INGEST = process.env.ENABLE_ON_NEW_TOKEN_INGEST === "1";
 
-/**
- * ✅ FIX:
- * Роут /api/notify/on-new-token проверяет INGEST_SECRET.
- * Поэтому и отправка должна использовать ТОТ ЖЕ env.
- */
+// ✅ FIX: используем ТОТ ЖЕ секрет, который проверяет route (process.env.INGEST_SECRET)
 const INGEST_SECRET = (process.env.INGEST_SECRET || "").trim();
 
 // дедуп в рамках одного инстанса (на hobby может быть несколько инстансов, поэтому основная дедуп должна быть в Neon)
@@ -326,12 +322,18 @@ async function postOnNewToken(t: Token) {
   const site = getSiteUrl();
   if (!site) return;
 
+  // если включили ingest, но забыли секрет — лучше не спамить 401 в логах
+  if (!INGEST_SECRET) {
+    console.error("[ingest][on-new-token] skipped: INGEST_SECRET is empty");
+    return;
+  }
+
   const url = `${site}/api/notify/on-new-token`;
 
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-
-  // ✅ send same secret that route validates
-  if (INGEST_SECRET) headers["x-ingest-secret"] = INGEST_SECRET;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-ingest-secret": INGEST_SECRET, // ✅ FIX
+  };
 
   const payload = {
     token_address: t.token_address,
@@ -352,6 +354,7 @@ async function postOnNewToken(t: Token) {
       cache: "no-store",
     });
 
+    // route может отдавать 200/201/409 (если дедуп) — это ок
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       console.error("[ingest][on-new-token] failed:", res.status, txt.slice(0, 300));
@@ -363,12 +366,6 @@ async function postOnNewToken(t: Token) {
 
 async function ingestNewTokens(tokens: Token[]) {
   if (!ENABLE_ON_NEW_TOKEN_INGEST) return;
-
-  // если включил ingest, но забыл секрет — логнем один раз и молча не будем спамить
-  if (!INGEST_SECRET) {
-    console.error("[ingest][on-new-token] INGEST_SECRET is missing (set it in Vercel env vars)");
-    return;
-  }
 
   const fresh = tokens.filter((t) => t?.token_address && isFreshToken(t));
 
@@ -824,7 +821,8 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
 
   const merged = Array.from(byAddress.values());
 
-  // ✅ emit "new token" events (guarded by ENABLE_ON_NEW_TOKEN_INGEST=1)
+  // ✅ NEW: emit "new token" events (guarded by ENABLE_ON_NEW_TOKEN_INGEST=1)
+  // Делается до Gecko, чтобы событие было максимально быстрым.
   await ingestNewTokens(merged);
 
   const withMarket = await enrichWithGeckoTerminal(merged);
