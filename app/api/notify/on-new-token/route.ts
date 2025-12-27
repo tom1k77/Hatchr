@@ -6,6 +6,21 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+type TokenRow = {
+  token_address: string;
+  symbol: string | null;
+  first_seen_at: string | null;
+  farcaster_fid: number | null;
+  farcaster_url: string | null;
+  volume_24h_usd: number | null;
+};
+
+type StateRow = {
+  token_address: string;
+  alerted_score_90: boolean | null;
+  alerted_vol_1000: boolean | null;
+};
+
 function getBaseUrl(req: Request) {
   const host = req.headers.get("host");
   return `https://${host}`;
@@ -85,10 +100,13 @@ export async function POST(req: Request) {
     const bodyFid = typeof body?.farcaster_fid === "number" ? body.farcaster_fid : toNum(body?.farcaster_fid);
     const bodyVol = toNum(body?.volume_24h_usd);
 
-    // 1) fetch token from DB (optional; do not fail the whole request if missing)
-    let token: any | null = null;
+    // defaults
+    let token: TokenRow | null = null;
+    let state = { alerted_score_90: false, alerted_vol_1000: false };
+
+    // 1) fetch token from DB (optional)
     try {
-      const tokenRes = await sql`
+      const tokenRes = await sql<TokenRow>`
         select token_address, symbol, first_seen_at, farcaster_fid, farcaster_url, volume_24h_usd
         from tokens
         where token_address = ${token_address}
@@ -96,21 +114,25 @@ export async function POST(req: Request) {
       `;
       token = tokenRes.rows?.[0] ?? null;
     } catch (e: any) {
-      // DB might not be ready; log and continue with body fallback.
-      console.error("[on-new-token] db read failed:", e?.message ?? String(e));
+      console.error("[on-new-token] db token read failed:", e?.message ?? String(e));
       token = null;
     }
 
-    // 2) state (optional; if table missing, we still can send "best effort" push)
-    let state = { alerted_score_90: false, alerted_vol_1000: false };
+    // 2) state (optional)
     try {
-      const stRes = await sql`
+      const stRes = await sql<StateRow>`
         select token_address, alerted_score_90, alerted_vol_1000
         from token_alert_state
         where token_address = ${token_address}
         limit 1
       `;
-      state = stRes.rows?.[0] ?? state;
+      const row = stRes.rows?.[0];
+      if (row) {
+        state = {
+          alerted_score_90: Boolean(row.alerted_score_90),
+          alerted_vol_1000: Boolean(row.alerted_vol_1000),
+        };
+      }
     } catch (e: any) {
       console.error("[on-new-token] state read failed:", e?.message ?? String(e));
     }
@@ -119,14 +141,11 @@ export async function POST(req: Request) {
     const targetUrl = `${baseUrl}/token?address=${token_address}`;
 
     // ✅ Use fid from DB OR body
-    const fidDb = typeof token?.farcaster_fid === "number" ? token.farcaster_fid : null;
-    const fid = fidDb ?? (typeof bodyFid === "number" ? bodyFid : null);
+    const fid = (typeof token?.farcaster_fid === "number" ? token.farcaster_fid : null) ?? (typeof bodyFid === "number" ? bodyFid : null);
 
     // ✅ Use volume from DB OR body
-    const volDb = typeof token?.volume_24h_usd === "number" ? token.volume_24h_usd : null;
-    const vol = volDb ?? bodyVol;
+    const vol = (typeof token?.volume_24h_usd === "number" ? token.volume_24h_usd : null) ?? bodyVol;
 
-    // Debug (remove later)
     console.log("[on-new-token] addr=", token_address, "fid=", fid, "vol=", vol, "sym=", symbol);
 
     let score: number | null = null;
@@ -134,9 +153,7 @@ export async function POST(req: Request) {
     // 3) compute score if we have fid
     if (fid) {
       const scoreRes = await fetch(
-        `${baseUrl}/api/token-score?fid=${encodeURIComponent(String(fid))}&address=${encodeURIComponent(
-          token_address
-        )}`,
+        `${baseUrl}/api/token-score?fid=${encodeURIComponent(String(fid))}&address=${encodeURIComponent(token_address)}`,
         { cache: "no-store" }
       );
 
@@ -164,11 +181,10 @@ export async function POST(req: Request) {
         targetUrl,
       });
 
-      // best effort persist
       try {
         await sql`
           insert into token_alert_state (token_address, alerted_score_90, alerted_vol_1000, updated_at)
-          values (${token_address}, true, ${Boolean(state.alerted_vol_1000)}, now())
+          values (${token_address}, true, ${state.alerted_vol_1000}, now())
           on conflict (token_address) do update set
             alerted_score_90 = true,
             updated_at = now()
@@ -189,11 +205,10 @@ export async function POST(req: Request) {
         targetUrl,
       });
 
-      // best effort persist
       try {
         await sql`
           insert into token_alert_state (token_address, alerted_score_90, alerted_vol_1000, updated_at)
-          values (${token_address}, ${Boolean(state.alerted_score_90)}, true, now())
+          values (${token_address}, ${state.alerted_score_90}, true, now())
           on conflict (token_address) do update set
             alerted_vol_1000 = true,
             updated_at = now()
