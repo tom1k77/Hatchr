@@ -1,3 +1,4 @@
+// app/api/notify/on-new-token/route.ts
 import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 
@@ -15,13 +16,12 @@ function clamp(n: number, min = 0, max = 1) {
 }
 
 /**
- * ✅ Ingest auth (shared secret)
- * Vercel Env:
- *  - INGEST_SECRET = <random string>
- * Client sends:
- *  - x-ingest-secret: <secret>
+ * ✅ Ingest auth (simple shared secret)
+ * ENV: INGEST_SECRET = <random string>
+ * Client must send:
+ * - x-ingest-secret: <secret>
  * OR
- *  - Authorization: Bearer <secret>
+ * - Authorization: Bearer <secret>
  */
 function verifyIngestSecret(req: Request): { ok: true } | { ok: false; reason: string } {
   const secret = (process.env.INGEST_SECRET || "").trim();
@@ -33,31 +33,16 @@ function verifyIngestSecret(req: Request): { ok: true } | { ok: false; reason: s
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
 
   const provided = headerSecret || bearer;
+
   if (!provided) return { ok: false, reason: "Missing ingest secret header" };
   if (provided !== secret) return { ok: false, reason: "Invalid ingest secret" };
 
   return { ok: true };
 }
 
-async function ensureTokenAlertStateTable() {
-  await sql`
-    create table if not exists token_alert_state (
-      token_address text primary key,
-      alerted_score_90 boolean not null default false,
-      alerted_vol_1000 boolean not null default false,
-      updated_at timestamptz not null default now()
-    )
-  `;
-}
-
 async function sendPush(
   baseUrl: string,
-  payload: {
-    notificationId: string;
-    title: string;
-    body: string;
-    targetUrl: string;
-  }
+  payload: { notificationId: string; title: string; body: string; targetUrl: string }
 ) {
   const res = await fetch(`${baseUrl}/api/notify/send`, {
     method: "POST",
@@ -67,25 +52,27 @@ async function sendPush(
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(`send failed: ${res.status} ${txt}`.slice(0, 300));
+    throw new Error(`send failed: ${res.status} ${txt}`);
   }
 
   return res.json().catch(() => ({}));
 }
 
+function toNum(x: any): number | null {
+  const n = Number(x);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function POST(req: Request) {
   const baseUrl = getBaseUrl(req);
 
-  // ✅ 0) auth gate
+  // ✅ auth gate
   const auth = verifyIngestSecret(req);
   if (!auth.ok) {
     return NextResponse.json({ ok: false, error: auth.reason }, { status: 401 });
   }
 
   try {
-    // ✅ 0.1) make sure state table exists (no "tokens" table required)
-    await ensureTokenAlertStateTable();
-
     const body = await req.json().catch(() => ({}));
 
     const token_address = String(body?.token_address ?? "").trim().toLowerCase();
@@ -93,22 +80,58 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid token_address" }, { status: 400 });
     }
 
-    const symbol = body?.symbol ? String(body.symbol).toUpperCase() : "Token";
-    const fid = typeof body?.farcaster_fid === "number" ? body.farcaster_fid : null;
+    // Fallback fields from body (so we don't depend on DB being "ready")
+    const bodySymbol = body?.symbol ? String(body.symbol).trim() : "";
+    const bodyFid = typeof body?.farcaster_fid === "number" ? body.farcaster_fid : toNum(body?.farcaster_fid);
+    const bodyVol = toNum(body?.volume_24h_usd);
 
+    // 1) fetch token from DB (optional; do not fail the whole request if missing)
+    let token: any | null = null;
+    try {
+      const tokenRes = await sql`
+        select token_address, symbol, first_seen_at, farcaster_fid, farcaster_url, volume_24h_usd
+        from tokens
+        where token_address = ${token_address}
+        limit 1
+      `;
+      token = tokenRes.rows?.[0] ?? null;
+    } catch (e: any) {
+      // DB might not be ready; log and continue with body fallback.
+      console.error("[on-new-token] db read failed:", e?.message ?? String(e));
+      token = null;
+    }
+
+    // 2) state (optional; if table missing, we still can send "best effort" push)
+    let state = { alerted_score_90: false, alerted_vol_1000: false };
+    try {
+      const stRes = await sql`
+        select token_address, alerted_score_90, alerted_vol_1000
+        from token_alert_state
+        where token_address = ${token_address}
+        limit 1
+      `;
+      state = stRes.rows?.[0] ?? state;
+    } catch (e: any) {
+      console.error("[on-new-token] state read failed:", e?.message ?? String(e));
+    }
+
+    const symbol = (token?.symbol ? String(token.symbol) : bodySymbol || "Token").toUpperCase();
     const targetUrl = `${baseUrl}/token?address=${token_address}`;
 
-    // 1) load state
-    const stRes = await sql`
-      select token_address, alerted_score_90, alerted_vol_1000
-      from token_alert_state
-      where token_address = ${token_address}
-      limit 1
-    `;
-    const state = stRes.rows?.[0] ?? { alerted_score_90: false, alerted_vol_1000: false };
+    // ✅ Use fid from DB OR body
+    const fidDb = typeof token?.farcaster_fid === "number" ? token.farcaster_fid : null;
+    const fid = fidDb ?? (typeof bodyFid === "number" ? bodyFid : null);
 
-    // 2) compute score (optional)
+    // ✅ Use volume from DB OR body
+    const volDb = typeof token?.volume_24h_usd === "number" ? token.volume_24h_usd : null;
+    const vol = volDb ?? bodyVol;
+
+    // Debug (remove later)
+    console.log("[on-new-token] addr=", token_address, "fid=", fid, "vol=", vol, "sym=", symbol);
+
     let score: number | null = null;
+
+    // 3) compute score if we have fid
     if (fid) {
       const scoreRes = await fetch(
         `${baseUrl}/api/token-score?fid=${encodeURIComponent(String(fid))}&address=${encodeURIComponent(
@@ -119,43 +142,45 @@ export async function POST(req: Request) {
 
       if (scoreRes.ok) {
         const json = await scoreRes.json().catch(() => null);
+
         if (typeof json?.hatchr_score === "number") score = clamp(json.hatchr_score, 0, 1);
         else if (typeof json?.hatchr_score_v1 === "number") score = clamp(json.hatchr_score_v1, 0, 1);
         else if (typeof json?.creator_score === "number") score = clamp(json.creator_score, 0, 1);
+      } else {
+        const txt = await scoreRes.text().catch(() => "");
+        console.error("[on-new-token] token-score failed:", scoreRes.status, txt.slice(0, 200));
       }
     }
-
-    // 3) volume from payload (optional)
-    const vol =
-      typeof body?.volume_24h_usd === "number"
-        ? body.volume_24h_usd
-        : typeof body?.volume24hUsd === "number"
-        ? body.volume24hUsd
-        : null;
 
     let sentScore = false;
     let sentVol = false;
 
-    // SCORE > 0.9
+    // 4) SCORE > 0.9
     if (score != null && score > 0.9 && !state.alerted_score_90) {
       await sendPush(baseUrl, {
         notificationId: `score90:${token_address}`,
-        title: "🚀 High-score token",
-        body: `${symbol} hit Hatchr Score ${score.toFixed(2)}`,
+        title: "🚀 High-score creator",
+        body: `${symbol} creator score ${score.toFixed(2)}`,
         targetUrl,
       });
 
-      await sql`
-        insert into token_alert_state (token_address, alerted_score_90, alerted_vol_1000, updated_at)
-        values (${token_address}, true, ${Boolean(state.alerted_vol_1000)}, now())
-        on conflict (token_address) do update set
-          alerted_score_90 = true,
-          updated_at = now()
-      `;
+      // best effort persist
+      try {
+        await sql`
+          insert into token_alert_state (token_address, alerted_score_90, alerted_vol_1000, updated_at)
+          values (${token_address}, true, ${Boolean(state.alerted_vol_1000)}, now())
+          on conflict (token_address) do update set
+            alerted_score_90 = true,
+            updated_at = now()
+        `;
+      } catch (e: any) {
+        console.error("[on-new-token] state write score failed:", e?.message ?? String(e));
+      }
+
       sentScore = true;
     }
 
-    // VOLUME > 1000 (if vol provided)
+    // 5) VOLUME > 1000
     if (vol != null && vol > 1000 && !state.alerted_vol_1000) {
       await sendPush(baseUrl, {
         notificationId: `vol1000:${token_address}`,
@@ -164,26 +189,31 @@ export async function POST(req: Request) {
         targetUrl,
       });
 
-      await sql`
-        insert into token_alert_state (token_address, alerted_score_90, alerted_vol_1000, updated_at)
-        values (${token_address}, ${Boolean(state.alerted_score_90)}, true, now())
-        on conflict (token_address) do update set
-          alerted_vol_1000 = true,
-          updated_at = now()
-      `;
+      // best effort persist
+      try {
+        await sql`
+          insert into token_alert_state (token_address, alerted_score_90, alerted_vol_1000, updated_at)
+          values (${token_address}, ${Boolean(state.alerted_score_90)}, true, now())
+          on conflict (token_address) do update set
+            alerted_vol_1000 = true,
+            updated_at = now()
+        `;
+      } catch (e: any) {
+        console.error("[on-new-token] state write vol failed:", e?.message ?? String(e));
+      }
+
       sentVol = true;
     }
 
     return NextResponse.json({
       ok: true,
       token_address,
-      fid,
+      fid: fid ?? null,
       score,
       vol,
       sent: { score90: sentScore, vol1000: sentVol },
     });
   } catch (e: any) {
-    console.error("[on-new-token] error:", e);
     return NextResponse.json({ ok: false, error: e?.message ?? String(e) }, { status: 500 });
   }
 }
