@@ -318,7 +318,10 @@ function isFreshToken(t: Token) {
   return Date.now() - ts <= FRESH_WINDOW_MS;
 }
 
-async function postOnNewToken(t: Token) {
+// ✅ allow both Token and TokenWithMarket
+type AnyTokenForIngest = Token | TokenWithMarket;
+
+async function postOnNewToken(t: AnyTokenForIngest) {
   const site = getSiteUrl();
   if (!site) return;
 
@@ -344,6 +347,13 @@ async function postOnNewToken(t: Token) {
     first_seen_at: t.first_seen_at || null,
     farcaster_url: t.farcaster_url || null,
     farcaster_fid: t.farcaster_fid ?? null,
+
+    // ✅ IMPORTANT: pass volume so volume-push can trigger immediately
+    volume_24h_usd:
+      (t as any).volume_24h_usd ??
+      (t as any).clanker_volume_24h_usd ??
+      (t as any).zora_volume_24h_usd ??
+      null,
   };
 
   try {
@@ -364,10 +374,10 @@ async function postOnNewToken(t: Token) {
   }
 }
 
-async function ingestNewTokens(tokens: Token[]) {
+async function ingestNewTokens(tokens: AnyTokenForIngest[]) {
   if (!ENABLE_ON_NEW_TOKEN_INGEST) return;
 
-  const fresh = tokens.filter((t) => t?.token_address && isFreshToken(t));
+  const fresh = tokens.filter((t) => t?.token_address && isFreshToken(t as Token));
 
   // ограничим отправку на один прогон, чтобы не заспамить себя на cold start
   const LIMIT = 25;
@@ -821,10 +831,11 @@ export async function getTokens(): Promise<TokenWithMarket[]> {
 
   const merged = Array.from(byAddress.values());
 
-  // ✅ NEW: emit "new token" events (guarded by ENABLE_ON_NEW_TOKEN_INGEST=1)
-  // Делается до Gecko, чтобы событие было максимально быстрым.
-  await ingestNewTokens(merged);
-
+  // ✅ сначала получаем market-цифры (volume и т.д.)
   const withMarket = await enrichWithGeckoTerminal(merged);
+
+  // ✅ потом шлём ingest — уже с volume_24h_usd
+  await ingestNewTokens(withMarket);
+
   return withMarket;
 }
